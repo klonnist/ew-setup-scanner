@@ -223,3 +223,26 @@ select, input[type='number'], input[type='text'] {
   .chart { height: 320px; }
   .toolbar > .primary { flex: 1; }
 }
+
+/* Giriş planları (B kırılımı / limit bölge) */
+.plan { margin-top: 8px; padding: 8px; border-radius: var(--radius-sm); background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border); }
+.plan.faded { opacity: 0.55; }
+.plan.muted-plan { font-size: 12px; }
+.plan-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; }
+.plan-name { font-weight: 600; color: var(--text); }
+.plan-head .rr { margin-left: auto; color: var(--text-2); }
+.plan .lv { margin-top: 6px; }
+.note { margin: 6px 0 0; font-size: 12px; color: var(--warn); }
+.state.zone-waiting { color: var(--warn); background: rgba(250, 178, 25, 0.14); }
+.state.zone-filled { color: #fff; background: #c9771f; }
+.state.zone-stopped, .state.zone-passed { color: var(--bad); }
+.state.zone-target { color: var(--good); }
+.chip.str-Güçlü { color: var(--good); }
+.chip.str-Orta { color: var(--warn); }
+.chip.str-Zayıf { color: var(--muted); }
+h3.sec { font-size: 14px; margin: 16px 0 4px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.levels { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; font-size: 12px; }
+.levels li { display: grid; grid-template-columns: 1fr auto 90px; gap: 8px; padding: 4px 8px; border-radius: 6px; background: var(--surface-2); color: var(--muted); }
+.levels li.in { color: var(--text-2); }
+.levels li.edge { color: #ff9f43; font-weight: 600; }
+.card .lv div.wide { grid-column: span 2; }

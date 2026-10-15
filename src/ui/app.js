@@ -1,6 +1,6 @@
 // Panel: araç çubuğu, tarama, özet, setup kartları ve ayrıntı (grafik + kural kontrolleri).
 import { runScan } from '../scan/scanner.js';
-import { findWave3Setups, compareSetups } from '../scan/wave3.js';
+import { findWave3Setups, compareSetups, pickSetups, activePlans } from '../scan/wave3.js';
 import { loadSettings, saveSettings, renderSettings, toScanOptions, UI_DEFAULTS } from './settings.js';
 import { drawSetup, destroyChart, LEGEND } from './chart.js';
 import { fmtPrice, fmtPct, fmtX, fmtTime, esc } from './format.js';
@@ -20,13 +20,14 @@ const state = {
   seenKeys: null,
 };
 
-const setupKey = (s) => `${s.coin}|${s.direction}|${s.points.p1.price}|${s.points.p2.price}`;
+const setupKey = (s) => `${s.coin}|${s.direction}|${s.phase}|${s.points.p0.price}|${s.points.p1.price}`;
 
 // ------------------------------------------------------------------ araç çubuğu
 function syncToolbar() {
   const s = state.settings;
   for (const b of document.querySelectorAll('#tf button')) b.setAttribute('aria-pressed', String(b.dataset.tf === s.timeframe));
   $('#ruleSet').value = s.ruleSet;
+  $('#entryType').value = s.entryType;
   $('#showAll').checked = !!s.showAll;
 }
 
@@ -90,7 +91,7 @@ function recompute() {
     if (!r.candles.length) continue;
     for (const s of findWave3Setups(r.candles, { ...opts, diagnostics }, r.live)) setups.push({ ...s, coin: r.coin, instId: r.instId });
   }
-  setups.sort(compareSetups);
+  setups.sort((a, b) => compareSetups(a, b, opts));
   state.setups = setups;
   state.diagnostics = diagnostics;
   render();
@@ -119,30 +120,55 @@ function notifyNew(silent) {
   if (!silent || !prev) return;
   const fresh = visibleSetups().filter((s) => !prev.has(setupKey(s)));
   if (!fresh.length || !('Notification' in window) || Notification.permission !== 'granted') return;
-  const body = fresh.slice(0, 5).map((s) => `${s.coin} ${s.direction === 'long' ? 'LONG ▲' : 'SHORT ▼'} · ${s.stateLabel} · R:R ${fmtX(s.rr, 1)}`).join('\n');
+  const body = fresh.slice(0, 5).map((s) => `${s.coin} ${s.direction === 'long' ? 'LONG ▲' : 'SHORT ▼'} · ${planSummary(s)}`).join('\n');
   try { new Notification(`Yeni dalga-3 setup (${state.scan.tf.id})`, { body }); } catch { /* bazı tarayıcılarda yalnızca SW ile */ }
 }
 
 // ------------------------------------------------------------------ çizim
+const useBreak = () => state.settings.entryType !== 'zone';
+const useZone = () => state.settings.entryType !== 'break';
+const dirTxt = (s) => (s.direction === 'long' ? 'LONG ▲' : 'SHORT ▼');
+
 function visibleSetups() {
-  const s = state.settings;
-  return state.setups.filter((x) => s.showAll || ((x.state === 'ready' || x.state === 'triggered') && x.rr >= s.minRR));
+  return state.settings.showAll ? state.setups : pickSetups(state.setups, toScanOptions(state.settings));
+}
+
+function resultOf(s) {
+  return state.scan.results.find((x) => x.coin === s.coin);
+}
+
+/** Süre koşulu dolmadıysa limit emrin kaç mum sonra aktif olacağı. */
+function barsUntilActive(s) {
+  const z = s.zone;
+  if (!z?.pendingTime || z.activeFrom == null) return 0;
+  return Math.max(0, z.activeFrom - (resultOf(s).candles.length - 1));
+}
+
+function planSummary(s) {
+  const parts = [];
+  const act = activePlans(s, toScanOptions(state.settings)).map((p) => p.type);
+  if (act.includes('break')) parts.push(`B kırılımı ${s.stateLabel} R:R ${fmtX(s.rr, 1)}`);
+  if (act.includes('zone')) parts.push(`Bölge ${s.zone.stateLabel} R:R ${fmtX(s.zone.rr, 1)}`);
+  return parts.join(' · ');
 }
 
 const REASONS = [
   [/ABC/, 'Dalga 2 ABC değil'],
-  [/Süre/, 'Dalga 2 dalga 1\'den kısa'],
+  [/Süre/, "Dalga 2 dalga 1'den kısa"],
   [/geri çekilme/, 'Geri çekilme bant dışı'],
   [/İtki/, 'İtki kuralı ihlali'],
   [/Dalga 1 küçük/, 'Dalga 1 küçük'],
+  [/stop/i, "Bölge stop'un ötesinde"],
 ];
 
 function renderSummary() {
   const r = state.scan;
+  const opts = toScanOptions(state.settings);
   const errors = r.results.filter((x) => x.error);
-  const vis = visibleSetups();
-  const active = state.setups.filter((x) => x.state === 'ready' || x.state === 'triggered');
-  const lowRR = active.filter((x) => x.rr < state.settings.minRR).length;
+  const vis = pickSetups(state.setups, opts);
+  const nBreak = vis.filter((s) => activePlans(s, opts).some((p) => p.type === 'break')).length;
+  const nZone = vis.filter((s) => activePlans(s, opts).some((p) => p.type === 'zone')).length;
+  const loose = pickSetups(state.setups, { ...opts, minRR: 0 }).length;
   const counts = new Map();
   for (const d of state.diagnostics) {
     for (const reason of d.reasons) {
@@ -151,40 +177,66 @@ function renderSummary() {
     }
   }
   const chips = [...counts].sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span class="chip">${esc(k)}: ${v}</span>`).join('');
+  const split = [useBreak() ? `${nBreak} B kırılımı` : '', useZone() ? `${nZone} limit bölge` : ''].filter(Boolean).join(', ');
   $('#summary').innerHTML = `
     <p><strong>${r.results.length} coin</strong> · ${esc(r.tf.label)} · ${fmtTime(r.at)} ·
-      <strong>${active.length}</strong> aktif setup${lowRR ? ` (${lowRR} tanesi R:R &lt; ${state.settings.minRR} olduğu için gizli)` : ''} ·
-      ${state.setups.length - active.length} kaçan/bozulan
+      <strong>${vis.length}</strong> aktif setup (${split})${loose > vis.length ? ` · ${loose - vis.length} tanesi R:R &lt; ${opts.minRR} olduğu için gizli` : ''} ·
+      ${state.setups.length - loose} kaçan/bozulan
       ${errors.length ? `<span class="error"> · ${errors.length} coin okunamadı (${esc(errors.slice(0, 4).map((e) => e.coin).join(', '))})</span>` : ''}</p>
     ${chips ? `<div class="chips"><span class="chip muted">Elenen adaylar →</span>${chips}</div>` : ''}`;
-  $('#listTitle').textContent = `Setup'lar (${vis.length})`;
+  $('#listTitle').textContent = `Setup'lar (${visibleSetups().length})`;
+}
+
+const lvBox = (label, value, cls = '') => `<div${cls ? ` class="${cls}"` : ''}><b>${esc(label)}</b><span class="num">${value}</span></div>`;
+
+function breakBlock(s, active) {
+  if (s.phase !== 'complete') {
+    return `<div class="plan muted-plan"><div class="plan-head"><span class="plan-name">B kırılımı</span><span class="muted">C tamamlanınca hesaplanır · tetik B = ${fmtPrice(s.abc.B.price, s.price)}</span></div></div>`;
+  }
+  const L = s.levels;
+  return `<div class="plan${active ? '' : ' faded'}">
+    <div class="plan-head"><span class="plan-name">B kırılımı</span><span class="state ${s.state}">${esc(s.stateLabel)}</span><span class="rr">R:R <b class="num">${fmtX(s.rr, 1)}</b></span></div>
+    <div class="lv">${lvBox(s.state === 'triggered' ? 'Fiyat' : 'Tetik', fmtPrice(L.entry, s.price))}${lvBox('Stop', fmtPrice(L.stop, s.price))}${lvBox('Hedef 1', fmtPrice(L.targets[0].price, s.price))}${lvBox('Hedef 2', fmtPrice(L.targets[1]?.price, s.price))}</div>
+  </div>`;
+}
+
+function zoneBlock(s, active) {
+  const z = s.zone;
+  if (!z) return `<div class="plan muted-plan"><div class="plan-head"><span class="plan-name">Limit bölge</span><span class="muted">ABC yok, bölge hesaplanamadı</span></div></div>`;
+  const wait = barsUntilActive(s);
+  const fill = z.legs.length > 1 && z.filledLegs ? ` (${z.filledLegs}/${z.legs.length})` : '';
+  return `<div class="plan${active ? '' : ' faded'}">
+    <div class="plan-head"><span class="plan-name">Limit bölge</span><span class="state zone-${z.state}">${esc(z.stateLabel)}${fill}</span>
+      <span class="chip str-${z.strength}">${esc(z.strength)}${z.inside ? ` · ${z.inside} çakışma` : ''}</span>
+      <span class="rr">R:R <b class="num">${fmtX(z.rr, 1)}</b></span></div>
+    ${wait ? `<div class="note">Süre koşulu: emir ${wait} mum sonra aktif</div>` : ''}
+    <div class="lv">${lvBox('Bölge', `${fmtPrice(z.near, s.price)} – ${fmtPrice(z.far, s.price)}`, 'wide')}${lvBox('Ort. giriş', fmtPrice(z.entry, s.price))}${lvBox('Stop', fmtPrice(z.stop, s.price))}${lvBox('Hedef 2', fmtPrice(z.targets[1]?.price, s.price))}</div>
+  </div>`;
 }
 
 function card(s) {
-  const L = s.levels;
-  const dirTxt = s.direction === 'long' ? 'LONG ▲' : 'SHORT ▼';
+  const act = activePlans(s, toScanOptions(state.settings)).map((p) => p.type);
   const sel = state.selected && setupKey(state.selected) === setupKey(s);
-  const faded = s.state === 'gone' || s.state === 'invalid' || s.rr < state.settings.minRR;
+  const phase = s.phase === 'forming' ? 'Dalga 2 sürüyor' : 'Dalga 2 tamam';
+  const time = s.phase === 'forming'
+    ? `Süre 2/1 şu an ${fmtX(s.timeRatio, 2)}${s.timeOk ? ' ✓' : ''}`
+    : `Süre 2/1 = ${fmtX(s.timeRatio, 2)}`;
   return `
-  <button type="button" class="card ${s.direction}${faded ? ' faded' : ''}" data-key="${esc(setupKey(s))}" aria-current="${sel}">
+  <button type="button" class="card ${s.direction}${act.length ? '' : ' faded'}" data-key="${esc(setupKey(s))}" aria-current="${sel}">
     <div class="head">
       <span class="coin">${esc(s.coin)}</span>
-      <span class="dir ${s.direction}">${dirTxt}</span>
-      <span class="state ${s.state}">${esc(s.stateLabel)}</span>
-      <span class="score">Skor <b class="num">${s.score}</b> · R:R <b class="num">${fmtX(s.rr, 1)}</b></span>
+      <span class="dir ${s.direction}">${dirTxt(s)}</span>
+      <span class="chip">${phase}</span>
+      <span class="score">Skor <b class="num">${s.score}</b></span>
     </div>
     <div class="meta">
-      <span>Dalga 2: ${s.abc ? esc(s.abc.kind === 'flat' ? 'flat' : 'zigzag') : 'ABC yok'}</span>
-      <span>Geri çekilme ${fmtPct(s.retr, 1)}</span>
-      <span>Süre 2/1 = ${fmtX(s.timeRatio, 2)}</span>
-      <span>${s.barsSince2} mum önce</span>
+      <span>Dalga 2: ${s.abc ? esc(s.abc.kind) : 'ABC yok'}</span>
+      <span>Geri çekilme ${fmtPct(s.retr, 1)}${s.phase === 'forming' ? ' (şu an)' : ''}</span>
+      <span>${time}</span>
+      <span>derece ${s.sensitivity}×ATR</span>
     </div>
-    <div class="lv">
-      <div><b>${s.state === 'triggered' ? 'Fiyat' : 'Tetik'}</b><span class="num">${fmtPrice(L.entry, s.price)}</span></div>
-      <div><b>Stop</b><span class="num">${fmtPrice(L.stop, s.price)}</span></div>
-      <div><b>Hedef 1</b><span class="num">${fmtPrice(L.targets[0].price, s.price)}</span></div>
-      <div><b>Hedef 2</b><span class="num">${fmtPrice(L.targets[1]?.price, s.price)}</span></div>
-    </div>
+    ${useBreak() ? breakBlock(s, act.includes('break')) : ''}
+    ${useZone() ? zoneBlock(s, act.includes('zone')) : ''}
   </button>`;
 }
 
@@ -192,7 +244,7 @@ function renderCards() {
   const vis = visibleSetups();
   const box = $('#cards');
   if (!vis.length) {
-    box.innerHTML = `<div class="empty muted">Bu zaman diliminde tüm koşulları sağlayan setup yok.<br/>Başka bir zaman dilimi dene veya “Kaçan / bozulanları da göster”i aç.</div>`;
+    box.innerHTML = `<div class="empty muted">Bu zaman diliminde tüm koşulları sağlayan setup yok.<br/>Başka bir zaman dilimi ya da giriş tipi dene veya “Kaçan / bozulanları da göster”i aç.</div>`;
     return;
   }
   box.innerHTML = vis.map(card).join('');
@@ -212,6 +264,43 @@ function ruleList(title, results) {
   return `<h3>${esc(title)}</h3><ul>${items}</ul>`;
 }
 
+const fact = (label, value, extra = '') => `<div><b>${esc(label)}</b><span class="num">${value}</span>${extra}</div>`;
+
+function breakFacts(s) {
+  if (s.phase !== 'complete') return '';
+  const L = s.levels;
+  const risk = Math.abs(L.entry - L.stop) / L.entry;
+  return `<h3 class="sec">B kırılımı (onaylı) · <span class="state ${s.state}">${esc(s.stateLabel)}</span></h3>
+    <div class="facts">
+      ${fact(s.state === 'triggered' ? 'Giriş (güncel fiyat)' : 'Tetik (B kırılımı)', fmtPrice(L.entry, s.price))}
+      ${fact('Stop', fmtPrice(L.stop, s.price), ` <small class="muted">risk ${fmtPct(risk)}</small>`)}
+      ${L.targets.map((t, i) => fact(`Hedef ${i + 1} (${t.k} × W1)`, fmtPrice(t.price, s.price))).join('')}
+      ${fact(`R:R (hedef ${state.settings.mainTarget + 1})`, fmtX(s.rr, 2))}
+    </div>`;
+}
+
+function zoneFacts(s) {
+  const z = s.zone;
+  if (!z) return '';
+  const risk = Math.abs(z.entry - z.stop) / z.entry;
+  const wait = barsUntilActive(s);
+  const entryTxt = { mid: 'kademeli (yarısı yakın, yarısı uzak kenar)', near: 'yakın kenar', far: 'uzak kenar' }[state.settings.zoneEntry];
+  const levels = [...z.levels].sort((a, b) => b.price - a.price).map((l) =>
+    `<li class="${l.edge ? 'edge' : l.inside ? 'in' : ''}"><span>${esc(l.name)}${l.edge ? ' · kenar' : ''}</span><span class="num">${fmtPrice(l.price, s.price)}</span><span>${l.inside ? '● bölgede' : ''}</span></li>`).join('');
+  return `<h3 class="sec">Limit bölge (erken) · <span class="state zone-${z.state}">${esc(z.stateLabel)}</span></h3>
+    ${wait ? `<p class="note">Süre koşulu: dalga 2, dalga 1'den uzun sürünce emir aktif olur (${wait} mum sonra).</p>` : ''}
+    <div class="facts">
+      ${fact('Yakın kenar', fmtPrice(z.near, s.price))}
+      ${fact('Uzak kenar', fmtPrice(z.far, s.price))}
+      ${fact('Bölge gücü', `${esc(z.strength)} · ${fmtX(z.widthAtr, 1)} ATR · ${fmtPct(z.widthPct, 2)}`)}
+      ${fact('Giriş', fmtPrice(z.entry, s.price), ` <small class="muted">${esc(entryTxt)}${z.filledLegs ? `, ${z.filledLegs}/${z.legs.length} doldu` : ''}</small>`)}
+      ${fact(z.stopMode === 'r886' ? 'Stop (dalga 2 = %88,6)' : 'Stop (dalga 1 başı)', fmtPrice(z.stop, s.price), ` <small class="muted">risk ${fmtPct(risk)}</small>`)}
+      ${z.targets.map((t, i) => fact(`Hedef ${i + 1} (${t.k} × W1)`, fmtPrice(t.price, s.price))).join('')}
+      ${fact(`R:R (hedef ${state.settings.mainTarget + 1})`, fmtX(z.rr, 2))}
+    </div>
+    <ul class="levels">${levels}</ul>`;
+}
+
 function renderDetail() {
   const s = state.selected;
   const box = $('#detail');
@@ -220,9 +309,7 @@ function renderDetail() {
     box.innerHTML = '<div class="empty muted">Bir setup seçince grafik ve kural kontrolleri burada görünür.</div>';
     return;
   }
-  const r = state.scan.results.find((x) => x.coin === s.coin);
-  const L = s.levels;
-  const risk = Math.abs(L.entry - L.stop) / L.entry;
+  const r = resultOf(s);
   const rsi = [];
   if (s.rsi.divergence) rsi.push(`C/A uyumsuzluk ${s.rsi.divergence.ok ? 'var ✓' : 'yok'} (${s.rsi.divergence.rA.toFixed(0)} → ${s.rsi.divergence.rC.toFixed(0)})`);
   if (s.rsi.w1Momentum) rsi.push(`dalga 1 RSI ${s.rsi.w1Momentum.r1.toFixed(0)} ${s.rsi.w1Momentum.ok ? '✓' : ''}`);
@@ -230,32 +317,30 @@ function renderDetail() {
   box.innerHTML = `
     <div class="detail-head">
       <h2>${esc(s.coin)}/USDT</h2>
-      <span class="dir ${s.direction}">${s.direction === 'long' ? 'LONG ▲' : 'SHORT ▼'}</span>
-      <span class="state ${s.state}">${esc(s.stateLabel)}</span>
+      <span class="dir ${s.direction}">${dirTxt(s)}</span>
+      <span class="chip">${s.phase === 'forming' ? 'Dalga 2 sürüyor' : 'Dalga 2 tamam'}</span>
       <span class="chip">${esc(state.scan.tf.id)} · derece ${s.sensitivity}×ATR</span>
       <a class="ext" href="${tv}" target="_blank" rel="noopener">TradingView'de aç ↗</a>
     </div>
     <div class="chart" id="chart"></div>
-    <div class="legend">${LEGEND.map(([t, c, cls]) => `<span><i class="${cls}" style="border-top-color:${c}"></i>${esc(t)}</span>`).join('')}</div>
+    <div class="legend">${LEGEND.filter(([, , , t]) => !t || (t === 'break' ? useBreak() : useZone())).map(([t, c, cls]) => `<span><i class="${cls}" style="border-top-color:${c}"></i>${esc(t)}</span>`).join('')}</div>
     <div class="facts">
-      <div><b>Güncel fiyat</b><span class="num">${fmtPrice(s.price)}</span></div>
-      <div><b>${s.state === 'triggered' ? 'Giriş (güncel)' : 'Tetik (B kırılımı)'}</b><span class="num">${fmtPrice(L.entry, s.price)}</span></div>
-      <div><b>Stop</b><span class="num">${fmtPrice(L.stop, s.price)}</span> <small class="muted">risk ${fmtPct(risk)}</small></div>
-      <div><b>Geçersizlik (0)</b><span class="num">${fmtPrice(L.invalidation, s.price)}</span></div>
-      ${L.targets.map((t, i) => `<div><b>Hedef ${i + 1} (${t.k} × W1)</b><span class="num">${fmtPrice(t.price, s.price)}</span></div>`).join('')}
-      <div><b>R:R (hedef ${state.settings.mainTarget + 1})</b><span class="num">${fmtX(s.rr, 2)}</span></div>
-      <div><b>Dalga 2 geri çekilme</b><span class="num">${fmtPct(s.retr)}</span></div>
-      <div><b>Süre: dalga 1 / dalga 2</b><span class="num">${s.durations.D1} / ${s.durations.D2} mum (${fmtX(s.timeRatio)})</span></div>
-      <div><b>Dalga 2 yapısı</b><span>${s.abc ? esc(s.abc.label) : 'ABC bulunamadı'}</span></div>
-      <div><b>RSI</b><span>${esc(rsi.join(' · ') || '–')}</span></div>
-      <div><b>Hacim W1 / W2</b><span>${s.volume.ok ? 'W1 > W2 ✓' : 'W1 ≤ W2'}</span></div>
-      <div><b>Skor</b><span class="num">${s.score}/100</span></div>
+      ${fact('Güncel fiyat', fmtPrice(s.price))}
+      ${fact('Geçersizlik (0)', fmtPrice(s.points.p0.price, s.price))}
+      ${fact(s.phase === 'forming' ? 'Dalga 2 geri çekilme (şu an)' : 'Dalga 2 geri çekilme', fmtPct(s.retr))}
+      ${fact('Süre: dalga 1 / dalga 2', `${s.durations.D1} / ${s.durations.D2} mum (${fmtX(s.timeRatio)})${s.phase === 'forming' ? (s.timeOk ? ' ✓' : ' – henüz sağlanmadı') : ''}`)}
+      ${fact('Dalga 2 yapısı', s.abc ? esc(s.abc.label) + (s.phase === 'forming' ? ' (C oluşuyor)' : '') : 'ABC bulunamadı')}
+      ${s.phase === 'complete' ? fact('RSI', esc(rsi.join(' · ') || '–')) : ''}
+      ${s.volume ? fact('Hacim W1 / W2', s.volume.ok ? 'W1 > W2 ✓' : 'W1 ≤ W2') : ''}
+      ${fact('Skor', `${s.score}/100`)}
     </div>
+    ${useBreak() ? breakFacts(s) : ''}
+    ${useZone() ? zoneFacts(s) : ''}
     <div class="rules">
-      ${ruleList(`İtki başlangıcı 0-1-2 (${state.settings.ruleSet})`, s.impulse.results)}
-      ${s.abc ? ruleList(`Dalga 2 iç yapısı: ${s.abc.label}`, s.abc.results) : ''}
+      ${ruleList(`İtki başlangıcı 0-1-2 (${state.settings.ruleSet})${s.phase === 'forming' ? ' — 2 = şimdiye kadarki uç' : ''}`, s.impulse.results)}
+      ${s.abc ? ruleList(`Dalga 2 iç yapısı: ${s.abc.label}${s.phase === 'forming' ? ' (0-A-B, C oluşuyor)' : ''}`, s.abc.results) : ''}
     </div>`;
-  drawSetup($('#chart'), r.candles, r.live, s);
+  drawSetup($('#chart'), r.candles, r.live, s, { showBreak: useBreak(), showZone: useZone() });
 }
 
 function select(s) {
@@ -280,6 +365,7 @@ function init() {
   renderSettings($('#settings'), state.settings, updateSettings);
   for (const b of document.querySelectorAll('#tf button')) b.addEventListener('click', () => updateSettings({ timeframe: b.dataset.tf }));
   $('#ruleSet').addEventListener('change', (e) => updateSettings({ ruleSet: e.target.value }));
+  $('#entryType').addEventListener('change', (e) => updateSettings({ entryType: e.target.value }));
   $('#showAll').addEventListener('change', (e) => { state.settings.showAll = e.target.checked; saveSettings(state.settings); if (state.scan) render(); });
   $('#scanBtn').addEventListener('click', () => scan());
   $('#settingsBtn').addEventListener('click', () => {
@@ -292,3 +378,4 @@ function init() {
 }
 
 init();
+

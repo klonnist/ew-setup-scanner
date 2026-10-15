@@ -6,6 +6,7 @@ const KEY = 'ew-setup-scanner:settings:v1';
 export const UI_DEFAULTS = {
   ...DEFAULTS,
   timeframe: '4H',
+  entryType: 'both',
   topN: 50,
   manualCoins: '',
   autoRefresh: 0, // dakika; 0 = kapalı
@@ -49,8 +50,13 @@ const FIELDS = [
   ['minW1Atr', 'Min. dalga 1 boyu (× ATR)', 'number', { step: 0.5, min: 0 }],
   ['rsiMode', 'RSI filtresi (Ders 3)', 'select', { options: [['score', 'Skora ekle'], ['require', 'Zorunlu'], ['off', 'Kapalı']], hint: "C'de A'ya göre uyumsuzluk / dalga 1'de RSI ≥ 60 (short: ≤ 40)" }],
   ['volume', 'Hacim filtresi (W1 > W2 hacmi skora +)', 'bool'],
-  ['stopMode', 'Stop yeri', 'select', { options: [['w2', 'Dalga 2 ucu'], ['w0', '0 noktası (geçersizlik)']] }],
-  ['stopAtr', 'Stop tamponu (× ATR)', 'number', { step: 0.05, min: 0 }],
+  ['stopMode', 'Stop yeri (B kırılımı)', 'select', { options: [['w2', 'Dalga 2 ucu'], ['w0', '0 noktası (geçersizlik)']] }],
+  ['stopAtr', 'Stop tamponu (× ATR)', 'number', { step: 0.05, min: 0, hint: 'İki giriş tipinde de stop bu kadar ötesine konur.' }],
+  ['zoneCExt', 'Bölge kenarı: C = ? × A', 'number', { step: 0.001, min: 0.5, hint: "B'den ölçülür. Varsayılan 1,272." }],
+  ['zoneRetr', 'Bölge kenarı: dalga 2 geri çekilme', 'pct', { hint: 'Varsayılan %61,8.' }],
+  ['zoneEntry', 'Bölge girişi', 'select', { options: [['mid', 'Kademeli: yarısı yakın, yarısı uzak kenar'], ['near', 'Yakın kenar'], ['far', 'Uzak kenar']] }],
+  ['zoneStop', 'Stop yeri (limit bölge)', 'select', { options: [['w0', 'Dalga 1 başı (0 noktası)'], ['r886', 'Dalga 2 = %88,6']] }],
+  ['zoneTime', 'Süre koşulu (limit bölge)', 'select', { options: [['require', "Emir, süre(2) > süre(1) olunca aktif"], ['ignore', 'Süreye bakma']] }],
   ['targets', 'Hedefler (× dalga 1)', 'list'],
   ['mainTarget', 'R:R için hedef', 'select', { options: [[0, 'Hedef 1'], [1, 'Hedef 2'], [2, 'Hedef 3']], num: true }],
   ['minRR', 'Min. R:R', 'number', { step: 0.25, min: 0 }],

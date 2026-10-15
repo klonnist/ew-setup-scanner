@@ -43,6 +43,6 @@ export async function runScan(settings, hooks = {}) {
   await Promise.all(Array.from({ length: Math.min(CONCURRENCY, coins.length) }, worker));
 
   const setups = results.flatMap((r) => r.setups.map((s) => ({ ...s, coin: r.coin, instId: r.instId })));
-  setups.sort(compareSetups);
+  setups.sort((a, b) => compareSetups(a, b, opts));
   return { tf, coins, results, setups, at: Date.now() };
 }

@@ -3,6 +3,7 @@
 import { evaluate } from '../ew/engine/analyze.js';
 import { zigzag, fillAtr } from './zigzag.js';
 import { atr as atrOf, rsi as rsiOf } from '../data/indicators.js';
+import { zonePlan } from './zone.js';
 
 export const DEFAULTS = {
   ruleSet: 'course',
@@ -23,7 +24,20 @@ export const DEFAULTS = {
   mainTarget: 1, // R:R hesabında kullanılan hedefin indeksi (1.618)
   minRR: 2,
   direction: 'both', // 'both' | 'long' | 'short'
+  entryType: 'break', // 'break': B kırılımı (onaylı) | 'zone': limit bölge (erken) | 'both'
+  zoneCExt: 1.272, // bölge kenarı: C = 1,272 × A (B'den ölçülür)
+  zoneRetr: 0.618, // bölge kenarı: dalga 2 = dalga 1'in %61,8'i
+  zoneEntry: 'mid', // 'near' yakın kenar | 'mid' yarı yarıya kademeli | 'far' uzak kenar
+  zoneStop: 'w0', // 'w0': dalga 1'in başı (0) | 'r886': dalga 2 = %88,6
+  zoneTime: 'require', // 'require': limit emir süre(2) > minTimeRatio × süre(1) olunca aktif | 'ignore'
 };
+
+/** Bölge emrinin aktif olduğu ilk mutlak mum indeksi (süre koşulu). */
+const activeFromOf = (o, P0, P1) =>
+  o.zoneTime === 'require' ? P1.i + Math.floor(o.minTimeRatio * (P1.i - P0.i)) + 1 : null;
+
+const useZone = (o) => o.entryType === 'zone' || o.entryType === 'both';
+const useBreak = (o) => o.entryType === 'break' || o.entryType === 'both';
 
 const STATE_LABEL = {
   ready: 'Hazırlanıyor',
@@ -75,16 +89,112 @@ export function findWave3Setups(candles, options = {}, live = null) {
   const seen = new Set();
   const out = [];
   for (const k of opts.sensitivities) {
-    const { pivots } = zigzag(candles, atrArr, k);
-    if (pivots.length < 3) continue;
-    const [P0, P1, P2] = pivots.slice(-3);
-    const key = `${P0.i}-${P1.i}-${P2.i}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    const s = evaluateSetup({ candles, atrArr, rsiArr, P0, P1, P2, k, opts, live, price });
-    if (s) out.push(s);
+    const { pivots, tentative } = zigzag(candles, atrArr, k);
+    // Tamamlanmış dalga 2: son üç onaylı pivot 0-1-2
+    if (pivots.length >= 3) {
+      const [P0, P1, P2] = pivots.slice(-3);
+      const key = `${P0.i}-${P1.i}-${P2.i}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        const s = evaluateSetup({ candles, atrArr, rsiArr, P0, P1, P2, k, opts, live, price });
+        if (s) out.push(s);
+      }
+    }
+    // Süren dalga 2: son iki onaylı pivot 0-1, C henüz oluşuyor (yalnızca bölge girişi için)
+    if (useZone(opts) && pivots.length >= 2 && tentative) {
+      const [P0, P1] = pivots.slice(-2);
+      const key = `f${P0.i}-${P1.i}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        const s = evaluateForming({ candles, atrArr, P0, P1, tentative, k, opts, live, price });
+        if (s) out.push(s);
+      }
+    }
   }
   return out;
+}
+
+// Dalga 2 sürerken kısmi sonuçla kırılmayan kurallar (dalga 2 henüz bitmedi).
+const PARTIAL_OK = new Set(['CRS-IMP-1']);
+
+/** Dalga 2 sürüyor: 0-1 onaylı, iç yapıda A ve B onaylı, C oluşuyor → limit bölge planı. */
+function evaluateForming({ candles, atrArr, P0, P1, tentative, k, opts, live, price }) {
+  const d = P0.type === 'L' ? 1 : -1;
+  const dirName = d === 1 ? 'long' : 'short';
+  if (opts.direction !== 'both' && opts.direction !== dirName) return null;
+  if (tentative.type !== P0.type) return null;
+  const last = candles.length - 1;
+  const cur = { i: tentative.i, price: tentative.price, type: tentative.type };
+  const reject = [];
+
+  const L1 = Math.abs(Math.log(P1.price) - Math.log(P0.price));
+  const retrNow = Math.abs(Math.log(P1.price) - Math.log(cur.price)) / L1;
+  const w1Atr = Math.abs(P1.price - P0.price) / atrArr[P1.i];
+  if (w1Atr < opts.minW1Atr) reject.push(`Dalga 1 küçük (${w1Atr.toFixed(1)}×ATR)`);
+  if (retrNow > opts.retrMax) reject.push(`Dalga 2 geri çekilme %${(retrNow * 100).toFixed(1)} bant dışı`);
+
+  const imp = evaluate('impulse', [P0, P1, cur].map((p) => ({ t: p.i, p: p.price })), { ruleSet: opts.ruleSet, logScale: true });
+  const hardFails = imp.results.filter((r) => r.status === 'fail' && !PARTIAL_OK.has(r.rule.id));
+  if (hardFails.length) reject.push('İtki kuralı ihlali');
+
+  // İç yapı: P1'den bugüne alt derecede tam iki onaylı pivot (A, B), C oluşuyor.
+  const kinds = opts.abcKinds === 'both' ? ['zigzag', 'flat'] : [opts.abcKinds];
+  let ab = null;
+  for (const div of opts.subDivisors) {
+    const { pivots: inner, tentative: t } = zigzag(candles, atrArr, k / div, { from: P1.i, to: last, start: { i: P1.i, type: P1.type } });
+    const ins = inner.filter((p) => p.i > P1.i);
+    if (ins.length !== 2 || ins[0].type === P1.type || !t || t.type !== ins[0].type) continue;
+    const [A, B] = ins;
+    const pts = [{ t: P1.i, p: P1.price }, { t: A.i, p: A.price }, { t: B.i, p: B.price }];
+    const ev = kinds.map((id) => evaluate(id, pts, { ruleSet: opts.ruleSet, logScale: true })).filter((e) => e.valid).sort((a, b) => b.score - a.score);
+    if (ev.length) { ab = { A, B, C: t, eval: ev[0] }; break; }
+  }
+  if (!ab) reject.push('Dalga 2 ABC değil');
+
+  if (reject.length) {
+    opts.diagnostics?.push({ direction: dirName, sensitivity: k, phase: 'forming', reasons: reject });
+    return null;
+  }
+
+  const path = candles.slice(ab.B.i + 1);
+  if (live) path.push(live);
+  const zone = zonePlan({
+    d, p0: P0.price, p1: P1.price, A: ab.A.price, B: ab.B.price, atr: atrArr[last], l1Log: L1, base: null,
+    pathStart: ab.B.i + 1, activeFrom: activeFromOf(opts, P0, P1),
+  }, path, false, opts);
+  if (!zone || zone.invalid) {
+    opts.diagnostics?.push({ direction: dirName, sensitivity: k, phase: 'forming', reasons: [zone?.reason || 'Bölge hesaplanamadı'] });
+    return null;
+  }
+
+  const D1 = P1.i - P0.i, D2 = last - P1.i;
+  const timeRatio = D2 / (D1 || 1);
+  const strengthPts = { 'Güçlü': 10, 'Orta': 5, 'Zayıf': 0 }[zone.strength] + Math.min(zone.inside, 3) * 2;
+  const score = Math.min(100, Math.round(0.35 * imp.score + 0.35 * ab.eval.score + strengthPts));
+
+  return {
+    phase: 'forming',
+    direction: dirName,
+    d,
+    sensitivity: k,
+    points: { p0: P0, p1: P1, p2: null, cNow: { i: ab.C.i, price: ab.C.price, type: ab.C.type } },
+    abc: { kind: ab.eval.pattern, label: ab.eval.label, A: ab.A, B: ab.B, results: ab.eval.results, score: ab.eval.score },
+    impulse: { label: imp.label, results: imp.results, score: imp.score },
+    retr: retrNow,
+    timeRatio,
+    timeOk: timeRatio > opts.minTimeRatio,
+    durations: { D1, D2 },
+    rsi: { divergence: null, w1Momentum: null },
+    volume: null,
+    levels: null,
+    zone,
+    price,
+    rr: 0,
+    state: 'forming',
+    stateLabel: 'Dalga 2 sürüyor',
+    barsSince2: null,
+    score,
+  };
 }
 
 function evaluateSetup({ candles, atrArr, rsiArr, P0, P1, P2, k, opts, live, price }) {
@@ -167,7 +277,20 @@ function evaluateSetup({ candles, atrArr, rsiArr, P0, P1, P2, k, opts, live, pri
   if (opts.volume && volOk) score += 10;
   score = Math.min(100, Math.round(score));
 
+  // Limit bölge planı (geriye dönük: C oluşurken bölge dolmuş muydu?)
+  let zone = null;
+  if (useZone(opts) && !abc.none) {
+    const zpath = candles.slice(abc.B.i + 1);
+    if (live) zpath.push(live);
+    zone = zonePlan({
+      d, p0: P0.price, p1: P1.price, A: abc.A.price, B: abc.B.price, atr: atrArr[P2.i], l1Log: L1, base: P2.price,
+      pathStart: abc.B.i + 1, activeFrom: activeFromOf(opts, P0, P1),
+    }, zpath, true, opts);
+    if (zone?.invalid) zone = null;
+  }
+
   return {
+    phase: 'complete',
     direction: dirName,
     d,
     sensitivity: k,
@@ -192,21 +315,35 @@ function evaluateSetup({ candles, atrArr, rsiArr, P0, P1, P2, k, opts, live, pri
     state,
     stateLabel: STATE_LABEL[state],
     barsSince2: candles.length - 1 - P2.i,
+    timeOk: true,
+    zone,
     score,
   };
 }
 
-/** Panelde gösterilecek setup'lar: geçerli durumlar + min R:R; coin başına en iyisi. */
-export function pickSetups(all, opts = {}) {
+/** Seçilen giriş tipine göre bu setup'ın hâlâ geçerli (aktif) planları. */
+export function activePlans(s, opts = {}) {
   const o = { ...DEFAULTS, ...opts };
-  const visible = all.filter((s) => (s.state === 'ready' || s.state === 'triggered') && s.rr >= o.minRR);
-  visible.sort(compareSetups);
-  return visible;
+  const out = [];
+  if (useBreak(o) && s.phase === 'complete' && (s.state === 'ready' || s.state === 'triggered') && s.rr >= o.minRR) {
+    out.push({ type: 'break', rr: s.rr });
+  }
+  if (useZone(o) && s.zone && (s.zone.state === 'waiting' || s.zone.state === 'filled') && s.zone.rr >= o.minRR) {
+    out.push({ type: 'zone', rr: s.zone.rr });
+  }
+  return out;
 }
 
-export function compareSetups(a, b) {
-  const st = { triggered: 0, ready: 1, gone: 2, invalid: 3 };
-  if (st[a.state] !== st[b.state]) return st[a.state] - st[b.state];
+/** Panelde gösterilecek setup'lar: en az bir aktif planı olanlar, sıralı. */
+export function pickSetups(all, opts = {}) {
+  return all.filter((s) => activePlans(s, opts).length).sort((a, b) => compareSetups(a, b, opts));
+}
+
+const bestRR = (s, o) => Math.max(0, ...activePlans(s, o).map((p) => p.rr));
+
+export function compareSetups(a, b, opts = {}) {
+  const act = (s) => (activePlans(s, opts).length ? 0 : 1);
+  if (act(a) !== act(b)) return act(a) - act(b);
   if (b.score !== a.score) return b.score - a.score;
-  return b.rr - a.rr;
+  return bestRR(b, opts) - bestRR(a, opts);
 }

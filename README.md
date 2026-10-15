@@ -19,6 +19,19 @@ Seviyeler: **tetik** = B dalgasının kırılımı (veya dalga 1 ucu, hangisi ya
 **geçersizlik** = 0 noktası, **hedefler** = dalga 2 ucu + {1; 1,618; 2,618} × dalga 1 (log ölçek).
 Durumlar: *Hazırlanıyor* (tetik bekleniyor), *Tetiklendi*, *Kaçtı* (hedef 1'e ulaştı), *Geçersiz* (dalga 2 ucu kırıldı).
 
+## Giriş tipleri
+
+Araç çubuğundaki **Giriş tipi** ile seçilir; "İkisi birden" seçilince kartta iki plan ayrı R:R ile görünür.
+
+- **B kırılımı (onaylı):** yukarıdaki seviyeler; dalga 2 tamamlandıktan sonra.
+- **Limit bölge (erken):** giriş bölgesi = C = 1,272 × A (B'den ölçülür) ile dalga 2 = %61,8 geri çekilme arası
+  (TradingView Fibonacci araçlarıyla aynı, doğrusal ölçek). Dalga 2 **sürerken** de (0-1-A-B onaylı, C oluşuyor) listelenir.
+  - Giriş: kademeli (yarısı yakın, yarısı uzak kenar), yakın kenar veya uzak kenar.
+  - Stop: dalga 1'in başı (0 noktası) veya dalga 2 = %88,6 — kullanıcı seçer; ATR tamponu iki tipte ortaktır.
+  - Bölge gücü kenarların yakınlığına göre (≤ 1 ATR güçlü, ≤ 2,5 ATR orta); bölgeye düşen diğer seviyeler
+    (C = 1A / 1,382A / 1,618A, %50 / %78,6 / %88,6) "çakışma" olarak sayılır.
+  - Süre koşulu: limit emir ancak süre(2) > süre(1) olduktan sonra aktif sayılır (Ayarlar'dan kapatılabilir).
+
 Tüm eşikler sayfadaki **Ayarlar** bölmesinden değiştirilebilir. Ağ gerektirmeyen ayarlar önbellekteki mumlarla anında yeniden hesaplanır.
 
 ## Kural motoru
