@@ -39,7 +39,7 @@ function updateSettings(patch) {
   if (patch === null) renderSettings($('#settings'), state.settings, updateSettings);
   if ('autoRefresh' in (patch || {})) setupAutoRefresh();
   const netChanged = patch === null || NET_KEYS.some((k) => k in patch && String(patch[k]) !== String(prev[k]));
-  if (!state.scan) return;
+  if (!state.scan) { if (state.busy) scan(); return; } // ilk tarama sürerken değişiklik: yeniden başlat
   if (netChanged) scan();
   else recompute();
 }

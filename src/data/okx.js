@@ -4,7 +4,7 @@
 //  - Mumlar eskiden yeniye sıralanır; kapanmamış mum (confirm = 0) ayrıca `live` döner.
 
 const BASE = 'https://www.okx.com';
-const RATE_GAP_MS = { candles: 80, other: 120 }; // OKX: candles 40 istek / 2 sn
+const RATE_GAP_MS = { candles: 80, history: 120, other: 120 }; // OKX: candles 40, history-candles 20 istek / 2 sn
 const TIMEOUT_MS = 15000;
 const MAX_RETRIES = 4;
 const RETRYABLE_CODES = new Set(['50001', '50004', '50011', '50013', '50026', '50061']);
@@ -17,7 +17,7 @@ export const STABLES = new Set([
 ]);
 
 export const TIMEFRAMES = {
-  '1H': { id: '1H', okxBar: '1H', label: '1 saat', ms: 3600e3 },
+  '15m': { id: '15m', okxBar: '15m', label: '15 dakika', ms: 15 * 60e3 },
   '4H': { id: '4H', okxBar: '4H', label: '4 saat', ms: 4 * 3600e3 },
   '1D': { id: '1D', okxBar: '1Dutc', label: '1 gün', ms: 86400e3 },
 };

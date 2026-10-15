@@ -16,6 +16,7 @@ export const DEFAULTS = {
   abcKinds: 'both', // 'zigzag' | 'flat' | 'both'
   minTimeRatio: 1.0, // süre(2) / süre(1) bundan BÜYÜK olmalı
   minW1Atr: 3,
+  w1Extend: 1, // 0 noktasını kaç iç dalgalanma geriye taşıyabilir (0 = son dönüş noktası, 99 = en geniş)
   rsiMode: 'score', // 'off' | 'score' | 'require'
   volume: false,
   stopMode: 'w2', // 'w2': dalga 2 ucu − stopAtr × ATR, 'w0': 0 noktası − stopAtr × ATR
@@ -38,6 +39,24 @@ const activeFromOf = (o, P0, P1) =>
 
 const useZone = (o) => o.entryType === 'zone' || o.entryType === 'both';
 const useBreak = (o) => o.entryType === 'break' || o.entryType === 'both';
+
+/**
+ * Dalga 1'in başlangıcını geriye genişletir: daha önceki aynı tip pivot daha uçtaysa (long: daha düşük dip)
+ * ve aradaki ters pivot 1'i geçmiyorsa, aradaki dalgalanma dalga 1'in iç yapısı sayılır.
+ * @param j0 pivots içinde P0'ın indeksi
+ */
+export function extendW1Start(pivots, j0, P1, steps) {
+  const d = pivots[j0].type === 'L' ? 1 : -1;
+  let j = j0;
+  for (let n = 0; n < steps && j - 2 >= 0; n++) {
+    const prev = pivots[j - 2], mid = pivots[j - 1];
+    if (prev.type !== pivots[j].type) break;
+    if (!(d * (prev.price - pivots[j].price) < 0)) break; // önceki dip daha aşağıda değil
+    if (!(d * (mid.price - P1.price) < 0)) break; // aradaki tepe 1'i geçiyor
+    j -= 2;
+  }
+  return pivots[j];
+}
 
 const STATE_LABEL = {
   ready: 'Hazırlanıyor',
@@ -92,7 +111,8 @@ export function findWave3Setups(candles, options = {}, live = null) {
     const { pivots, tentative } = zigzag(candles, atrArr, k);
     // Tamamlanmış dalga 2: son üç onaylı pivot 0-1-2
     if (pivots.length >= 3) {
-      const [P0, P1, P2] = pivots.slice(-3);
+      const P1 = pivots[pivots.length - 2], P2 = pivots[pivots.length - 1];
+      const P0 = extendW1Start(pivots, pivots.length - 3, P1, opts.w1Extend);
       const key = `${P0.i}-${P1.i}-${P2.i}`;
       if (!seen.has(key)) {
         seen.add(key);
@@ -102,7 +122,8 @@ export function findWave3Setups(candles, options = {}, live = null) {
     }
     // Süren dalga 2: son iki onaylı pivot 0-1, C henüz oluşuyor (yalnızca bölge girişi için)
     if (useZone(opts) && pivots.length >= 2 && tentative) {
-      const [P0, P1] = pivots.slice(-2);
+      const P1 = pivots[pivots.length - 1];
+      const P0 = extendW1Start(pivots, pivots.length - 2, P1, opts.w1Extend);
       const key = `f${P0.i}-${P1.i}`;
       if (!seen.has(key)) {
         seen.add(key);

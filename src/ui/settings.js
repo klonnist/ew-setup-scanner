@@ -1,5 +1,6 @@
 // Ayarlar: varsayılanlar, tarayıcıda saklama ve "Ayarlar" bölmesinin formu.
 import { DEFAULTS } from '../scan/wave3.js';
+import { TIMEFRAMES } from '../data/okx.js';
 
 const KEY = 'ew-setup-scanner:settings:v1';
 
@@ -16,7 +17,11 @@ export const UI_DEFAULTS = {
 export function loadSettings() {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { ...UI_DEFAULTS, ...JSON.parse(raw) };
+    if (raw) {
+      const s = { ...UI_DEFAULTS, ...JSON.parse(raw) };
+      if (!TIMEFRAMES[s.timeframe]) s.timeframe = UI_DEFAULTS.timeframe; // ör. kaldırılan 1H
+      return s;
+    }
   } catch { /* depolama kapalı olabilir */ }
   return { ...UI_DEFAULTS };
 }
@@ -42,6 +47,7 @@ const FIELDS = [
   ['manualCoins', 'Elle coin listesi', 'text', { hint: 'Doluysa hacim listesi yerine bu kullanılır. Ör: BTC, ETH, SOL' }],
   ['direction', 'Yön', 'select', { options: [['both', 'Long + Short'], ['long', 'Sadece long'], ['short', 'Sadece short']] }],
   ['sensitivities', 'ZigZag duyarlılığı (× ATR)', 'list', { hint: 'Her değer bir dalga derecesi. Küçük = kısa dalgalar.' }],
+  ['w1Extend', 'Dalga 1 başlangıcı', 'select', { options: [[0, 'Son dönüş noktası'], [1, '1 iç dalgalanma geri'], [2, '2 iç dalgalanma geri'], [99, 'En geniş dalga 1']], num: true, hint: "Daha önceki dip daha aşağıdaysa ve aradaki tepe 1'i geçmiyorsa 0 noktası geriye taşınır." }],
   ['retrMin', 'Dalga 2 geri çekilme min', 'pct'],
   ['retrMax', 'Dalga 2 geri çekilme max', 'pct'],
   ['requireAbc', 'Dalga 2 ABC zorunlu', 'bool'],

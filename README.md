@@ -5,7 +5,7 @@ ve **Elliott Wave dalga 3 girişi** setup'larını listeler. Tarayıcıda çalı
 
 ## Setup tanımı
 
-Son üç ZigZag dönüş noktası 0-1-2 olarak alınır (long: dip-tepe-dip, short: tersi). Setup sayılması için:
+Son üç ZigZag dönüş noktası 0-1-2 olarak alınır (long: dip-tepe-dip, short: tersi). 0 noktası, aradaki tepe 1'i geçmiyor ve önceki dip daha aşağıdaysa geriye taşınabilir (Ayarlar → Dalga 1 başlangıcı; varsayılan 1 iç dalgalanma). Setup sayılması için:
 
 | Koşul | Varsayılan |
 |---|---|
@@ -33,6 +33,19 @@ Araç çubuğundaki **Giriş tipi** ile seçilir; "İkisi birden" seçilince kar
   - Süre koşulu: limit emir ancak süre(2) > süre(1) olduktan sonra aktif sayılır (Ayarlar'dan kapatılabilir).
 
 Tüm eşikler sayfadaki **Ayarlar** bölmesinden değiştirilebilir. Ağ gerektirmeyen ayarlar önbellekteki mumlarla anında yeniden hesaplanır.
+
+## Backtest
+
+[`backtest.html`](https://klonnist.github.io/ew-setup-scanner/backtest.html): zaman dilimi (15m / 4H / 1D) ve tarih aralığı seçilir;
+OKX geçmiş mumlarıyla her mum kapanışında canlı tarayıcının göreceği setup'lar bulunur ve emirler sonraki mumlarda simüle edilir
+(gelecek veri kullanılmaz). Hesap Web Worker'larda yapılır.
+
+- B kırılımı: tetik seviyesinde stop emir (setup tetiklenmiş görüldüyse o mumun kapanışından); dalga 2 uzarsa iptal.
+- Limit bölge: yalnızca dalga 2 **sürerken** görülen setup'lar için limit emir; B kırılırsa veya hedef 1 görülürse iptal.
+- Aynı mumda stop ve hedef → stop; dolum mumunda hedef sayılmaz; komisyon R'den düşülür.
+- Rapor: işlem sayısı, kazanma oranı, ortalama / toplam R, kâr faktörü, maks. düşüş, kümülatif R grafiği ve
+  plan tipi, yön, bölge gücü, çakışma, dalga 2 tipi, derece, coin kırılımları.
+- Çalışmalar tarayıcıda (localStorage, ~3,5 MB sınır, tipik çalışma 10–100 KB) saklanır; JSON olarak dışa/içe aktarılabilir.
 
 ## Kural motoru
 
