@@ -1,0 +1,212 @@
+// Dalga 3 girişi setup'ı: tamamlanmış 0-1-2 (dalga 2 = ABC) → dalga 3'e giriş.
+// Saf fonksiyonlar; DOM ve ağ kullanmaz. Long ve short için aynı kod (d = +1 / −1).
+import { evaluate } from '../ew/engine/analyze.js';
+import { zigzag, fillAtr } from './zigzag.js';
+import { atr as atrOf, rsi as rsiOf } from '../data/indicators.js';
+
+export const DEFAULTS = {
+  ruleSet: 'course',
+  sensitivities: [2, 3, 4.5], // ana ZigZag eşiği (× ATR)
+  subDivisors: [2, 2.5, 3, 4], // dalga 2 iç yapısı için eşik = ana eşik ÷ bölen
+  retrMin: 0.382,
+  retrMax: 0.886,
+  idealRetr: [0.5, 0.618],
+  requireAbc: true,
+  abcKinds: 'both', // 'zigzag' | 'flat' | 'both'
+  minTimeRatio: 1.0, // süre(2) / süre(1) bundan BÜYÜK olmalı
+  minW1Atr: 3,
+  rsiMode: 'score', // 'off' | 'score' | 'require'
+  volume: false,
+  stopMode: 'w2', // 'w2': dalga 2 ucu − stopAtr × ATR, 'w0': 0 noktası − stopAtr × ATR
+  stopAtr: 0.25,
+  targets: [1, 1.618, 2.618],
+  mainTarget: 1, // R:R hesabında kullanılan hedefin indeksi (1.618)
+  minRR: 2,
+  direction: 'both', // 'both' | 'long' | 'short'
+};
+
+const STATE_LABEL = {
+  ready: 'Hazırlanıyor',
+  triggered: 'Tetiklendi',
+  gone: 'Kaçtı',
+  invalid: 'Geçersiz',
+};
+export { STATE_LABEL };
+
+const ext = (c, type) => (type === 'H' ? c.high : c.low);
+const pt = (candles, i, type) => ({ t: i, p: ext(candles[i], type) });
+const mean = (a) => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : 0);
+
+/**
+ * Dalga 2'nin (i1 → i2) ABC olup olmadığını bulur. Farklı alt eşiklerle iç ZigZag çalıştırır;
+ * tam iki iç pivot (A, B) çıkan ve motorda zigzag/flat olarak GEÇERLİ olan ilk dereceyi döndürür.
+ */
+export function findAbc(candles, atrArr, i1, i2, type1, k, opts) {
+  const kinds = opts.abcKinds === 'both' ? ['zigzag', 'flat'] : [opts.abcKinds];
+  const tried = [];
+  for (const div of opts.subDivisors) {
+    const { pivots } = zigzag(candles, atrArr, k / div, { from: i1, to: i2, start: { i: i1, type: type1 } });
+    const inner = pivots.filter((p) => p.i > i1 && p.i < i2);
+    tried.push(inner.length);
+    if (inner.length !== 2) continue;
+    const [A, B] = inner;
+    // A, dalga 2 yönünde (1'in tersi) olmalı; C = i2.
+    if (A.type === type1) continue;
+    const pts = [pt(candles, i1, type1), { t: A.i, p: A.price }, { t: B.i, p: B.price }, pt(candles, i2, A.type)];
+    const evals = kinds
+      .map((id) => evaluate(id, pts, { ruleSet: opts.ruleSet, logScale: true }))
+      .filter((e) => e.valid)
+      .sort((a, b) => b.score - a.score);
+    if (evals.length) return { A, B, div, eval: evals[0], kind: evals[0].pattern };
+  }
+  return { none: true, tried };
+}
+
+/** Bir coinin mumları için tüm duyarlılıklarda dalga-3 setup adaylarını bulur. */
+export function findWave3Setups(candles, options = {}, live = null) {
+  const opts = { ...DEFAULTS, ...options };
+  if (candles.length < 40) return [];
+  const highs = candles.map((c) => c.high), lows = candles.map((c) => c.low), closes = candles.map((c) => c.close);
+  const atrArr = fillAtr(atrOf(highs, lows, closes, 14));
+  const rsiArr = rsiOf(closes, 14);
+  const last = candles.length - 1;
+  const price = live?.close ?? closes[last];
+
+  const seen = new Set();
+  const out = [];
+  for (const k of opts.sensitivities) {
+    const { pivots } = zigzag(candles, atrArr, k);
+    if (pivots.length < 3) continue;
+    const [P0, P1, P2] = pivots.slice(-3);
+    const key = `${P0.i}-${P1.i}-${P2.i}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const s = evaluateSetup({ candles, atrArr, rsiArr, P0, P1, P2, k, opts, live, price });
+    if (s) out.push(s);
+  }
+  return out;
+}
+
+function evaluateSetup({ candles, atrArr, rsiArr, P0, P1, P2, k, opts, live, price }) {
+  const d = P0.type === 'L' ? 1 : -1; // long: 0 dip, 1 tepe, 2 dip
+  const dirName = d === 1 ? 'long' : 'short';
+  if (opts.direction !== 'both' && opts.direction !== dirName) return null;
+  const reject = [];
+
+  const L1 = Math.abs(Math.log(P1.price) - Math.log(P0.price));
+  const L2 = Math.abs(Math.log(P1.price) - Math.log(P2.price));
+  const retr = L2 / L1;
+  const D1 = P1.i - P0.i, D2 = P2.i - P1.i;
+  const timeRatio = D2 / (D1 || 1);
+  const w1Atr = Math.abs(P1.price - P0.price) / atrArr[P1.i];
+
+  if (w1Atr < opts.minW1Atr) reject.push(`Dalga 1 küçük (${w1Atr.toFixed(1)}×ATR)`);
+  if (retr < opts.retrMin || retr > opts.retrMax) reject.push(`Dalga 2 geri çekilme %${(retr * 100).toFixed(1)} bant dışı`);
+  if (!(timeRatio > opts.minTimeRatio)) reject.push(`Süre(2)/Süre(1) = ${timeRatio.toFixed(2)}× (> ${opts.minTimeRatio} olmalı)`);
+
+  // Kural motoru: 0-1-2 itki başlangıcı
+  const pts = [P0, P1, P2].map((p) => ({ t: p.i, p: p.price }));
+  const imp = evaluate('impulse', pts, { ruleSet: opts.ruleSet, logScale: true });
+  if (!imp.valid) reject.push('İtki kuralı ihlali');
+
+  // Dalga 2 iç yapısı
+  const abc = findAbc(candles, atrArr, P1.i, P2.i, P1.type, k, opts);
+  if (opts.requireAbc && abc.none) reject.push('Dalga 2 ABC değil');
+
+  if (reject.length) {
+    opts.diagnostics?.push({ direction: dirName, sensitivity: k, reasons: reject });
+    return null;
+  }
+
+  // RSI (Ders 3): C'de A'ya göre uyumsuzluk + dalga 1 momentumu
+  const rsiInfo = { divergence: null, w1Momentum: null };
+  if (!abc.none) {
+    const rA = rsiArr[abc.A.i], rC = rsiArr[P2.i];
+    if (rA != null && rC != null) rsiInfo.divergence = { ok: d * (rC - rA) > 0, rA, rC };
+  }
+  const r1 = rsiArr[P1.i];
+  if (r1 != null) rsiInfo.w1Momentum = { ok: d === 1 ? r1 >= 60 : r1 <= 40, r1 };
+  const rsiPts = (rsiInfo.divergence?.ok ? 0.5 : 0) + (rsiInfo.w1Momentum?.ok ? 0.5 : 0);
+  if (opts.rsiMode === 'require' && rsiPts === 0) return null;
+
+  // Hacim: dalga 1 ortalama hacmi > dalga 2 ortalama hacmi
+  const v1 = mean(candles.slice(P0.i + 1, P1.i + 1).map((c) => c.volume));
+  const v2 = mean(candles.slice(P1.i + 1, P2.i + 1).map((c) => c.volume));
+  const volOk = v1 > v2;
+
+  // Seviyeler
+  const atrNow = atrArr[candles.length - 1];
+  const lg = (x) => Math.log(x);
+  const targets = opts.targets.map((m) => ({ k: m, price: Math.exp(lg(P2.price) + d * m * L1) }));
+  const trigger = !abc.none
+    ? (d === 1 ? Math.min(abc.B.price, P1.price) : Math.max(abc.B.price, P1.price))
+    : P1.price;
+  const stopBase = opts.stopMode === 'w0' ? P0.price : P2.price;
+  const stop = stopBase - d * opts.stopAtr * atrArr[P2.i];
+
+  // Durum: 2'den sonraki mumlar (+ canlı mum)
+  const after = candles.slice(P2.i + 1);
+  if (live) after.push(live);
+  const best = after.length ? (d === 1 ? Math.max(...after.map((c) => c.high)) : Math.min(...after.map((c) => c.low))) : P2.price;
+  const worst = after.length ? (d === 1 ? Math.min(...after.map((c) => c.low)) : Math.max(...after.map((c) => c.high))) : P2.price;
+  let state;
+  if (d * (worst - P2.price) < 0) state = 'invalid';
+  else if (d * (best - targets[0].price) >= 0) state = 'gone';
+  else if (d * (best - trigger) >= 0) state = 'triggered';
+  else state = 'ready';
+
+  const entry = state === 'triggered' ? price : trigger;
+  const main = targets[Math.min(opts.mainTarget, targets.length - 1)].price;
+  const risk = d * (entry - stop);
+  const rr = risk > 0 ? (d * (main - entry)) / risk : 0;
+
+  // Skor
+  const ideal = retr >= opts.idealRetr[0] - 0.02 && retr <= opts.idealRetr[1] + 0.02;
+  let score = 0.35 * imp.score + 0.35 * (abc.none ? 0 : abc.eval.score) + (ideal ? 10 : 0);
+  if (opts.rsiMode !== 'off') score += 10 * rsiPts;
+  if (opts.volume && volOk) score += 10;
+  score = Math.min(100, Math.round(score));
+
+  return {
+    direction: dirName,
+    d,
+    sensitivity: k,
+    points: { p0: P0, p1: P1, p2: P2 },
+    abc: abc.none ? null : {
+      kind: abc.kind,
+      label: abc.eval.label,
+      A: abc.A,
+      B: abc.B,
+      results: abc.eval.results,
+      score: abc.eval.score,
+    },
+    impulse: { label: imp.label, results: imp.results, score: imp.score },
+    retr,
+    timeRatio,
+    durations: { D1, D2 },
+    rsi: rsiInfo,
+    volume: { v1, v2, ok: volOk },
+    levels: { trigger, entry, stop, invalidation: P0.price, targets, atr: atrNow },
+    price,
+    rr,
+    state,
+    stateLabel: STATE_LABEL[state],
+    barsSince2: candles.length - 1 - P2.i,
+    score,
+  };
+}
+
+/** Panelde gösterilecek setup'lar: geçerli durumlar + min R:R; coin başına en iyisi. */
+export function pickSetups(all, opts = {}) {
+  const o = { ...DEFAULTS, ...opts };
+  const visible = all.filter((s) => (s.state === 'ready' || s.state === 'triggered') && s.rr >= o.minRR);
+  visible.sort(compareSetups);
+  return visible;
+}
+
+export function compareSetups(a, b) {
+  const st = { triggered: 0, ready: 1, gone: 2, invalid: 3 };
+  if (st[a.state] !== st[b.state]) return st[a.state] - st[b.state];
+  if (b.score !== a.score) return b.score - a.score;
+  return b.rr - a.rr;
+}
