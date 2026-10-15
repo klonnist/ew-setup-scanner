@@ -41,6 +41,9 @@ jobs:
           cp -r index.html backtest.html src _site/
           # Önbellek kırıcı: ?v=dev → ?v=<commit> (Pages dosyaları 10 dk önbelleğe alır)
           sed -i "s/?v=dev/?v=${GITHUB_SHA::7}/g" _site/index.html _site/backtest.html
+          # Alt modül importları da sürümlenir; yoksa yayından sonraki 10 dk eski/yeni dosyalar karışabilir
+          find _site/src -name '*.js' -exec sed -i -E "s#(from '\.{1,2}/[^']+\.js)'#\1?v=${GITHUB_SHA::7}'#g" {} +
+          if grep -rhE "from '\.{1,2}/[^']+\.js'" _site/src; then echo "Sürümlenmemiş import kaldı" && exit 1; fi
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

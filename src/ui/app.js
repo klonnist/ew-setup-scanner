@@ -40,7 +40,7 @@ function updateSettings(patch) {
   if ('autoRefresh' in (patch || {})) setupAutoRefresh();
   const netChanged = patch === null || NET_KEYS.some((k) => k in patch && String(patch[k]) !== String(prev[k]));
   if (!state.scan) { if (state.busy) scan(); return; } // ilk tarama sürerken değişiklik: yeniden başlat
-  if (netChanged) scan();
+  if (netChanged) { markStale(); scan(); }
   else recompute();
 }
 
@@ -70,7 +70,7 @@ async function scan({ silent = false } = {}) {
     notifyNew(silent);
     render();
   } catch (err) {
-    if (err.name === 'AbortError') return;
+    if (err.name === 'AbortError' && ctrl.signal.aborted) return; // yerine yeni tarama başladı
     $('#summary').innerHTML = `<p class="error">Tarama başarısız: ${esc(err.message)}</p>`;
   } finally {
     if (state.abort === ctrl) {
@@ -95,6 +95,12 @@ function recompute() {
   state.setups = setups;
   state.diagnostics = diagnostics;
   render();
+}
+
+/** Zaman dilimi / coin listesi değişti: eski sonuçlar yeni tarama bitene kadar soluk gösterilir. */
+function markStale() {
+  document.querySelector('.layout').classList.add('stale');
+  $('#summary').innerHTML = `<p class="muted">${esc(state.settings.timeframe)} taranıyor… Aşağıdaki sonuçlar önceki taramaya ait.</p>`;
 }
 
 function setProgress(done, total, text) {
@@ -351,6 +357,7 @@ function select(s) {
 }
 
 function render() {
+  document.querySelector('.layout').classList.remove('stale');
   renderSummary();
   const vis = visibleSetups();
   const keep = state.selected && vis.find((s) => setupKey(s) === setupKey(state.selected));

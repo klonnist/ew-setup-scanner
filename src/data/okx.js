@@ -156,7 +156,8 @@ let cryptoPromise = null;
 /** OKX instCategory '1' = kripto; '3' tokenize hisse (xStocks), '4' emtia (XAUT, PAXG). */
 export function getCryptoInstIds(opts = {}) {
   if (!cryptoPromise) {
-    cryptoPromise = okxGet('/api/v5/public/instruments', { instType: 'SPOT' }, opts)
+    // Paylaşılan önbellek: çağıranın iptal sinyaline bağlanmaz (iptal edilen bir tarama sonrakini bozmasın).
+    cryptoPromise = okxGet('/api/v5/public/instruments', { instType: 'SPOT' }, { onRetry: opts.onRetry })
       .then((list) => new Set(list.filter((x) => x.state === 'live' && (x.instCategory ?? '1') === '1').map((x) => x.instId)));
     cryptoPromise.catch(() => { cryptoPromise = null; });
   }
