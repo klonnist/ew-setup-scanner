@@ -295,3 +295,8 @@ table.runs td.acts { white-space: nowrap; display: flex; gap: 4px; }
   .tile span { font-size: 16px; }
 }
 .layout.stale { opacity: 0.4; pointer-events: none; transition: opacity 0.2s; }
+
+/* Mükemmel çakışma */
+.chip.str-Mükemmel { color: #1a1300; background: #f0c75e; font-weight: 700; }
+.state.zone-approaching { color: #1a1300; background: #ffcf5c; font-weight: 600; }
+.perfect-toggle { color: #f0c75e; font-weight: 600; }

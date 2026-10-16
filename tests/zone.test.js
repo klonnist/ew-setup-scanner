@@ -6,7 +6,8 @@ import { findWave3Setups, activePlans } from '../src/scan/wave3.js';
 // Pivotlar (±0,3 fitil): 0 = 99,7 (bar 19), 1 = 130,3 (bar 39), A = 114,7, B = 122,3, C = 109,7.
 // Bölge (doğrusal): %61,8 = 130,3 − 0,618 × 30,6 ≈ 111,39 (yakın) · C = 1,272A = 122,3 − 1,272 × 15,6 ≈ 102,46 (uzak)
 const BASE = [[0, 120], [20, 100], [40, 130], [52, 115], [60, 122], [70, 110], [76, 119]];
-const OPTS = { sensitivities: [4.5], entryType: 'both' };
+// Ön pay ve yaklaşma uyarısı kapalı: seviyeler tam fiyattan test edilir (ayrı testler aşağıda).
+const OPTS = { sensitivities: [4.5], entryType: 'both', zoneFrontAtr: 0, approachAtr: 0 };
 const NEAR = 130.3 - 0.618 * 30.6;
 const FAR = 122.3 - 1.272 * 15.6;
 
@@ -71,4 +72,68 @@ test('süre koşulu: süre(2) > süre(1) dolmadan bölgeye gelinirse emir sayıl
   assert.equal(req.zone.activeFrom, 70);
   const ign = findWave3Setups(build(path), { ...OPTS, minTimeRatio: 1.5, zoneTime: 'ignore' }).find((x) => x.phase === 'forming');
   assert.equal(ign.zone.state, 'filled');
+});
+
+// ---------------------------------------------------------------- mükemmel çakışma (BAT benzeri)
+// 0 = 99,7 · 1 = 130,3 · A = 118,3 · B = 126,65 → %61,8 = 111,389 ve C = 1,272A = 111,386 (fark ≈ 0,002 ATR).
+// C 111,57'de dönüyor: seviyeye ~0,1 ATR kala.
+import { compareSetups } from '../src/scan/wave3.js';
+import { backtestCoin } from '../src/backtest/engine.js';
+const PERFECT = [[0, 120], [20, 100], [40, 130], [50, 118.6], [58, 126.35], [70, 111.87], [80, 128]];
+const P_OPTS = { sensitivities: [8], entryType: 'both' };
+
+test('mükemmel: iki kenar ≤ 0,5 ATR → tek çakışma seviyesi, tek emir bacağı', () => {
+  const s = findWave3Setups(build(PERFECT), P_OPTS).find((x) => x.phase === 'complete');
+  assert.equal(s.zone.perfect, true);
+  assert.equal(s.zone.strength, 'Mükemmel');
+  assert.ok(s.zone.widthAtr < 0.01);
+  assert.equal(s.zone.legs.length, 1);
+  assert.ok(Math.abs(s.zone.confluence - (s.zone.lvC + s.zone.lvR) / 2) < 1e-12);
+  // Eşik küçültülürse aynı yapı mükemmel sayılmaz
+  const strict = findWave3Setups(build(PERFECT), { ...P_OPTS, perfectAtr: 0.001 }).find((x) => x.phase === 'complete');
+  assert.equal(strict.zone.perfect, false);
+});
+
+test('ön pay: C seviyeye birkaç tik kala dönünce ön paylı emir dolar, tam seviyedeki dolmaz', () => {
+  const exact = findWave3Setups(build(PERFECT), { ...P_OPTS, zoneFrontAtr: 0 }).find((x) => x.phase === 'complete');
+  assert.equal(exact.zone.state, 'missed');
+  const front = findWave3Setups(build(PERFECT), { ...P_OPTS, zoneFrontAtr: 0.15 }).find((x) => x.phase === 'complete');
+  assert.equal(front.zone.state, 'filled');
+  // Long'da emir seviyenin üstünde (fiyat yönüne doğru)
+  assert.ok(front.zone.legs[0] > front.zone.confluence);
+  assert.ok(Math.abs(front.zone.legs[0] - front.zone.confluence - 0.15 * front.zone.atr) < 1e-9);
+});
+
+test('yaklaşma: dalga 2 sürerken fiyat emre 0,5 ATR\'den yakınsa "Seviyeye yaklaştı"', () => {
+  const path = [[0, 120], [20, 100], [40, 130], [50, 118.6], [58, 126.35], [70, 112.3]];
+  const s = findWave3Setups(build(path), P_OPTS).find((x) => x.phase === 'forming');
+  assert.ok(s, 'süren dalga 2 bulunmalı');
+  assert.equal(s.zone.perfect, true);
+  assert.equal(s.zone.state, 'approaching');
+  assert.deepEqual(activePlans(s, P_OPTS).map((p) => p.type), ['zone']);
+  const off = findWave3Setups(build(path), { ...P_OPTS, approachAtr: 0 }).find((x) => x.phase === 'forming');
+  assert.equal(off.zone.state, 'waiting');
+});
+
+test('sıralama ve filtre: aktif mükemmel setup önde; "sadece mükemmel" diğerlerini gizler', () => {
+  const perfect = findWave3Setups(build(PERFECT), P_OPTS).find((x) => x.phase === 'complete');
+  const normal = findWave3Setups(build(BASE), OPTS).find((x) => x.phase === 'complete');
+  const o = { entryType: 'both', minRR: 0 };
+  assert.ok(compareSetups(perfect, { ...normal, score: 100 }, o) < 0);
+  assert.equal(activePlans(normal, { ...o, onlyPerfect: true }).length, 0);
+  assert.ok(activePlans(perfect, { ...o, onlyPerfect: true }).length > 0);
+});
+
+test('backtest: sadece mükemmel modunda yalnızca çakışmalı setup işlem açar ve işlem bunu kaydeder', () => {
+  const bt = (path, opts) => {
+    const c = build(path);
+    return backtestCoin(c, { from: c[0].time, to: c[c.length - 1].time, feePct: 0, opts: { subDivisors: [2, 2.5, 3, 4], minRR: 0, entryType: 'zone', onlyPerfect: true, ...opts } });
+  };
+  assert.equal(bt([...BASE.slice(0, 6), [76, 119], [100, 85]], { sensitivities: [4.5] }).trades.length, 0);
+  const r = bt([...PERFECT.slice(0, 5), [70, 111.87], [80, 128], [110, 170]], { sensitivities: [8] });
+  const z = r.trades.filter((t) => t.type === 'zone');
+  assert.equal(z.length, 1);
+  assert.equal(z[0].perfect, true);
+  assert.ok(z[0].widthAtr < 0.5);
+  assert.ok(z[0].R > 0);
 });

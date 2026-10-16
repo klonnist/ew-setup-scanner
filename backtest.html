@@ -53,6 +53,12 @@
       <label class="field"><span>Komisyon (% / işlem tarafı)</span><input type="number" id="feePct" step="0.01" min="0" /></label>
       <label class="field"><span>Emir geçerlilik (mum)</span><input type="number" id="maxPending" step="1" min="1" /></label>
       <label class="field"><span>Maks. pozisyon süresi (mum)</span><input type="number" id="maxHold" step="1" min="1" /></label>
+      <label class="field"><span>Setup seçimi</span>
+        <select id="onlyPerfect">
+          <option value="">Tüm setup'lar</option>
+          <option value="1">★ Sadece mükemmel</option>
+        </select>
+      </label>
       <label class="field"><span>Not (isteğe bağlı)</span><input type="text" id="note" placeholder="ör. dalga 1 en geniş" /></label>
       <div class="bt-actions">
         <button type="button" id="settingsBtn" class="ghost" aria-expanded="false" aria-controls="settings">Tarama ayarları</button>

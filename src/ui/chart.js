@@ -89,8 +89,13 @@ export function drawSetup(el, candles, live, s, show = { showBreak: true, showZo
   const Z = show.showZone ? s.zone : null;
   if (Z) {
     const nm = (v) => (v === Z.lvC ? `C=${String(Z.cExtK).replace('.', ',')}A` : `%${String(+(Z.retrR * 100).toFixed(1)).replace('.', ',')}`);
-    line(Z.near, C.zone, `Bölge ${nm(Z.near)}`, LW.LineStyle.Solid);
-    line(Z.far, C.zone, `Bölge ${nm(Z.far)}`, LW.LineStyle.Solid);
+    if (Z.perfect) {
+      line(Z.confluence, C.zone, `★ ${nm(Z.lvR)} ≈ ${nm(Z.lvC)}`, LW.LineStyle.Solid);
+    } else {
+      line(Z.near, C.zone, `Bölge ${nm(Z.near)}`, LW.LineStyle.Solid);
+      line(Z.far, C.zone, `Bölge ${nm(Z.far)}`, LW.LineStyle.Solid);
+    }
+    if (Z.front > 0) Z.legs.forEach((lv) => line(lv, C.zone, 'Emir', LW.LineStyle.Dotted));
     line(Z.stop, C.zoneStop, 'Stop (bölge)');
   }
   (L?.targets || Z?.targets || []).forEach((t, i) => line(t.price, C.target, `H${i + 1} ${t.k}`));

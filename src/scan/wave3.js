@@ -30,6 +30,10 @@ export const DEFAULTS = {
   zoneRetr: 0.618, // bölge kenarı: dalga 2 = dalga 1'in %61,8'i
   zoneEntry: 'mid', // 'near' yakın kenar | 'mid' yarı yarıya kademeli | 'far' uzak kenar
   zoneStop: 'w0', // 'w0': dalga 1'in başı (0) | 'r886': dalga 2 = %88,6
+  perfectAtr: 0.5, // iki bölge kenarı arası ≤ bu × ATR ise 'Mükemmel'
+  zoneFrontAtr: 0.2, // limit emir seviyenin bu × ATR önüne konur (BAT 15m: C seviyeye 0,16 ATR kala döndü)
+  approachAtr: 0.5, // fiyat emre bu × ATR yaklaşınca 'Seviyeye yaklaştı'
+  onlyPerfect: false, // yalnızca mükemmel çakışmalı setup'lar
   zoneTime: 'require', // 'require': limit emir süre(2) > minTimeRatio × süre(1) olunca aktif | 'ignore'
 };
 
@@ -190,7 +194,7 @@ function evaluateForming({ candles, atrArr, P0, P1, tentative, k, opts, live, pr
 
   const D1 = P1.i - P0.i, D2 = last - P1.i;
   const timeRatio = D2 / (D1 || 1);
-  const strengthPts = { 'Güçlü': 10, 'Orta': 5, 'Zayıf': 0 }[zone.strength] + Math.min(zone.inside, 3) * 2;
+  const strengthPts = { 'Mükemmel': 15, 'Güçlü': 10, 'Orta': 5, 'Zayıf': 0 }[zone.strength] + Math.min(zone.inside, 3) * 2;
   const score = Math.min(100, Math.round(0.35 * imp.score + 0.35 * ab.eval.score + strengthPts));
 
   return {
@@ -300,7 +304,7 @@ function evaluateSetup({ candles, atrArr, rsiArr, P0, P1, P2, k, opts, live, pri
 
   // Limit bölge planı (geriye dönük: C oluşurken bölge dolmuş muydu?)
   let zone = null;
-  if (useZone(opts) && !abc.none) {
+  if ((useZone(opts) || opts.onlyPerfect) && !abc.none) {
     const zpath = candles.slice(abc.B.i + 1);
     if (live) zpath.push(live);
     zone = zonePlan({
@@ -308,6 +312,7 @@ function evaluateSetup({ candles, atrArr, rsiArr, P0, P1, P2, k, opts, live, pri
       pathStart: abc.B.i + 1, activeFrom: activeFromOf(opts, P0, P1),
     }, zpath, true, opts);
     if (zone?.invalid) zone = null;
+    if (zone?.perfect) score = Math.min(100, score + 10);
   }
 
   return {
@@ -342,14 +347,17 @@ function evaluateSetup({ candles, atrArr, rsiArr, P0, P1, P2, k, opts, live, pri
   };
 }
 
+const ZONE_ACTIVE = new Set(['waiting', 'approaching', 'filled']);
+
 /** Seçilen giriş tipine göre bu setup'ın hâlâ geçerli (aktif) planları. */
 export function activePlans(s, opts = {}) {
   const o = { ...DEFAULTS, ...opts };
   const out = [];
+  if (o.onlyPerfect && !s.zone?.perfect) return out; // yalnızca çakışmalı (mükemmel) setup'lar
   if (useBreak(o) && s.phase === 'complete' && (s.state === 'ready' || s.state === 'triggered') && s.rr >= o.minRR) {
     out.push({ type: 'break', rr: s.rr });
   }
-  if (useZone(o) && s.zone && (s.zone.state === 'waiting' || s.zone.state === 'filled') && s.zone.rr >= o.minRR) {
+  if (useZone(o) && s.zone && ZONE_ACTIVE.has(s.zone.state) && s.zone.rr >= o.minRR) {
     out.push({ type: 'zone', rr: s.zone.rr });
   }
   return out;
@@ -365,6 +373,8 @@ const bestRR = (s, o) => Math.max(0, ...activePlans(s, o).map((p) => p.rr));
 export function compareSetups(a, b, opts = {}) {
   const act = (s) => (activePlans(s, opts).length ? 0 : 1);
   if (act(a) !== act(b)) return act(a) - act(b);
+  const perf = (s) => (s.zone?.perfect ? 0 : 1);
+  if (perf(a) !== perf(b)) return perf(a) - perf(b);
   if (b.score !== a.score) return b.score - a.score;
   return bestRR(b, opts) - bestRR(a, opts);
 }

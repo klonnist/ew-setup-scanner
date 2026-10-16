@@ -29,6 +29,7 @@ function syncToolbar() {
   $('#ruleSet').value = s.ruleSet;
   $('#entryType').value = s.entryType;
   $('#showAll').checked = !!s.showAll;
+  $('#onlyPerfect').checked = !!s.onlyPerfect;
 }
 
 function updateSettings(patch) {
@@ -120,14 +121,26 @@ function setupAutoRefresh() {
 }
 
 function notifyNew(silent) {
-  const keys = new Set(visibleSetups().map(setupKey));
-  const prev = state.seenKeys;
+  const vis = pickSetups(state.setups, toScanOptions(state.settings));
+  const keys = new Set(vis.map(setupKey));
+  const approaching = new Set(vis.filter((s) => s.zone?.state === 'approaching').map(setupKey));
+  const prev = state.seenKeys, prevApp = state.seenApproaching;
   state.seenKeys = keys;
+  state.seenApproaching = approaching;
   if (!silent || !prev) return;
-  const fresh = visibleSetups().filter((s) => !prev.has(setupKey(s)));
-  if (!fresh.length || !('Notification' in window) || Notification.permission !== 'granted') return;
-  const body = fresh.slice(0, 5).map((s) => `${s.coin} ${s.direction === 'long' ? 'LONG ▲' : 'SHORT ▼'} · ${planSummary(s)}`).join('\n');
-  try { new Notification(`Yeni dalga-3 setup (${state.scan.tf.id})`, { body }); } catch { /* bazı tarayıcılarda yalnızca SW ile */ }
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const line = (s) => `${s.zone?.perfect ? '★ ' : ''}${s.coin} ${dirTxt(s)} · ${planSummary(s)}`;
+  const fresh = vis.filter((s) => !prev.has(setupKey(s)));
+  // Emre yaklaşanlar ve mükemmel setup'lar ayrı bildirim: kaçırılmasın.
+  const near = vis.filter((s) => approaching.has(setupKey(s)) && !prevApp?.has(setupKey(s)));
+  const perfect = fresh.filter((s) => s.zone?.perfect);
+  const other = fresh.filter((s) => !s.zone?.perfect);
+  const tf = state.scan.tf.id;
+  try {
+    if (near.length) new Notification(`Fiyat emre yaklaştı (${tf})`, { body: near.slice(0, 5).map((s) => `${line(s)} · emir ${fmtPrice(s.zone.legs[0], s.price)}`).join('\n') });
+    if (perfect.length) new Notification(`★ Yeni mükemmel setup (${tf})`, { body: perfect.slice(0, 5).map((s) => `${line(s)} · seviye ${fmtPrice(s.zone.confluence, s.price)}`).join('\n') });
+    if (other.length) new Notification(`Yeni dalga-3 setup (${tf})`, { body: other.slice(0, 5).map(line).join('\n') });
+  } catch { /* bazı tarayıcılarda yalnızca SW ile */ }
 }
 
 // ------------------------------------------------------------------ çizim
@@ -136,7 +149,8 @@ const useZone = () => state.settings.entryType !== 'break';
 const dirTxt = (s) => (s.direction === 'long' ? 'LONG ▲' : 'SHORT ▼');
 
 function visibleSetups() {
-  return state.settings.showAll ? state.setups : pickSetups(state.setups, toScanOptions(state.settings));
+  if (!state.settings.showAll) return pickSetups(state.setups, toScanOptions(state.settings));
+  return state.settings.onlyPerfect ? state.setups.filter((s) => s.zone?.perfect) : state.setups;
 }
 
 function resultOf(s) {
@@ -183,7 +197,8 @@ function renderSummary() {
     }
   }
   const chips = [...counts].sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span class="chip">${esc(k)}: ${v}</span>`).join('');
-  const split = [useBreak() ? `${nBreak} B kırılımı` : '', useZone() ? `${nZone} limit bölge` : ''].filter(Boolean).join(', ');
+  const nPerfect = vis.filter((s) => s.zone?.perfect).length;
+  const split = [useBreak() ? `${nBreak} B kırılımı` : '', useZone() ? `${nZone} limit bölge` : '', `★ ${nPerfect} mükemmel`].filter(Boolean).join(', ');
   $('#summary').innerHTML = `
     <p><strong>${r.results.length} coin</strong> · ${esc(r.tf.label)} · ${fmtTime(r.at)} ·
       <strong>${vis.length}</strong> aktif setup (${split})${loose > vis.length ? ` · ${loose - vis.length} tanesi R:R &lt; ${opts.minRR} olduğu için gizli` : ''} ·
@@ -213,10 +228,12 @@ function zoneBlock(s, active) {
   const fill = z.legs.length > 1 && z.filledLegs ? ` (${z.filledLegs}/${z.legs.length})` : '';
   return `<div class="plan${active ? '' : ' faded'}">
     <div class="plan-head"><span class="plan-name">Limit bölge</span><span class="state zone-${z.state}">${esc(z.stateLabel)}${fill}</span>
-      <span class="chip str-${z.strength}">${esc(z.strength)}${z.inside ? ` · ${z.inside} çakışma` : ''}</span>
+      <span class="chip str-${z.strength}">${z.perfect ? '★ ' : ''}${esc(z.strength)}${z.inside ? ` · ${z.inside} çakışma` : ''}</span>
       <span class="rr">R:R <b class="num">${fmtX(z.rr, 1)}</b></span></div>
     ${wait ? `<div class="note">Süre koşulu: emir ${wait} mum sonra aktif</div>` : ''}
-    <div class="lv">${lvBox('Bölge', `${fmtPrice(z.near, s.price)} – ${fmtPrice(z.far, s.price)}`, 'wide')}${lvBox('Ort. giriş', fmtPrice(z.entry, s.price))}${lvBox('Stop', fmtPrice(z.stop, s.price))}${lvBox('Hedef 2', fmtPrice(z.targets[1]?.price, s.price))}</div>
+    <div class="lv">${z.perfect
+      ? lvBox('Çakışma seviyesi', `${fmtPrice(z.confluence, s.price)} <small class="muted">fark ${fmtX(z.widthAtr, 2)} ATR</small>`, 'wide')
+      : lvBox('Bölge', `${fmtPrice(z.near, s.price)} – ${fmtPrice(z.far, s.price)}`, 'wide')}${lvBox(z.filledLegs ? 'Ort. giriş' : 'Emir', fmtPrice(z.entry, s.price))}${lvBox('Stop', fmtPrice(z.stop, s.price))}${lvBox('Hedef 2', fmtPrice(z.targets[1]?.price, s.price))}</div>
   </div>`;
 }
 
@@ -298,6 +315,9 @@ function zoneFacts(s) {
     <div class="facts">
       ${fact('Yakın kenar', fmtPrice(z.near, s.price))}
       ${fact('Uzak kenar', fmtPrice(z.far, s.price))}
+      ${fact('İki kenar farkı', `${fmtPrice(Math.abs(z.near - z.far), s.price)} · ${fmtX(z.widthAtr, 2)} ATR${z.perfect ? ' ★' : ''}`)}
+      ${fact(z.legs.length > 1 ? 'Emir seviyeleri' : 'Emir seviyesi', z.legs.map((l) => fmtPrice(l, s.price)).join(' / '),
+        ` <small class="muted">${z.front > 0 ? `seviyenin ${fmtPrice(z.front, s.price)} önünde` : 'tam seviye'} · yaklaşma uyarısı ${state.settings.approachAtr} ATR</small>`)}
       ${fact('Bölge gücü', `${esc(z.strength)} · ${fmtX(z.widthAtr, 1)} ATR · ${fmtPct(z.widthPct, 2)}`)}
       ${fact('Giriş', fmtPrice(z.entry, s.price), ` <small class="muted">${esc(entryTxt)}${z.filledLegs ? `, ${z.filledLegs}/${z.legs.length} doldu` : ''}</small>`)}
       ${fact(z.stopMode === 'r886' ? 'Stop (dalga 2 = %88,6)' : 'Stop (dalga 1 başı)', fmtPrice(z.stop, s.price), ` <small class="muted">risk ${fmtPct(risk)}</small>`)}
@@ -373,6 +393,7 @@ function init() {
   for (const b of document.querySelectorAll('#tf button')) b.addEventListener('click', () => updateSettings({ timeframe: b.dataset.tf }));
   $('#ruleSet').addEventListener('change', (e) => updateSettings({ ruleSet: e.target.value }));
   $('#entryType').addEventListener('change', (e) => updateSettings({ entryType: e.target.value }));
+  $('#onlyPerfect').addEventListener('change', (e) => updateSettings({ onlyPerfect: e.target.checked }));
   $('#showAll').addEventListener('change', (e) => { state.settings.showAll = e.target.checked; saveSettings(state.settings); if (state.scan) render(); });
   $('#scanBtn').addEventListener('click', () => scan());
   $('#settingsBtn').addEventListener('click', () => {

@@ -37,7 +37,7 @@ function loadParams() {
   try { p = JSON.parse(localStorage.getItem(PKEY) || 'null'); } catch { /* yoksay */ }
   const tf = p?.tf && TIMEFRAMES[p.tf] ? p.tf : '4H';
   return {
-    tf, ...defaultsFor(tf), topN: 20, entryType: 'both', note: '',
+    tf, ...defaultsFor(tf), topN: 20, entryType: 'both', onlyPerfect: '', note: '',
     exitTarget: BT_DEFAULTS.exitTarget, feePct: BT_DEFAULTS.feePct, maxPending: BT_DEFAULTS.maxPending, maxHold: BT_DEFAULTS.maxHold,
     ...(p || {}), tf,
   };
@@ -46,7 +46,7 @@ function saveParams() { try { localStorage.setItem(PKEY, JSON.stringify(params))
 
 function syncForm() {
   for (const b of document.querySelectorAll('#tf button')) b.setAttribute('aria-pressed', String(b.dataset.tf === params.tf));
-  for (const k of ['from', 'to', 'topN', 'entryType', 'exitTarget', 'feePct', 'maxPending', 'maxHold', 'note']) $('#' + k).value = params[k];
+  for (const k of ['from', 'to', 'topN', 'entryType', 'onlyPerfect', 'exitTarget', 'feePct', 'maxPending', 'maxHold', 'note']) $('#' + k).value = params[k];
   $('#to').max = isoDay(Date.now());
   $('#quick').innerHTML = QUICK[params.tf].map(([t, d]) => `<button type="button" class="ghost sm" data-days="${d}">${t}</button>`).join('');
   for (const b of document.querySelectorAll('#quick button')) {
@@ -118,7 +118,7 @@ async function run() {
   const from = dayMs(params.from), to = Math.min(dayMs(params.to, true), Date.now());
   if (!(to > from)) return setStatus('<p class="error">Bitiş tarihi başlangıçtan sonra olmalı.</p>');
   const scan = toScanOptions(settings);
-  const opts = { ...scan, entryType: params.entryType };
+  const opts = { ...scan, entryType: params.entryType, onlyPerfect: !!params.onlyPerfect };
   delete opts.manualCoins;
   const cfg = {
     from, to, opts,
@@ -205,7 +205,8 @@ async function run() {
 }
 
 const SETTING_KEYS = ['ruleSet', 'sensitivities', 'w1Extend', 'retrMin', 'retrMax', 'requireAbc', 'abcKinds', 'minTimeRatio', 'minW1Atr',
-  'rsiMode', 'volume', 'stopMode', 'stopAtr', 'targets', 'minRR', 'direction', 'zoneCExt', 'zoneRetr', 'zoneEntry', 'zoneStop', 'zoneTime'];
+  'rsiMode', 'volume', 'stopMode', 'stopAtr', 'targets', 'minRR', 'direction', 'zoneCExt', 'zoneRetr', 'zoneEntry', 'zoneStop', 'zoneTime',
+  'perfectAtr', 'zoneFrontAtr', 'approachAtr', 'onlyPerfect'];
 function pickSettings(o) { return Object.fromEntries(SETTING_KEYS.map((k) => [k, o[k]])); }
 
 function settingsText(p) {
@@ -214,7 +215,11 @@ function settingsText(p) {
   const parts = [
     `${s.ruleSet}`, `dalga 1: ${w1}`, `süre>${s.minTimeRatio}`, `min R:R ${s.minRR}`, `H${p.exitTarget + 1}`, `kom. %${p.feePct}`,
   ];
-  if (p.entryType !== 'break') parts.push(`bölge ${s.zoneEntry}/${s.zoneStop === 'r886' ? 'stop %88,6' : 'stop 0'}${s.zoneTime === 'ignore' ? '/süresiz' : ''}`);
+  if (s.onlyPerfect) parts.unshift(`★ sadece mükemmel (≤${s.perfectAtr} ATR)`);
+  if (p.entryType !== 'break') {
+    parts.push(`bölge ${s.zoneEntry}/${s.zoneStop === 'r886' ? 'stop %88,6' : 'stop 0'}${s.zoneTime === 'ignore' ? '/süresiz' : ''}`);
+    if (s.zoneFrontAtr != null) parts.push(`ön pay ${s.zoneFrontAtr} ATR`);
+  }
   if (p.entryType !== 'zone') parts.push(`B stop ${s.stopMode}`);
   return parts.join(' · ');
 }
@@ -227,7 +232,13 @@ function statRow(name, s) {
   return `<tr><td>${esc(name)}</td><td class="num">${s.n}</td><td class="num">${fmtPct(s.winRate, 0)}</td><td class="num ${s.avgR >= 0 ? 'pos' : 'neg'}">${fmtR(s.avgR)}</td><td class="num ${s.totalR >= 0 ? 'pos' : 'neg'}">${fmtR(s.totalR)}</td><td class="num">${fmtPF(s.pf)}</td></tr>`;
 }
 
-function groupTable(title, trades, keyFn, { limit = 0, sort = 'n' } = {}) {
+const WIDTH_BUCKETS = ['≤ 0,25 ATR', '0,25–0,5 ATR', '0,5–1 ATR', '1–2,5 ATR', '> 2,5 ATR'];
+function widthBucket(w) {
+  if (w == null) return null;
+  return WIDTH_BUCKETS[w <= 0.25 ? 0 : w <= 0.5 ? 1 : w <= 1 ? 2 : w <= 2.5 ? 3 : 4];
+}
+
+function groupTable(title, trades, keyFn, { limit = 0, sort = 'n', order = null } = {}) {
   const groups = new Map();
   for (const t of trades) {
     const k = keyFn(t);
@@ -236,7 +247,7 @@ function groupTable(title, trades, keyFn, { limit = 0, sort = 'n' } = {}) {
     groups.get(k).push(t);
   }
   let rows = [...groups].map(([k, list]) => [k, summarize(list)]).filter(([, s]) => s.n);
-  rows.sort((a, b) => (sort === 'R' ? b[1].totalR - a[1].totalR : b[1].n - a[1].n));
+  rows.sort((a, b) => (order ? order.indexOf(a[0]) - order.indexOf(b[0]) : sort === 'R' ? b[1].totalR - a[1].totalR : b[1].n - a[1].n));
   if (limit && rows.length > limit * 2) rows = [...rows.slice(0, limit), ['…', null], ...rows.slice(-limit)];
   if (!rows.length) return '';
   return `<div class="bd"><h3>${esc(title)}</h3><table class="stat"><thead><tr><th></th><th>İşlem</th><th>Kazanma</th><th>Ort.</th><th>Toplam</th><th>PF</th></tr></thead>
@@ -278,6 +289,8 @@ function show(runObj) {
     groupTable('Yön', closed, (t) => (t.dir === 'long' ? 'LONG ▲' : 'SHORT ▼')),
     groupTable('Bölge gücü (limit bölge)', closed.filter((t) => t.type === 'zone'), (t) => t.strength),
     groupTable('Bölgede çakışan seviye', closed.filter((t) => t.type === 'zone'), (t) => `${t.inside} çakışma`),
+    groupTable('★ Mükemmel mi (iki kenar çakışıyor)', closed, (t) => (t.perfect == null ? null : t.perfect ? '★ Mükemmel' : 'Değil')),
+    groupTable('Bölge genişliği (iki kenar farkı)', closed, (t) => widthBucket(t.widthAtr), { order: WIDTH_BUCKETS }),
     groupTable('Dalga 2 tipi', closed, (t) => t.abc || 'ABC yok'),
     groupTable('Derece (× ATR)', closed, (t) => `${t.sensitivity}×`),
     groupTable('Kademeli dolum', closed.filter((t) => t.type === 'zone' && t.legs > 1), (t) => `${t.filledLegs}/${t.legs} doldu`),
@@ -387,7 +400,7 @@ function init() {
   for (const b of document.querySelectorAll('#tf button')) {
     b.addEventListener('click', () => { params = { ...params, tf: b.dataset.tf, ...defaultsFor(b.dataset.tf) }; saveParams(); syncForm(); });
   }
-  for (const k of ['from', 'to', 'topN', 'entryType', 'exitTarget', 'feePct', 'maxPending', 'maxHold', 'note']) {
+  for (const k of ['from', 'to', 'topN', 'entryType', 'onlyPerfect', 'exitTarget', 'feePct', 'maxPending', 'maxHold', 'note']) {
     $('#' + k).addEventListener('change', (e) => { params[k] = e.target.value; saveParams(); updateEstimate(); });
   }
   $('#settingsBtn').addEventListener('click', () => {

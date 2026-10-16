@@ -8,6 +8,7 @@ export const ZONE_LABEL = {
   stopped: 'Stop oldu',
   passed: 'Stop seviyesi geçildi',
   target: 'Hedef 1 görüldü',
+  approaching: 'Seviyeye yaklaştı',
 };
 
 const C_LEVELS = [1, 1.272, 1.382, 1.618];
@@ -44,7 +45,10 @@ export function zonePlan(z, path, complete, opts) {
   const inside = levels.filter((l) => l.inside && !l.edge).length;
   const widthAtr = (hi - lo) / atr;
   const widthPct = (hi - lo) / ((hi + lo) / 2);
-  const strength = widthAtr <= 1 ? 'Güçlü' : widthAtr <= 2.5 ? 'Orta' : 'Zayıf';
+  // Mükemmel: iki kenar (ör. %61,8 ve 1,272A) neredeyse aynı fiyatta → tek çakışma seviyesi.
+  const perfect = widthAtr <= opts.perfectAtr;
+  const strength = perfect ? 'Mükemmel' : widthAtr <= 1 ? 'Güçlü' : widthAtr <= 2.5 ? 'Orta' : 'Zayıf';
+  const confluence = (lvC + lvR) / 2;
 
   const buffer = opts.stopAtr * atr;
   const stopBase = opts.zoneStop === 'r886' ? retr(0.886) : p0;
@@ -52,8 +56,11 @@ export function zonePlan(z, path, complete, opts) {
   // Bölgenin uzak kenarı stop'un ötesindeyse plan anlamsız.
   if (d * (far - stop) <= 0) return { invalid: true, reason: 'Bölge stop seviyesinin ötesinde', near, far, stop, levels };
 
-  // Giriş: yakın / orta (yarı yarıya kademeli) / uzak kenar
-  const legs = opts.zoneEntry === 'near' ? [near] : opts.zoneEntry === 'far' ? [far] : [near, far];
+  // Giriş: yakın / orta (yarı yarıya kademeli) / uzak kenar; mükemmelde tek seviye.
+  // Emirler fiyat yönüne doğru zoneFrontAtr × ATR öne alınır: seviyeye birkaç tik kala dönen fiyat da doldurur.
+  const raw = perfect ? [confluence] : opts.zoneEntry === 'near' ? [near] : opts.zoneEntry === 'far' ? [far] : [near, far];
+  const front = (opts.zoneFrontAtr || 0) * atr;
+  const legs = raw.map((lv) => lv + d * front);
   const plannedEntry = legs.reduce((s, x) => s + x, 0) / legs.length;
 
   // Dolum simülasyonu: B'den sonraki mumlar sırayla.
@@ -84,6 +91,12 @@ export function zonePlan(z, path, complete, opts) {
   }
   if (state === 'waiting' && path.some((c) => d * ((d === 1 ? c.low : c.high) - stop) <= 0)) state = 'passed';
   if (state === 'waiting' && complete) state = 'missed';
+  // Yaklaşma: dolmadı ama son mumun ucu ilk emir seviyesine approachAtr × ATR'den yakın.
+  if (state === 'waiting' && path.length) {
+    const lastC = path[path.length - 1];
+    const gap = d * ((d === 1 ? lastC.low : lastC.high) - legs[0]);
+    if (opts.approachAtr > 0 && gap <= opts.approachAtr * atr) state = 'approaching';
+  }
 
   const entry = entryOf();
   const base = z.base ?? entry;
@@ -97,6 +110,7 @@ export function zonePlan(z, path, complete, opts) {
     state,
     stateLabel: ZONE_LABEL[state],
     near, far, lvC, lvR, cExtK: opts.zoneCExt, retrR: opts.zoneRetr,
+    perfect, confluence, front, atr,
     entry,
     legs,
     filledLegs: filledLegs.size,
@@ -111,6 +125,6 @@ export function zonePlan(z, path, complete, opts) {
     strength,
     // Süre koşulu henüz dolmadıysa emrin aktif olacağı mutlak mum indeksi
     activeFrom: Number.isFinite(activeFrom) ? activeFrom : null,
-    pendingTime: state === 'waiting' && (pendingTime || path.length === 0) && Number.isFinite(activeFrom),
+    pendingTime: (state === 'waiting' || state === 'approaching') && (pendingTime || path.length === 0) && Number.isFinite(activeFrom),
   };
 }

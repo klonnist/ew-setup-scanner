@@ -52,6 +52,7 @@ export function backtestCoin(candles, cfg) {
     const win = candles.slice(off, t + 1);
     const setups = findWave3Setups(win, opts, null);
     for (const s of setups) {
+      if (opts.onlyPerfect && !s.zone?.perfect) continue;
       const abs = (p) => candles[p.i + off].time;
       const base = `${s.direction}|${abs(s.points.p0)}|${abs(s.points.p1)}`;
       if (useBreak && s.phase === 'complete' && (s.state === 'ready' || s.state === 'triggered') && s.rr >= opts.minRR) {
@@ -75,7 +76,7 @@ export function backtestCoin(candles, cfg) {
         const key = `Z|${base}|${abs(s.abc.A)}|${abs(s.abc.B)}`;
         if (seen.has(key)) continue;
         seen.add(key);
-        if (s.zone.state !== 'waiting') { cancel({ type: 'zone' }, 'geç algılandı'); orderCount++; continue; }
+        if (s.zone.state !== 'waiting' && s.zone.state !== 'approaching') { cancel({ type: 'zone' }, 'geç algılandı'); orderCount++; continue; }
         orderCount++;
         const z = s.zone;
         const w = 1 / z.legs.length;
@@ -102,7 +103,10 @@ export function backtestCoin(candles, cfg) {
 
   // ---------------------------------------------------------------- yardımcılar
   function meta(s) {
-    return { sensitivity: s.sensitivity, score: s.score, retr: s.retr, timeRatio: s.timeRatio, abc: s.abc?.kind || null };
+    return {
+      sensitivity: s.sensitivity, score: s.score, retr: s.retr, timeRatio: s.timeRatio, abc: s.abc?.kind || null,
+      widthAtr: s.zone ? s.zone.widthAtr : null, perfect: s.zone ? s.zone.perfect : null,
+    };
   }
 
   function fillLeg(o, leg, price, t) {

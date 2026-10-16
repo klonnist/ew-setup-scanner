@@ -31,6 +31,9 @@ Araç çubuğundaki **Giriş tipi** ile seçilir; "İkisi birden" seçilince kar
   - Bölge gücü kenarların yakınlığına göre (≤ 1 ATR güçlü, ≤ 2,5 ATR orta); bölgeye düşen diğer seviyeler
     (C = 1A / 1,382A / 1,618A, %50 / %78,6 / %88,6) "çakışma" olarak sayılır.
   - Süre koşulu: limit emir ancak süre(2) > süre(1) olduktan sonra aktif sayılır (Ayarlar'dan kapatılabilir).
+  - **★ Mükemmel:** iki kenar arası ≤ 0,5 ATR ise tek çakışma seviyesi; listede en üstte, "Sadece mükemmel" ile süzülebilir.
+  - **Ön pay:** limit emir seviyenin 0,2 ATR önüne konur (fiyat seviyeye birkaç tik kala dönse de dolsun; 0 = tam seviye).
+  - **Seviyeye yaklaştı:** fiyat emre 0,5 ATR'den yakınsa kart işaretlenir; otomatik yenilemede bildirim gelir.
 
 Tüm eşikler sayfadaki **Ayarlar** bölmesinden değiştirilebilir. Ağ gerektirmeyen ayarlar önbellekteki mumlarla anında yeniden hesaplanır.
 

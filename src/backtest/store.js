@@ -4,14 +4,14 @@ const KEY = 'ew-setup-scanner:backtests:v1';
 export const MAX_BYTES = 3.5 * 1024 * 1024; // localStorage ~5 MB; ayarlar vb. için pay bırak
 
 // Sıkıştırılmış işlem satırı alanları (sıra önemli)
-const FIELDS = ['coin', 'type', 'dir', 'created', 'entryTime', 'exitTime', 'entry', 'exit', 'stop', 'target', 'filledLegs', 'legs', 'R', 'outcome', 'bars', 'sensitivity', 'score', 'retr', 'timeRatio', 'abc', 'strength', 'inside'];
+const FIELDS = ['coin', 'type', 'dir', 'created', 'entryTime', 'exitTime', 'entry', 'exit', 'stop', 'target', 'filledLegs', 'legs', 'R', 'outcome', 'bars', 'sensitivity', 'score', 'retr', 'timeRatio', 'abc', 'strength', 'inside', 'widthAtr', 'perfect'];
 const round = (x) => (typeof x === 'number' && !Number.isInteger(x) ? +x.toPrecision(6) : x);
 
 export function packTrades(trades) {
   return trades.map((t) => FIELDS.map((f) => round(t[f] ?? null)));
 }
 export function unpackTrades(rows) {
-  return rows.map((r) => Object.fromEntries(FIELDS.map((f, i) => [f, r[i]])));
+  return rows.map((r) => Object.fromEntries(FIELDS.map((f, i) => [f, r[i] ?? null])));
 }
 
 export function loadRuns() {
