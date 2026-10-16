@@ -1,6 +1,6 @@
 // Panel: araç çubuğu, tarama, özet, setup kartları ve ayrıntı (grafik + kural kontrolleri).
 import { runScan } from '../scan/scanner.js';
-import { findWave3Setups, compareSetups, pickSetups, activePlans } from '../scan/wave3.js';
+import { findWave3Setups, compareSetups, pickSetups, activePlans, riskPct, feeR } from '../scan/wave3.js';
 import { loadSettings, saveSettings, renderSettings, toScanOptions, UI_DEFAULTS } from './settings.js';
 import { drawSetup, destroyChart, LEGEND } from './chart.js';
 import { fmtPrice, fmtPct, fmtX, fmtTime, esc } from './format.js';
@@ -208,7 +208,21 @@ function renderSummary() {
   $('#listTitle').textContent = `Setup'lar (${visibleSetups().length})`;
 }
 
-const lvBox = (label, value, cls = '') => `<div${cls ? ` class="${cls}"` : ''}><b>${esc(label)}</b><span class="num">${value}</span></div>`;
+// Dar stop: giriş geçersizlik seviyesine çok yakınsa komisyon R'nin büyük kısmını yer.
+const TIGHT_PCT = 1.5;
+const pctTxt = (x, d) => x.toFixed(d).replace('.', ',');
+function stopCell(entry, stop, ref) {
+  const pct = riskPct(entry, stop);
+  return `${fmtPrice(stop, ref)} <small class="${pct < TIGHT_PCT ? 'warn-txt' : 'muted'}">%${pctTxt(pct, pct < 1 ? 2 : 1)}</small>`;
+}
+function tightNote(entry, stop) {
+  const pct = riskPct(entry, stop);
+  if (pct >= TIGHT_PCT) return '';
+  const fr = feeR(entry, stop, state.settings.feePct ?? 0.1);
+  return `<div class="note">⚠ Stop çok yakın (%${pctTxt(pct, 2)}): komisyon ≈ ${pctTxt(fr, 2)}R</div>`;
+}
+
+const lvBox =(label, value, cls = '') => `<div${cls ? ` class="${cls}"` : ''}><b>${esc(label)}</b><span class="num">${value}</span></div>`;
 
 function breakBlock(s, active) {
   if (s.phase !== 'complete') {
@@ -217,7 +231,8 @@ function breakBlock(s, active) {
   const L = s.levels;
   return `<div class="plan${active ? '' : ' faded'}">
     <div class="plan-head"><span class="plan-name">B kırılımı</span><span class="state ${s.state}">${esc(s.stateLabel)}</span><span class="rr">R:R <b class="num">${fmtX(s.rr, 1)}</b></span></div>
-    <div class="lv">${lvBox(s.state === 'triggered' ? 'Fiyat' : 'Tetik', fmtPrice(L.entry, s.price))}${lvBox('Stop', fmtPrice(L.stop, s.price))}${lvBox('Hedef 1', fmtPrice(L.targets[0].price, s.price))}${lvBox('Hedef 2', fmtPrice(L.targets[1]?.price, s.price))}</div>
+    <div class="lv">${lvBox(s.state === 'triggered' ? 'Fiyat' : 'Tetik', fmtPrice(L.entry, s.price))}${lvBox('Stop', stopCell(L.entry, L.stop, s.price))}${lvBox('Hedef 1', fmtPrice(L.targets[0].price, s.price))}${lvBox('Hedef 2', fmtPrice(L.targets[1]?.price, s.price))}</div>
+    ${tightNote(L.entry, L.stop)}
   </div>`;
 }
 
@@ -233,7 +248,8 @@ function zoneBlock(s, active) {
     ${wait ? `<div class="note">Süre koşulu: emir ${wait} mum sonra aktif</div>` : ''}
     <div class="lv">${z.perfect
       ? lvBox('Çakışma seviyesi', `${fmtPrice(z.confluence, s.price)} <small class="muted">fark ${fmtX(z.widthAtr, 2)} ATR</small>`, 'wide')
-      : lvBox('Bölge', `${fmtPrice(z.near, s.price)} – ${fmtPrice(z.far, s.price)}`, 'wide')}${lvBox(z.filledLegs ? 'Ort. giriş' : 'Emir', fmtPrice(z.entry, s.price))}${lvBox('Stop', fmtPrice(z.stop, s.price))}${lvBox('Hedef 2', fmtPrice(z.targets[1]?.price, s.price))}</div>
+      : lvBox('Bölge', `${fmtPrice(z.near, s.price)} – ${fmtPrice(z.far, s.price)}`, 'wide')}${lvBox(z.filledLegs ? 'Ort. giriş' : 'Emir', fmtPrice(z.entry, s.price))}${lvBox('Stop', stopCell(z.entry, z.stop, s.price))}${lvBox('Hedef 2', fmtPrice(z.targets[1]?.price, s.price))}</div>
+    ${tightNote(z.entry, z.stop)}
   </div>`;
 }
 
@@ -302,12 +318,14 @@ function breakFacts(s) {
     </div>`;
 }
 
+const ENTRY_TXT = { mid: 'kademeli (yarısı yakın, yarısı uzak kenar)', near: 'yakın kenar', far: 'uzak kenar', r618: 'sadece %61,8 seviyesi', c127: 'sadece C = 1,272A seviyesi' };
+
 function zoneFacts(s) {
   const z = s.zone;
   if (!z) return '';
   const risk = Math.abs(z.entry - z.stop) / z.entry;
   const wait = barsUntilActive(s);
-  const entryTxt = { mid: 'kademeli (yarısı yakın, yarısı uzak kenar)', near: 'yakın kenar', far: 'uzak kenar' }[state.settings.zoneEntry];
+  const entryTxt = z.perfect ? 'tek çakışma seviyesi' : ENTRY_TXT[state.settings.zoneEntry];
   const levels = [...z.levels].sort((a, b) => b.price - a.price).map((l) =>
     `<li class="${l.edge ? 'edge' : l.inside ? 'in' : ''}"><span>${esc(l.name)}${l.edge ? ' · kenar' : ''}</span><span class="num">${fmtPrice(l.price, s.price)}</span><span>${l.inside ? '● bölgede' : ''}</span></li>`).join('');
   return `<h3 class="sec">Limit bölge (erken) · <span class="state zone-${z.state}">${esc(z.stateLabel)}</span></h3>

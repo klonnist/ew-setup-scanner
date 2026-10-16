@@ -206,8 +206,10 @@ async function run() {
 
 const SETTING_KEYS = ['ruleSet', 'sensitivities', 'w1Extend', 'retrMin', 'retrMax', 'requireAbc', 'abcKinds', 'minTimeRatio', 'minW1Atr',
   'rsiMode', 'volume', 'stopMode', 'stopAtr', 'targets', 'minRR', 'direction', 'zoneCExt', 'zoneRetr', 'zoneEntry', 'zoneStop', 'zoneTime',
-  'perfectAtr', 'zoneFrontAtr', 'approachAtr', 'onlyPerfect'];
+  'perfectAtr', 'zoneFrontAtr', 'approachAtr', 'onlyPerfect', 'minRiskPct'];
 function pickSettings(o) { return Object.fromEntries(SETTING_KEYS.map((k) => [k, o[k]])); }
+
+const ZONE_ENTRY_TXT = { mid: 'kademeli', near: 'yakın kenar', far: 'uzak kenar', r618: 'sadece %61,8', c127: 'sadece 1,272A' };
 
 function settingsText(p) {
   const s = p.settings;
@@ -215,9 +217,10 @@ function settingsText(p) {
   const parts = [
     `${s.ruleSet}`, `dalga 1: ${w1}`, `süre>${s.minTimeRatio}`, `min R:R ${s.minRR}`, `H${p.exitTarget + 1}`, `kom. %${p.feePct}`,
   ];
+  if (s.minRiskPct > 0) parts.push(`min stop %${s.minRiskPct}`);
   if (s.onlyPerfect) parts.unshift(`★ sadece mükemmel (≤${s.perfectAtr} ATR)`);
   if (p.entryType !== 'break') {
-    parts.push(`bölge ${s.zoneEntry}/${s.zoneStop === 'r886' ? 'stop %88,6' : 'stop 0'}${s.zoneTime === 'ignore' ? '/süresiz' : ''}`);
+    parts.push(`bölge ${ZONE_ENTRY_TXT[s.zoneEntry] || s.zoneEntry}/${s.zoneStop === 'r886' ? 'stop %88,6' : 'stop 0'}${s.zoneTime === 'ignore' ? '/süresiz' : ''}`);
     if (s.zoneFrontAtr != null) parts.push(`ön pay ${s.zoneFrontAtr} ATR`);
   }
   if (p.entryType !== 'zone') parts.push(`B stop ${s.stopMode}`);
@@ -237,6 +240,14 @@ function widthBucket(w) {
   if (w == null) return null;
   return WIDTH_BUCKETS[w <= 0.25 ? 0 : w <= 0.5 ? 1 : w <= 1 ? 2 : w <= 2.5 ? 3 : 4];
 }
+
+// Stop mesafesi ve komisyon maliyeti işlemin entry / exit / stop alanlarından hesaplanır (eski kayıtlarda da çalışır).
+const tradeRiskPct = (t) => (Math.abs(t.entry - t.stop) / t.entry) * 100;
+const tradeFeeR = (t, feePct) => ((feePct / 100) * (t.entry + t.exit)) / (Math.abs(t.entry - t.stop) || Infinity);
+const RISK_BUCKETS = ['< %1', '%1–2', '%2–4', '%4–8', '> %8'];
+const riskBucket = (p) => RISK_BUCKETS[p < 1 ? 0 : p < 2 ? 1 : p < 4 ? 2 : p < 8 ? 3 : 4];
+const FEE_BUCKETS = ['< 0,1R', '0,1–0,25R', '0,25–0,5R', '> 0,5R'];
+const feeBucket = (f) => FEE_BUCKETS[f < 0.1 ? 0 : f < 0.25 ? 1 : f < 0.5 ? 2 : 3];
 
 function groupTable(title, trades, keyFn, { limit = 0, sort = 'n', order = null } = {}) {
   const groups = new Map();
@@ -266,12 +277,15 @@ function show(runObj) {
 
   const types = [...new Set(trades.map((t) => t.type))];
   const blocks = (types.length ? types : [p.entryType === 'zone' ? 'zone' : 'break']).map((type) => {
-    const s = summarize(trades.filter((t) => t.type === type));
+    const list = trades.filter((t) => t.type === type);
+    const s = summarize(list);
+    const gross = list.filter((t) => t.outcome !== 'open').reduce((a, t) => a + t.R + tradeFeeR(t, p.feePct), 0);
     return `<div class="tile-group"><h3>${TYPE_NAME[type]}</h3><div class="tile-row">
       ${tile('İşlem', `${s.n}${s.open ? ` <small class="muted">+${s.open} açık</small>` : ''}`)}
       ${tile('Kazanma', fmtPct(s.winRate, 1))}
       ${tile('Ort. R', fmtR(s.avgR), s.avgR >= 0 ? 'pos' : 'neg')}
       ${tile('Toplam R', fmtR(s.totalR), s.totalR >= 0 ? 'pos' : 'neg')}
+      ${tile('Komisyonsuz toplam', fmtR(gross), gross >= 0 ? 'pos' : 'neg')}
       ${tile('Kâr faktörü', fmtPF(s.pf), s.pf >= 1 ? 'pos' : 'neg')}
       ${tile('Maks. düşüş', `${s.maxDD.toFixed(1)}R`)}
       ${tile('Hedef / stop / süre', `${s.targets} / ${s.stops} / ${s.timeouts}`)}
@@ -287,6 +301,8 @@ function show(runObj) {
   $('#breakdowns').innerHTML = [
     groupTable('Plan tipi', closed, (t) => TYPE_NAME[t.type]),
     groupTable('Yön', closed, (t) => (t.dir === 'long' ? 'LONG ▲' : 'SHORT ▼')),
+    groupTable('Stop mesafesi (giriş → stop)', closed, (t) => riskBucket(tradeRiskPct(t)), { order: RISK_BUCKETS }),
+    groupTable(`Komisyon maliyeti (%${p.feePct} → R)`, closed, (t) => feeBucket(tradeFeeR(t, p.feePct)), { order: FEE_BUCKETS }),
     groupTable('Bölge gücü (limit bölge)', closed.filter((t) => t.type === 'zone'), (t) => t.strength),
     groupTable('Bölgede çakışan seviye', closed.filter((t) => t.type === 'zone'), (t) => `${t.inside} çakışma`),
     groupTable('★ Mükemmel mi (iki kenar çakışıyor)', closed, (t) => (t.perfect == null ? null : t.perfect ? '★ Mükemmel' : 'Değil')),

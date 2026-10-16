@@ -53,12 +53,16 @@ export function zonePlan(z, path, complete, opts) {
   const buffer = opts.stopAtr * atr;
   const stopBase = opts.zoneStop === 'r886' ? retr(0.886) : p0;
   const stop = stopBase - d * buffer;
-  // Bölgenin uzak kenarı stop'un ötesindeyse plan anlamsız.
-  if (d * (far - stop) <= 0) return { invalid: true, reason: 'Bölge stop seviyesinin ötesinde', near, far, stop, levels };
-
   // Giriş: yakın / orta (yarı yarıya kademeli) / uzak kenar; mükemmelde tek seviye.
   // Emirler fiyat yönüne doğru zoneFrontAtr × ATR öne alınır: seviyeye birkaç tik kala dönen fiyat da doldurur.
-  const raw = perfect ? [confluence] : opts.zoneEntry === 'near' ? [near] : opts.zoneEntry === 'far' ? [far] : [near, far];
+  // r618 / c127: kenar yakın mı uzak mı olduğuna bakmadan yalnızca o Fibonacci seviyesi.
+  const raw = perfect ? [confluence]
+    : opts.zoneEntry === 'r618' ? [lvR]
+      : opts.zoneEntry === 'c127' ? [lvC]
+        : opts.zoneEntry === 'near' ? [near] : opts.zoneEntry === 'far' ? [far] : [near, far];
+  // Emir verilecek en derin seviye stop'un ötesindeyse plan anlamsız.
+  const deepest = d === 1 ? Math.min(...raw) : Math.max(...raw);
+  if (d * (deepest - stop) <= 0) return { invalid: true, reason: 'Bölge stop seviyesinin ötesinde', near, far, stop, levels };
   const front = (opts.zoneFrontAtr || 0) * atr;
   const legs = raw.map((lv) => lv + d * front);
   const plannedEntry = legs.reduce((s, x) => s + x, 0) / legs.length;

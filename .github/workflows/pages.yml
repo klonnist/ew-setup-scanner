@@ -23,6 +23,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Sözdizimi kontrolü (testlerin yüklemediği arayüz dosyaları dahil)
+        run: for f in $(find src -name '*.js'); do node --check "$f"; done
       - name: Birim testleri
         run: node --test tests/*.test.js
 

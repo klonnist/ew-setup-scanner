@@ -137,3 +137,26 @@ test('backtest: sadece mükemmel modunda yalnızca çakışmalı setup işlem a�
   assert.ok(z[0].widthAtr < 0.5);
   assert.ok(z[0].R > 0);
 });
+
+test('seviye bazlı giriş: sadece %61,8 ya da sadece C = 1,272A', () => {
+  const r618 = findWave3Setups(build(BASE), { ...OPTS, zoneEntry: 'r618' }).find((x) => x.phase === 'complete');
+  assert.deepEqual(r618.zone.legs.map((v) => +v.toFixed(6)), [+NEAR.toFixed(6)]);
+  const c127 = findWave3Setups(build(BASE), { ...OPTS, zoneEntry: 'c127' }).find((x) => x.phase === 'complete');
+  assert.deepEqual(c127.zone.legs.map((v) => +v.toFixed(6)), [+FAR.toFixed(6)]);
+  // %88,6 stop: 1,272A seviyesi stop'un ötesinde → o plan yok, ama %61,8 planı geçerli
+  assert.equal(findWave3Setups(build(BASE), { ...OPTS, zoneEntry: 'c127', zoneStop: 'r886' }).find((x) => x.phase === 'complete').zone, null);
+  assert.ok(findWave3Setups(build(BASE), { ...OPTS, zoneEntry: 'r618', zoneStop: 'r886' }).find((x) => x.phase === 'complete').zone);
+});
+
+test('min. stop mesafesi: eşiğin altındaki plan aktif değil, backtest emir açmaz; 0 = kapalı', () => {
+  const s = findWave3Setups(build(BASE), OPTS).find((x) => x.phase === 'complete');
+  const o = { entryType: 'break', minRR: 0 };
+  const pct = (Math.abs(s.levels.entry - s.levels.stop) / s.levels.entry) * 100; // ≈ %10,7
+  assert.equal(activePlans(s, { ...o, minRiskPct: pct + 1 }).length, 0);
+  assert.equal(activePlans(s, { ...o, minRiskPct: pct - 1 }).length, 1);
+  assert.equal(activePlans(s, { ...o, minRiskPct: 0 }).length, 1);
+  const c = build([...BASE, [110, 165]]);
+  const bt = (minRiskPct) => backtestCoin(c, { from: c[0].time, to: c[c.length - 1].time, feePct: 0, opts: { sensitivities: [4.5], minRR: 0, entryType: 'break', minRiskPct } }).trades.length;
+  assert.equal(bt(0), 1);
+  assert.equal(bt(50), 0);
+});

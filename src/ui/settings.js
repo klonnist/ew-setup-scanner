@@ -60,7 +60,7 @@ const FIELDS = [
   ['stopAtr', 'Stop tamponu (× ATR)', 'number', { step: 0.05, min: 0, hint: 'İki giriş tipinde de stop bu kadar ötesine konur.' }],
   ['zoneCExt', 'Bölge kenarı: C = ? × A', 'number', { step: 0.001, min: 0.5, hint: "B'den ölçülür. Varsayılan 1,272." }],
   ['zoneRetr', 'Bölge kenarı: dalga 2 geri çekilme', 'pct', { hint: 'Varsayılan %61,8.' }],
-  ['zoneEntry', 'Bölge girişi', 'select', { options: [['mid', 'Kademeli: yarısı yakın, yarısı uzak kenar'], ['near', 'Yakın kenar'], ['far', 'Uzak kenar']] }],
+  ['zoneEntry', 'Bölge girişi', 'select', { options: [['mid', 'Kademeli: yarısı yakın, yarısı uzak kenar'], ['near', 'Yakın kenar'], ['far', 'Uzak kenar'], ['r618', 'Sadece %61,8 seviyesi'], ['c127', 'Sadece C = 1,272A seviyesi']], hint: "Mükemmel setup'larda (iki seviye çakışınca) her seçenekte tek çakışma seviyesi kullanılır." }],
   ['zoneStop', 'Stop yeri (limit bölge)', 'select', { options: [['w0', 'Dalga 1 başı (0 noktası)'], ['r886', 'Dalga 2 = %88,6']] }],
   ['perfectAtr', '★ Mükemmel: iki kenar farkı ≤ ? × ATR', 'number', { step: 0.05, min: 0, hint: '%61,8 ile C = 1,272A bu kadar yakınsa tek çakışma seviyesi sayılır.' }],
   ['zoneFrontAtr', 'Limit emri seviyenin önüne (× ATR)', 'number', { step: 0.05, min: 0, hint: 'Fiyat seviyeye birkaç tik kala dönse de emir dolsun. 0 = tam seviye.' }],
@@ -69,6 +69,8 @@ const FIELDS = [
   ['targets', 'Hedefler (× dalga 1)', 'list'],
   ['mainTarget', 'R:R için hedef', 'select', { options: [[0, 'Hedef 1'], [1, 'Hedef 2'], [2, 'Hedef 3']], num: true }],
   ['minRR', 'Min. R:R', 'number', { step: 0.25, min: 0 }],
+  ['minRiskPct', 'Min. stop mesafesi (%)', 'number', { step: 0.1, min: 0, hint: "Giriş ile stop (geçersizlik) arası bundan darsa plan gösterilmez. 0 = kapalı; dar stopta komisyon R'yi yer." }],
+  ['feePct', 'Komisyon (% / işlem tarafı)', 'number', { step: 0.01, min: 0, hint: 'Kartta dar stop uyarısındaki komisyon tahmini için.' }],
   ['autoRefresh', 'Otomatik yenileme', 'select', { options: [[0, 'Kapalı'], [5, '5 dakikada bir'], [15, '15 dakikada bir']], num: true, hint: 'Sekme açıkken çalışır; yeni setup çıkınca bildirim gösterir.' }],
 ];
 

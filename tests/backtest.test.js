@@ -89,3 +89,13 @@ test('limit bölge: sadece yakın kenar doldu, dalga 3 hedefe gitti → kademeli
   assert.equal(z[0].filledLegs, 1);
   assert.ok(z[0].R > 0);
 });
+
+test('limit emir aktifleştiğinde fiyat stop\'un ötesindeyse emir verilmez (işlem açılmaz)', () => {
+  // Bölge emri B onaylanınca oluşur ama süre koşulu (minTimeRatio 3 → bar ~100) dolana kadar bekler;
+  // bu sırada fiyat 0 noktasının (stop) altına iner ve orada kalır.
+  const c = build([[0, 120], [20, 100], [40, 130], [52, 115], [60, 122], [66, 112], [75, 90], [130, 92]]);
+  const r = backtestCoin(c, { from: c[0].time, to: c[c.length - 1].time, feePct: 0, maxPending: 80,
+    opts: { sensitivities: [4.5], subDivisors: [2], minRR: 0, entryType: 'zone', minTimeRatio: 3 } });
+  assert.equal(r.trades.length, 0);
+  assert.ok(r.stats.cancelled['zone:stop seviyesi geçildi'] >= 1, JSON.stringify(r.stats.cancelled));
+});

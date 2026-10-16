@@ -300,3 +300,4 @@ table.runs td.acts { white-space: nowrap; display: flex; gap: 4px; }
 .chip.str-Mükemmel { color: #1a1300; background: #f0c75e; font-weight: 700; }
 .state.zone-approaching { color: #1a1300; background: #ffcf5c; font-weight: 600; }
 .perfect-toggle { color: #f0c75e; font-weight: 600; }
+.warn-txt { color: var(--warn); }

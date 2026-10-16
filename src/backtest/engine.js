@@ -2,7 +2,7 @@
 // Her kapanan mumda canlı tarayıcının yaptığını yapar: son `window` mumla findWave3Setups.
 // Yeni çıkan setup'tan emir oluşturur ve sonraki mumlarda simüle eder. Gelecek veri kullanılmaz:
 // t mumunda görülen setup'ın emri en erken t+1 mumunda dolabilir (tetiklenmişse t kapanışından piyasa emri).
-import { findWave3Setups, DEFAULTS } from '../scan/wave3.js';
+import { findWave3Setups, DEFAULTS, riskOk } from '../scan/wave3.js';
 
 export const BT_DEFAULTS = {
   window: 300, // canlı taramadaki mum sayısı
@@ -55,7 +55,8 @@ export function backtestCoin(candles, cfg) {
       if (opts.onlyPerfect && !s.zone?.perfect) continue;
       const abs = (p) => candles[p.i + off].time;
       const base = `${s.direction}|${abs(s.points.p0)}|${abs(s.points.p1)}`;
-      if (useBreak && s.phase === 'complete' && (s.state === 'ready' || s.state === 'triggered') && s.rr >= opts.minRR) {
+      if (useBreak && s.phase === 'complete' && (s.state === 'ready' || s.state === 'triggered') && s.rr >= opts.minRR
+        && riskOk(s.state === 'triggered' ? bar.close : s.levels.trigger, s.levels.stop, opts)) {
         const key = `B|${base}|${abs(s.points.p2)}`;
         if (!seen.has(key)) {
           seen.add(key);
@@ -72,7 +73,7 @@ export function backtestCoin(candles, cfg) {
           orders.push(o);
         }
       }
-      if (useZone && s.phase === 'forming' && s.zone && s.zone.rr >= opts.minRR) {
+      if (useZone && s.phase === 'forming' && s.zone && s.zone.rr >= opts.minRR && riskOk(s.zone.entry, s.zone.stop, opts)) {
         const key = `Z|${base}|${abs(s.abc.A)}|${abs(s.abc.B)}`;
         if (seen.has(key)) continue;
         seen.add(key);
@@ -135,6 +136,12 @@ export function backtestCoin(candles, cfg) {
       } else if (t >= o.activeFrom) {
         if (d * (adverse - leg.level) <= 0) {
           const px = d === 1 ? Math.min(leg.level, b.open) : Math.max(leg.level, b.open);
+          // Emir aktif olduğunda fiyat zaten stop'un ötesindeyse (süre koşulu beklenirken geçildi) setup bozulmuştur:
+          // gerçekte bu emir verilmez. Hiç dolum yoksa iptal, varsa bu bacak atlanır.
+          if (d * (px - o.stop) <= 0) {
+            if (!o.legs.some((l) => l.filled)) { cancel(o, 'stop seviyesi geçildi'); return; }
+            continue;
+          }
           fillLeg(o, leg, px, t);
           fillsNow.push(leg);
         }

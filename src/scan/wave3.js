@@ -28,12 +28,14 @@ export const DEFAULTS = {
   entryType: 'break', // 'break': B kırılımı (onaylı) | 'zone': limit bölge (erken) | 'both'
   zoneCExt: 1.272, // bölge kenarı: C = 1,272 × A (B'den ölçülür)
   zoneRetr: 0.618, // bölge kenarı: dalga 2 = dalga 1'in %61,8'i
-  zoneEntry: 'mid', // 'near' yakın kenar | 'mid' yarı yarıya kademeli | 'far' uzak kenar
+  zoneEntry: 'mid', // 'near' yakın kenar | 'mid' yarı yarıya kademeli | 'far' uzak kenar | 'r618' / 'c127' yalnızca o seviye
   zoneStop: 'w0', // 'w0': dalga 1'in başı (0) | 'r886': dalga 2 = %88,6
   perfectAtr: 0.5, // iki bölge kenarı arası ≤ bu × ATR ise 'Mükemmel'
   zoneFrontAtr: 0.2, // limit emir seviyenin bu × ATR önüne konur (BAT 15m: C seviyeye 0,16 ATR kala döndü)
   approachAtr: 0.5, // fiyat emre bu × ATR yaklaşınca 'Seviyeye yaklaştı'
   onlyPerfect: false, // yalnızca mükemmel çakışmalı setup'lar
+  minRiskPct: 0, // giriş-stop mesafesi fiyatın bu %'sinden azsa plan aktif sayılmaz (0 = kapalı)
+  feePct: 0.1, // komisyon tahmini (% / işlem tarafı) — dar stop uyarısı için
   zoneTime: 'require', // 'require': limit emir süre(2) > minTimeRatio × süre(1) olunca aktif | 'ignore'
 };
 
@@ -349,15 +351,25 @@ function evaluateSetup({ candles, atrArr, rsiArr, P0, P1, P2, k, opts, live, pri
 
 const ZONE_ACTIVE = new Set(['waiting', 'approaching', 'filled']);
 
+/** Giriş ile stop arası, fiyatın yüzdesi olarak. */
+export const riskPct = (entry, stop) => (Math.abs(entry - stop) / entry) * 100;
+/** Giriş + çıkış komisyonunun R cinsinden yaklaşık maliyeti (çıkış ≈ giriş varsayımıyla). */
+export const feeR = (entry, stop, feePct) => ((feePct / 100) * 2 * entry) / (Math.abs(entry - stop) || Infinity);
+/** Planın stop mesafesi eşiği geçiyor mu (minRiskPct = 0 → her zaman). */
+export function riskOk(entry, stop, o) {
+  return !(o.minRiskPct > 0) || riskPct(entry, stop) >= o.minRiskPct;
+}
+
 /** Seçilen giriş tipine göre bu setup'ın hâlâ geçerli (aktif) planları. */
 export function activePlans(s, opts = {}) {
   const o = { ...DEFAULTS, ...opts };
   const out = [];
   if (o.onlyPerfect && !s.zone?.perfect) return out; // yalnızca çakışmalı (mükemmel) setup'lar
-  if (useBreak(o) && s.phase === 'complete' && (s.state === 'ready' || s.state === 'triggered') && s.rr >= o.minRR) {
+  if (useBreak(o) && s.phase === 'complete' && (s.state === 'ready' || s.state === 'triggered') && s.rr >= o.minRR
+    && riskOk(s.levels.entry, s.levels.stop, o)) {
     out.push({ type: 'break', rr: s.rr });
   }
-  if (useZone(o) && s.zone && ZONE_ACTIVE.has(s.zone.state) && s.zone.rr >= o.minRR) {
+  if (useZone(o) && s.zone && ZONE_ACTIVE.has(s.zone.state) && s.zone.rr >= o.minRR && riskOk(s.zone.entry, s.zone.stop, o)) {
     out.push({ type: 'zone', rr: s.zone.rr });
   }
   return out;
