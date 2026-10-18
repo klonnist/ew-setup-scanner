@@ -1,13 +1,28 @@
-// Tarama akışı: hacme göre coin listesi → her coin için mumlar → dalga-3 setup'ları.
+// Tarama akışı: hacme göre coin listesi → her coin için mumlar → moda göre setup'lar (dalga-3 ya da üçgen).
 import { getTopCoins, getCandles, TIMEFRAMES } from '../data/okx.js';
 import { findWave3Setups, compareSetups, DEFAULTS } from './wave3.js';
+import { findTriangles, compareTriangles } from './triangle.js';
 
 const CONCURRENCY = 6;
+// Dalga-3 son 300 mumla (canlı ve backtest aynı pencere); üçgenler aylarca sürebildiği için 600 mum indirilir.
+export const WAVE_BARS = 300;
+export const LONG_BARS = 600;
+
+/** Bir coinin önbellekteki mumlarında seçilen moda göre setup'ları bulur. */
+export function detect(r, opts) {
+  if (opts.mode === 'triangle') return findTriangles(r.longCandles, opts, r.live);
+  return findWave3Setups(r.candles, opts, r.live);
+}
+
+export function sortSetups(setups, opts) {
+  setups.sort((a, b) => (opts.mode === 'triangle' ? compareTriangles(a, b) : compareSetups(a, b, opts)));
+  return setups;
+}
 
 /**
- * @param settings  { timeframe, topN, manualCoins: string[]|null, bars, ...wave3 seçenekleri }
+ * @param settings  { mode, timeframe, topN, manualCoins: string[]|null, ...ayarlar }
  * @param hooks     { onProgress({done,total,coin}), onRetry, signal }
- * @returns {{ coins, results: {coin, instId, setups, candles, live, error}[], setups, at }}
+ * @returns {{ coins, results: {coin, instId, setups, candles, longCandles, live, error}[], setups, at }}
  */
 export async function runScan(settings, hooks = {}) {
   const tf = TIMEFRAMES[settings.timeframe] || TIMEFRAMES['4H'];
@@ -29,12 +44,13 @@ export async function runScan(settings, hooks = {}) {
       const idx = next++;
       const c = coins[idx];
       try {
-        const { candles, live } = await getCandles(c.instId, tf, settings.bars || 300, net);
-        const setups = findWave3Setups(candles, opts, live);
-        results[idx] = { ...c, candles, live, setups };
+        const { candles: longCandles, live } = await getCandles(c.instId, tf, LONG_BARS, net);
+        const r = { ...c, candles: longCandles.slice(-WAVE_BARS), longCandles, live };
+        r.setups = detect(r, opts);
+        results[idx] = r;
       } catch (err) {
         if (err.name === 'AbortError') throw err;
-        results[idx] = { ...c, candles: [], live: null, setups: [], error: err.message };
+        results[idx] = { ...c, candles: [], longCandles: [], live: null, setups: [], error: err.message };
       }
       done++;
       hooks.onProgress?.({ done, total: coins.length, coin: c.coin });
@@ -43,6 +59,6 @@ export async function runScan(settings, hooks = {}) {
   await Promise.all(Array.from({ length: Math.min(CONCURRENCY, coins.length) }, worker));
 
   const setups = results.flatMap((r) => r.setups.map((s) => ({ ...s, coin: r.coin, instId: r.instId })));
-  setups.sort((a, b) => compareSetups(a, b, opts));
+  sortSetups(setups, opts);
   return { tf, coins, results, setups, at: Date.now() };
 }

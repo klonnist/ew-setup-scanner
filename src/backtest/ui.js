@@ -1,7 +1,7 @@
 // Backtest sayfası: form, veri indirme + worker havuzu, sonuç raporu ve kayıtlı çalışmalar.
 import { getTopCoins, TIMEFRAMES } from '../data/okx.js';
 import { getHistory, estimateRequests } from './history.js';
-import { summarize, BT_DEFAULTS } from './engine.js';
+import { summarize, BT_DEFAULTS, TRI_WINDOW } from './engine.js';
 import { loadRuns, saveRun, deleteRun, importRuns, packTrades, unpackTrades, usedBytes, MAX_BYTES } from './store.js';
 import { loadSettings, saveSettings, renderSettings, toScanOptions, UI_DEFAULTS } from '../ui/settings.js';
 import { fmtPct, fmtX, esc } from '../ui/format.js';
@@ -14,7 +14,8 @@ const QUICK = {
   '4H': [['3 ay', 91], ['6 ay', 182], ['1 yıl', 365]],
   '1D': [['1 yıl', 365], ['2 yıl', 730], ['3 yıl', 1095]],
 };
-const TYPE_NAME = { break: 'B kırılımı', zone: 'Limit bölge' };
+const TYPE_NAME = { break: 'B kırılımı', zone: 'Limit bölge', triangle: 'Üçgen kırılımı' };
+const windowFor = (mode) => (mode === 'triangle' ? TRI_WINDOW : BT_DEFAULTS.window);
 
 let settings = loadSettings();
 let params = loadParams();
@@ -37,7 +38,7 @@ function loadParams() {
   try { p = JSON.parse(localStorage.getItem(PKEY) || 'null'); } catch { /* yoksay */ }
   const tf = p?.tf && TIMEFRAMES[p.tf] ? p.tf : '4H';
   return {
-    tf, ...defaultsFor(tf), topN: 20, entryType: 'both', onlyPerfect: '', note: '',
+    tf, ...defaultsFor(tf), topN: 20, mode: 'wave3', entryType: 'both', onlyPerfect: '', note: '',
     exitTarget: BT_DEFAULTS.exitTarget, feePct: BT_DEFAULTS.feePct, maxPending: BT_DEFAULTS.maxPending, maxHold: BT_DEFAULTS.maxHold,
     ...(p || {}), tf,
   };
@@ -46,8 +47,9 @@ function saveParams() { try { localStorage.setItem(PKEY, JSON.stringify(params))
 
 function syncForm() {
   for (const b of document.querySelectorAll('#tf button')) b.setAttribute('aria-pressed', String(b.dataset.tf === params.tf));
-  for (const k of ['from', 'to', 'topN', 'entryType', 'onlyPerfect', 'exitTarget', 'feePct', 'maxPending', 'maxHold', 'note']) $('#' + k).value = params[k];
+  for (const k of ['from', 'to', 'topN', 'mode', 'entryType', 'onlyPerfect', 'exitTarget', 'feePct', 'maxPending', 'maxHold', 'note']) $('#' + k).value = params[k];
   $('#to').max = isoDay(Date.now());
+  document.body.classList.toggle('mode-triangle', params.mode === 'triangle');
   $('#quick').innerHTML = QUICK[params.tf].map(([t, d]) => `<button type="button" class="ghost sm" data-days="${d}">${t}</button>`).join('');
   for (const b of document.querySelectorAll('#quick button')) {
     b.addEventListener('click', () => {
@@ -68,7 +70,7 @@ function updateEstimate() {
   const tf = TIMEFRAMES[params.tf];
   const from = dayMs(params.from), to = dayMs(params.to, true);
   if (!(to > from)) { $('#estimate').textContent = 'Bitiş tarihi başlangıçtan sonra olmalı.'; return; }
-  const req = estimateRequests(tf, from - BT_DEFAULTS.window * tf.ms, to) * coinCount();
+  const req = estimateRequests(tf, from - windowFor(params.mode) * tf.ms, to) * coinCount();
   const bars = Math.round((Math.min(to, Date.now()) - from) / tf.ms);
   const sec = Math.round(req * 0.12 + (bars * coinCount() * 0.0006) / Math.max(1, workerCount()));
   $('#estimate').textContent = `${coinCount()} coin × ${bars.toLocaleString('tr-TR')} mum · ~${req.toLocaleString('tr-TR')} OKX isteği · tahmini süre ${sec < 90 ? sec + ' sn' : Math.round(sec / 60) + ' dk'} (aynı aralık sayfa açıkken tekrar indirilmez)`;
@@ -118,12 +120,12 @@ async function run() {
   const from = dayMs(params.from), to = Math.min(dayMs(params.to, true), Date.now());
   if (!(to > from)) return setStatus('<p class="error">Bitiş tarihi başlangıçtan sonra olmalı.</p>');
   const scan = toScanOptions(settings);
-  const opts = { ...scan, entryType: params.entryType, onlyPerfect: !!params.onlyPerfect };
+  const opts = { ...scan, mode: params.mode, entryType: params.entryType, onlyPerfect: !!params.onlyPerfect };
   delete opts.manualCoins;
   const cfg = {
     from, to, opts,
     exitTarget: Number(params.exitTarget), feePct: Number(params.feePct),
-    maxPending: Number(params.maxPending), maxHold: Number(params.maxHold), window: BT_DEFAULTS.window,
+    maxPending: Number(params.maxPending), maxHold: Number(params.maxHold), window: windowFor(params.mode),
   };
 
   const ctrl = new AbortController();
@@ -181,7 +183,7 @@ async function run() {
       secs: Math.round((Date.now() - t0) / 1000),
       params: {
         tf: params.tf, from, to, topN: Number(params.topN), coins: coins.map((c) => c.coin), note: params.note || '',
-        entryType: params.entryType, exitTarget: cfg.exitTarget, feePct: cfg.feePct, maxPending: cfg.maxPending, maxHold: cfg.maxHold,
+        mode: params.mode, entryType: params.entryType, exitTarget: cfg.exitTarget, feePct: cfg.feePct, maxPending: cfg.maxPending, maxHold: cfg.maxHold,
         settings: pickSettings(opts),
       },
       orders, cancelled, errors,
@@ -206,13 +208,24 @@ async function run() {
 
 const SETTING_KEYS = ['ruleSet', 'sensitivities', 'w1Extend', 'retrMin', 'retrMax', 'requireAbc', 'abcKinds', 'minTimeRatio', 'minW1Atr',
   'rsiMode', 'volume', 'stopMode', 'stopAtr', 'targets', 'minRR', 'direction', 'zoneCExt', 'zoneRetr', 'zoneEntry', 'zoneStop', 'zoneTime',
-  'perfectAtr', 'zoneFrontAtr', 'approachAtr', 'onlyPerfect', 'minRiskPct'];
+  'perfectAtr', 'zoneFrontAtr', 'approachAtr', 'onlyPerfect', 'minRiskPct',
+  'triType', 'triContext', 'flatAtr', 'minTops', 'minBottoms', 'minWidthBars', 'triTarget', 'triMinRR'];
+const TRI_TARGET_TXT = { mm: 'ölçülü hareket', f382: '%38,2', f50: '%50', f618: '%61,8', f786: '%78,6', f100: '%100' };
 function pickSettings(o) { return Object.fromEntries(SETTING_KEYS.map((k) => [k, o[k]])); }
 
 const ZONE_ENTRY_TXT = { mid: 'kademeli', near: 'yakın kenar', far: 'uzak kenar', r618: 'sadece %61,8', c127: 'sadece 1,272A' };
 
 function settingsText(p) {
   const s = p.settings;
+  if (p.mode === 'triangle') {
+    return [
+      '▲▼ üçgen kırılımı',
+      { all: 'yükselen + alçalan', asc: 'sadece yükselen', desc: 'sadece alçalan' }[s.triType] || 'tüm tipler',
+      { all: 'tüm bağlamlar', 'after-down': 'düşüş sonrası', 'after-up': 'yükseliş sonrası' }[s.triContext] || 'tüm bağlamlar',
+      `düz kenar ±${s.flatAtr} ATR`, `dokunuş ≥${s.minTops}/${s.minBottoms}`, `çıkış: ${TRI_TARGET_TXT[s.triTarget] || s.triTarget}`,
+      `min R:R ${s.triMinRR}`, `kom. %${p.feePct}`,
+    ].join(' · ');
+  }
   const w1 = { 0: 'son pivot', 1: '1 geri', 2: '2 geri', 99: 'en geniş' }[s.w1Extend] ?? s.w1Extend;
   const parts = [
     `${s.ruleSet}`, `dalga 1: ${w1}`, `süre>${s.minTimeRatio}`, `min R:R ${s.minRR}`, `H${p.exitTarget + 1}`, `kom. %${p.feePct}`,
@@ -265,6 +278,47 @@ function groupTable(title, trades, keyFn, { limit = 0, sort = 'n', order = null 
     <tbody>${rows.map(([k, s]) => (s ? statRow(String(k), s) : '<tr><td colspan="6" class="muted">…</td></tr>')).join('')}</tbody></table></div>`;
 }
 
+// ---------------------------------------------------------------- üçgen: nereye kadar gitti
+const CONTEXT_TXT = { 'after-down': 'Düşüş sonrası', 'after-up': 'Yükseliş sonrası' };
+const FIB_STEPS = [0.382, 0.5, 0.618, 0.786, 1];
+const MM_STEPS = [0.5, 1, 1.5, 2];
+const median = (a) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
+const pctOf = (list, ok) => (list.length ? `%${Math.round((100 * list.filter(ok).length) / list.length)}` : '–');
+
+/**
+ * Her kırılımın stop görülmeden önce ulaştığı en uç nokta:
+ *  - Fib: kırılım önceki hareketin tersineyse geri alınan oran (TRX: düşüşün %61,8'i), aynı yöndeyse kırılımdan izdüşüm oranı.
+ *  - Ölçülü: kırılım seviyesinden üçgen yüksekliğinin katı.
+ */
+function reachTable(list) {
+  if (!list.length) return '';
+  const groups = [
+    ['Hepsi', list],
+    ['Yükselen üçgen ▲', list.filter((t) => t.pattern === 'asc')],
+    ['Alçalan üçgen ▼', list.filter((t) => t.pattern === 'desc')],
+    ['Yükselen · düşüş sonrası', list.filter((t) => t.pattern === 'asc' && t.context === 'after-down')],
+    ['Yükselen · yükseliş sonrası', list.filter((t) => t.pattern === 'asc' && t.context === 'after-up')],
+    ['Alçalan · yükseliş sonrası', list.filter((t) => t.pattern === 'desc' && t.context === 'after-up')],
+    ['Alçalan · düşüş sonrası', list.filter((t) => t.pattern === 'desc' && t.context === 'after-down')],
+  ].filter(([, g]) => g.length);
+  const num = (x, d = 2) => (x == null ? '–' : x.toFixed(d).replace('.', ','));
+  const rows = groups.map(([name, g]) => {
+    const withFib = g.filter((t) => t.mfeFib != null);
+    return `<tr><td>${esc(name)}</td><td class="num">${g.length}</td>
+      ${FIB_STEPS.map((r) => { const ahead = withFib.filter((t) => t.startFib == null || t.startFib < r); return `<td class="num" title="${ahead.length} kırılımda seviye henüz ilerideydi">${pctOf(ahead, (t) => t.mfeFib >= r)}</td>`; }).join('')}
+      <td class="num">${num(median(withFib.map((t) => t.mfeFib)))}</td>
+      ${MM_STEPS.map((k) => `<td class="num">${pctOf(g, (t) => t.mfeH >= k)}</td>`).join('')}
+      <td class="num">${num(median(g.map((t) => t.mfeH)))}×</td></tr>`;
+  }).join('');
+  return `<div class="bd reach"><h3>Nereye kadar gitti? (kırılımdan sonra, stop görülmeden önce ulaşılan en uç nokta)</h3>
+    <table class="stat"><thead>
+      <tr><th></th><th></th><th colspan="6">Önceki hareketin Fib seviyesine ulaşan</th><th colspan="5">Ölçülü hareket (üçgen yüksekliği) katı</th></tr>
+      <tr><th>Grup</th><th>Kırılım</th>${FIB_STEPS.map((r) => `<th>%${String(+(r * 100).toFixed(1)).replace(".", ",")}</th>`).join('')}<th>Medyan</th>${MM_STEPS.map((k) => `<th>${String(k).replace('.', ',')}×</th>`).join('')}<th>Medyan</th></tr>
+    </thead><tbody>${rows}</tbody></table>
+    <p class="muted small">Fib: kırılım önceki hareketin tersine ise (ör. düşüş sonrası yükselen üçgen) önceki hareketin geri alınan oranı;
+    aynı yöndeyse kırılım seviyesinden önceki hareket boyunun izdüşümü. Her Fib sütunu yalnızca kırılım anında o seviyenin henüz ileride olduğu işlemleri sayar (zaten geçilmiş seviyeler hariç). Örnek: "%61,8 → %40" bu kırılımların %40'ı stop olmadan önce %61,8'e ulaştı demek.</p></div>`;
+}
+
 function tile(label, value, cls = '') { return `<div class="tile"><b>${esc(label)}</b><span class="num ${cls}">${value}</span></div>`; }
 
 function show(runObj) {
@@ -296,6 +350,7 @@ function show(runObj) {
   $('#tiles').innerHTML = `${blocks}<p class="muted small">${runObj.orders} emir oluştu, ${trades.length} tanesi doldu.</p>${canc ? `<div class="chips"><span class="chip muted">Dolmayan emirler →</span>${canc}</div>` : ''}`;
 
   drawEquity(trades, types);
+  $('#reach').innerHTML = reachTable(trades.filter((t) => t.type === 'triangle' && t.mfeH != null));
 
   const closed = trades.filter((t) => t.outcome !== 'open');
   $('#breakdowns').innerHTML = [
@@ -303,6 +358,8 @@ function show(runObj) {
     groupTable('Yön', closed, (t) => (t.dir === 'long' ? 'LONG ▲' : 'SHORT ▼')),
     groupTable('Stop mesafesi (giriş → stop)', closed, (t) => riskBucket(tradeRiskPct(t)), { order: RISK_BUCKETS }),
     groupTable(`Komisyon maliyeti (%${p.feePct} → R)`, closed, (t) => feeBucket(tradeFeeR(t, p.feePct)), { order: FEE_BUCKETS }),
+    groupTable('Üçgen tipi', closed.filter((t) => t.type === 'triangle'), (t) => (t.pattern === 'asc' ? 'Yükselen (yukarı kırılım)' : t.pattern === 'desc' ? 'Alçalan (aşağı kırılım)' : null)),
+    groupTable('Önceki hareket (üçgen)', closed.filter((t) => t.type === 'triangle'), (t) => CONTEXT_TXT[t.context] || 'bağlam yok'),
     groupTable('Bölge gücü (limit bölge)', closed.filter((t) => t.type === 'zone'), (t) => t.strength),
     groupTable('Bölgede çakışan seviye', closed.filter((t) => t.type === 'zone'), (t) => `${t.inside} çakışma`),
     groupTable('★ Mükemmel mi (iki kenar çakışıyor)', closed, (t) => (t.perfect == null ? null : t.perfect ? '★ Mükemmel' : 'Değil')),
@@ -416,7 +473,7 @@ function init() {
   for (const b of document.querySelectorAll('#tf button')) {
     b.addEventListener('click', () => { params = { ...params, tf: b.dataset.tf, ...defaultsFor(b.dataset.tf) }; saveParams(); syncForm(); });
   }
-  for (const k of ['from', 'to', 'topN', 'entryType', 'onlyPerfect', 'exitTarget', 'feePct', 'maxPending', 'maxHold', 'note']) {
+  for (const k of ['from', 'to', 'topN', 'mode', 'entryType', 'onlyPerfect', 'exitTarget', 'feePct', 'maxPending', 'maxHold', 'note']) {
     $('#' + k).addEventListener('change', (e) => { params[k] = e.target.value; saveParams(); updateEstimate(); });
   }
   $('#settingsBtn').addEventListener('click', () => {
@@ -424,6 +481,7 @@ function init() {
     el.hidden = !el.hidden;
     $('#settingsBtn').setAttribute('aria-expanded', String(!el.hidden));
   });
+  $('#mode').addEventListener('change', () => document.body.classList.toggle('mode-triangle', params.mode === 'triangle'));
   $('#runBtn').addEventListener('click', run);
   $('#stopBtn').addEventListener('click', () => { running?.ctrl.abort(); running?.pool.terminate(); });
   $('#exportBtn').addEventListener('click', exportRuns);

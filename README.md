@@ -37,6 +37,19 @@ Araç çubuğundaki **Giriş tipi** ile seçilir; "İkisi birden" seçilince kar
 
 Tüm eşikler sayfadaki **Ayarlar** bölmesinden değiştirilebilir. Ağ gerektirmeyen ayarlar önbellekteki mumlarla anında yeniden hesaplanır.
 
+## Üçgen kırılımı modu
+
+Araç çubuğunda **Mod → Üçgen kırılımı**. Son 600 mumda (üçgenler aylarca sürebilir) ZigZag dönüş noktalarından:
+
+- **Yükselen üçgen:** en az 2 tepe aynı seviyede (en yüksek tepeye ≤ 0,5 ATR), dipler en düşük dipten çıkan yükselen
+  destek çizgisinin üstünde (en az 2 dokunuş) → yukarı kırılım. **Alçalan üçgen** aynası → aşağı kırılım.
+- **Bağlam:** üçgenden önceki hareket (kalıp yüksekliğinin en az 2 katı) — "düşüş sonrası" / "yükseliş sonrası".
+- **Durum:** oluşuyor · kırılıma yakın · kırıldı (kapanış düz kenarı 0,1 ATR geçti) · bozuldu (eğik kenar kırıldı).
+- **Plan:** giriş kırılım kapanışı, stop son dibin (tepenin) 0,25 ATR ötesi; hedefler ölçülü hareket (1× yükseklik) ve
+  önceki hareketin %38,2 / %50 / %61,8 / %78,6 / %100 seviyeleri (kırılım tersine ise geri çekilme, aynı yöndeyse izdüşüm).
+- **Backtest → Mod: Üçgen kırılımı:** her kırılımın stop görülmeden önce ulaştığı en uç nokta kaydedilir;
+  "Nereye kadar gitti?" tablosu Fib seviyelerine ve ölçülü hareket katlarına ulaşma oranlarını tip ve bağlama göre verir.
+
 ## Backtest
 
 [`backtest.html`](https://klonnist.github.io/ew-setup-scanner/backtest.html): zaman dilimi (15m / 4H / 1D) ve tarih aralığı seçilir;

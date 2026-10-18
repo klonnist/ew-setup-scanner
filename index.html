@@ -12,7 +12,7 @@
     <header class="top">
       <div class="brand">
         <h1>EW Dalga-3 Tarayıcı</h1>
-        <p class="sub">Dalga 2'si ABC ile tamamlanmış ve dalga 1'den uzun sürmüş 0-1-2 yapıları · OKX canlı veri</p>
+        <p class="sub">Dalga-3 setup'ları (dalga 2 = ABC) ve üçgen kırılımları · OKX canlı veri</p>
       </div>
       <nav class="nav"><a href="backtest.html">Backtest →</a><a class="link" href="https://klonnist.github.io/ew-chart-reader/" target="_blank" rel="noopener">Kural kitabı ↗</a></nav>
     </header>
@@ -24,6 +24,13 @@
         <button type="button" data-tf="1D">1D</button>
       </div>
       <label class="field inline">
+        <span>Mod</span>
+        <select id="mode">
+          <option value="wave3">Dalga-3 setup</option>
+          <option value="triangle">Üçgen kırılımı</option>
+        </select>
+      </label>
+      <label class="field inline wave-only">
         <span>Kural seti</span>
         <select id="ruleSet">
           <option value="course">Kurs (Rules.docx)</option>
@@ -31,7 +38,7 @@
           <option value="neely">Neely</option>
         </select>
       </label>
-      <label class="field inline">
+      <label class="field inline wave-only">
         <span>Giriş tipi</span>
         <select id="entryType">
           <option value="both">İkisi birden</option>
@@ -57,7 +64,7 @@
       <section class="list" aria-label="Setup listesi">
         <div class="list-head">
           <h2 id="listTitle">Setup'lar</h2>
-          <label class="check perfect-toggle"><input type="checkbox" id="onlyPerfect" /> ★ Sadece mükemmel</label>
+          <label class="check perfect-toggle wave-only"><input type="checkbox" id="onlyPerfect" /> ★ Sadece mükemmel</label>
           <label class="check"><input type="checkbox" id="showAll" /> Kaçan / bozulanları da göster</label>
         </div>
         <div id="cards" class="cards"></div>

@@ -3,6 +3,10 @@
 // Yeni çıkan setup'tan emir oluşturur ve sonraki mumlarda simüle eder. Gelecek veri kullanılmaz:
 // t mumunda görülen setup'ın emri en erken t+1 mumunda dolabilir (tetiklenmişse t kapanışından piyasa emri).
 import { findWave3Setups, DEFAULTS, riskOk } from '../scan/wave3.js';
+import { findTriangles, TRI_DEFAULTS, reachOf } from '../scan/triangle.js';
+
+// Üçgen modunda canlı tarayıcıyla aynı uzun pencere (bkz. scanner.js LONG_BARS)
+export const TRI_WINDOW = 600;
 
 export const BT_DEFAULTS = {
   window: 300, // canlı taramadaki mum sayısı
@@ -21,7 +25,10 @@ const sideExt = (c, d) => ({ adverse: d === 1 ? c.low : c.high, fav: d === 1 ? c
  */
 export function backtestCoin(candles, cfg) {
   const c = { ...BT_DEFAULTS, ...cfg };
-  const opts = { ...DEFAULTS, ...c.opts, diagnostics: undefined };
+  const opts = { ...TRI_DEFAULTS, ...DEFAULTS, ...c.opts, diagnostics: undefined };
+  const triMode = opts.mode === 'triangle';
+  if (triMode) c.window = Math.max(c.window, TRI_WINDOW);
+  const trackers = []; // üçgen: kırılım sonrası en uç fiyatı (stop görülene kadar) izler
   const useBreak = opts.entryType !== 'zone';
   const useZone = opts.entryType !== 'break';
   const n = candles.length;
@@ -41,15 +48,20 @@ export function backtestCoin(candles, cfg) {
 
     // 1) Önceki mumlarda oluşan emir / pozisyonları bu mumla ilerlet
     for (const o of orders) if (!o.done && o.created < t) step(o, bar, t);
+    for (const k of trackers) if (!k.done && k.start < t) track(k, bar, t);
 
     if (!inRange) {
-      if (!orders.some((o) => !o.done)) break;
+      if (!orders.some((o) => !o.done) && !trackers.some((k) => !k.done)) break;
       continue; // aralık bitti: yeni emir yok, açık olanlar kapanana kadar devam
     }
 
     // 2) Bu mum kapandı: canlı tarayıcı ne görürdü?
     const off = Math.max(0, t + 1 - c.window);
     const win = candles.slice(off, t + 1);
+    if (triMode) {
+      triangleStep(win, off, bar, t);
+      continue;
+    }
     const setups = findWave3Setups(win, opts, null);
     for (const s of setups) {
       if (opts.onlyPerfect && !s.zone?.perfect) continue;
@@ -100,7 +112,55 @@ export function backtestCoin(candles, cfg) {
     if (o.legs.some((l) => l.filled)) close(o, last.close, n - 1, 'open');
     else cancel(o, 'veri bitti');
   }
+  for (const k of trackers) if (!k.done) finishTrack(k, true);
   return { trades, stats: { orders: orderCount, cancelled } };
+
+  // ---------------------------------------------------------------- üçgen kırılımı
+  // Kalıp bu mumun kapanışıyla kırıldıysa (breakIdx = son mum) kapanıştan piyasa emriyle girilir.
+  function triangleStep(win, off, bar, t) {
+    const last = win.length - 1;
+    for (const tr of findTriangles(win, opts, null)) {
+      if (tr.state !== 'broken' || tr.breakIdx !== last) continue;
+      const key = `T|${tr.type}|${candles[tr.first.i + off].time}|${tr.level}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      orderCount++;
+      const L = tr.levels;
+      if (tr.rr < opts.triMinRR) { cancel({ type: 'triangle' }, 'R:R düşük'); continue; }
+      if (!riskOk(bar.close, L.stop, opts)) { cancel({ type: 'triangle' }, 'stop çok yakın'); continue; }
+      const o = {
+        type: 'triangle', d: tr.d, created: t, key,
+        legs: [{ level: bar.close, w: 1, market: true }],
+        stop: L.stop, target: L.main.price, t1: L.main.price, cancelBeyond: null, cancelFav: null,
+        meta: {
+          sensitivity: tr.sensitivity, score: tr.score, pattern: tr.type, context: tr.context,
+          // Kırılım seviyesinin kendisi önceki hareketin hangi Fib oranında (bundan gerideki seviyeler 'zaten geçilmiş' sayılır)
+          startFib: reachOf(tr, L.breakLevel).mfeFib,
+          strength: null, abc: null, retr: null, timeRatio: null,
+        },
+      };
+      fillLeg(o, o.legs[0], bar.close, t);
+      orders.push(o);
+      // Nereye kadar gitti: hedeften çıkılsa bile stop görülene (ya da maxHold dolana) kadar izlenir.
+      trackers.push({ o, tr, start: t, mfe: bar.close, done: false });
+    }
+  }
+
+  function track(k, b, t) {
+    const { adverse, fav } = sideExt(b, k.tr.d);
+    // Stop mumunda fav sayılmaz (mum içi sıra bilinmez)
+    if (k.tr.d * (adverse - k.tr.levels.stop) <= 0) return finishTrack(k);
+    if (k.tr.d * (fav - k.mfe) > 0) k.mfe = fav;
+    if (t - k.start >= c.maxHold) finishTrack(k);
+  }
+
+  function finishTrack(k) {
+    k.done = true;
+    const r = reachOf(k.tr, k.mfe);
+    const trade = k.o.trade;
+    if (trade) { trade.mfeH = r.mfeH; trade.mfeFib = r.mfeFib; }
+    else k.o.reach = r; // pozisyon henüz kapanmadı: close() bunu işleme yazar
+  }
 
   // ---------------------------------------------------------------- yardımcılar
   function meta(s) {
@@ -181,7 +241,7 @@ export function backtestCoin(candles, cfg) {
       risk += leg.w;
     }
     const filled = o.legs.filter((l) => l.filled);
-    trades.push({
+    const trade = {
       type: o.type,
       dir: d === 1 ? 'long' : 'short',
       created: candles[o.created].time,
@@ -197,7 +257,10 @@ export function backtestCoin(candles, cfg) {
       outcome,
       bars: t - o.entryT,
       ...o.meta,
-    });
+      ...(o.reach ? { mfeH: o.reach.mfeH, mfeFib: o.reach.mfeFib } : {}),
+    };
+    o.trade = trade;
+    trades.push(trade);
   }
 }
 

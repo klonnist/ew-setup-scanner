@@ -1,11 +1,14 @@
 // Ayarlar: varsayılanlar, tarayıcıda saklama ve "Ayarlar" bölmesinin formu.
 import { DEFAULTS } from '../scan/wave3.js';
 import { TIMEFRAMES } from '../data/okx.js';
+import { TRI_DEFAULTS } from '../scan/triangle.js';
 
 const KEY = 'ew-setup-scanner:settings:v1';
 
 export const UI_DEFAULTS = {
-  ...DEFAULTS,
+  ...TRI_DEFAULTS,
+  ...DEFAULTS, // ortak anahtar (sensitivities) dalga-3 varsayılanı
+  mode: 'wave3', // 'wave3' | 'triangle'
   timeframe: '4H',
   entryType: 'both',
   topN: 50,
@@ -71,6 +74,14 @@ const FIELDS = [
   ['minRR', 'Min. R:R', 'number', { step: 0.25, min: 0 }],
   ['minRiskPct', 'Min. stop mesafesi (%)', 'number', { step: 0.1, min: 0, hint: "Giriş ile stop (geçersizlik) arası bundan darsa plan gösterilmez. 0 = kapalı; dar stopta komisyon R'yi yer." }],
   ['feePct', 'Komisyon (% / işlem tarafı)', 'number', { step: 0.01, min: 0, hint: 'Kartta dar stop uyarısındaki komisyon tahmini için.' }],
+  ['triType', 'Üçgen: tip', 'select', { options: [['all', 'Yükselen + alçalan'], ['asc', 'Sadece yükselen (yukarı kırılım)'], ['desc', 'Sadece alçalan (aşağı kırılım)']] }],
+  ['triContext', 'Üçgen: önceki hareket', 'select', { options: [['all', 'Hepsi'], ['after-down', 'Düşüş sonrası'], ['after-up', 'Yükseliş sonrası']] }],
+  ['flatAtr', 'Üçgen: düz kenar toleransı (× ATR)', 'number', { step: 0.05, min: 0, hint: 'Tepeler (dipler) en yüksek tepeye bu kadar yakınsa düz kenara dokunmuş sayılır.' }],
+  ['minTops', 'Üçgen: düz kenara en az dokunuş', 'number', { step: 1, min: 2 }],
+  ['minBottoms', 'Üçgen: eğik kenara en az dokunuş', 'number', { step: 1, min: 2 }],
+  ['minWidthBars', 'Üçgen: en az genişlik (mum)', 'number', { step: 1, min: 3 }],
+  ['triTarget', 'Üçgen: ana hedef (R:R)', 'select', { options: [['mm', 'Ölçülü hareket (1× yükseklik)'], ['f382', 'Önceki hareketin %38,2'], ['f50', '%50'], ['f618', '%61,8'], ['f786', '%78,6'], ['f100', '%100']] }],
+  ['triMinRR', 'Üçgen: min. R:R', 'number', { step: 0.25, min: 0 }],
   ['autoRefresh', 'Otomatik yenileme', 'select', { options: [[0, 'Kapalı'], [5, '5 dakikada bir'], [15, '15 dakikada bir']], num: true, hint: 'Sekme açıkken çalışır; yeni setup çıkınca bildirim gösterir.' }],
 ];
 

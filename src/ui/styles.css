@@ -301,3 +301,12 @@ table.runs td.acts { white-space: nowrap; display: flex; gap: 4px; }
 .state.zone-approaching { color: #1a1300; background: #ffcf5c; font-weight: 600; }
 .perfect-toggle { color: #f0c75e; font-weight: 600; }
 .warn-txt { color: var(--warn); }
+
+/* Mod: üçgen kırılımı */
+body.mode-triangle .wave-only { display: none; }
+.state.tri-broken { color: #fff; background: var(--accent); }
+.state.tri-near { color: #1a1300; background: #ffcf5c; font-weight: 600; }
+.state.tri-forming { color: var(--warn); background: rgba(250, 178, 25, 0.14); }
+.state.tri-failed { color: var(--bad); }
+.reach { margin-top: 14px; overflow-x: auto; }
+.reach table th[colspan] { text-align: center; color: var(--text-2); }

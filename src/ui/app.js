@@ -1,8 +1,10 @@
 // Panel: araç çubuğu, tarama, özet, setup kartları ve ayrıntı (grafik + kural kontrolleri).
-import { runScan } from '../scan/scanner.js';
-import { findWave3Setups, compareSetups, pickSetups, activePlans, riskPct, feeR } from '../scan/wave3.js';
+import { runScan, detect, sortSetups } from '../scan/scanner.js';
+import { pickSetups, activePlans, riskPct, feeR } from '../scan/wave3.js';
+import { pickTriangles } from '../scan/triangle.js';
 import { loadSettings, saveSettings, renderSettings, toScanOptions, UI_DEFAULTS } from './settings.js';
-import { drawSetup, destroyChart, LEGEND } from './chart.js';
+import { drawSetup, drawTriangle, destroyChart, LEGEND, TRI_LEGEND } from './chart.js';
+import { triCard, triDetail, triSummary, triKey } from './triangleView.js';
 import { fmtPrice, fmtPct, fmtX, fmtTime, esc } from './format.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -20,7 +22,8 @@ const state = {
   seenKeys: null,
 };
 
-const setupKey = (s) => `${s.coin}|${s.direction}|${s.phase}|${s.points.p0.price}|${s.points.p1.price}`;
+const isTri = () => state.settings.mode === 'triangle';
+const setupKey = (s) => (s.kind === 'triangle' ? triKey(s) : `${s.coin}|${s.direction}|${s.phase}|${s.points.p0.price}|${s.points.p1.price}`);
 
 // ------------------------------------------------------------------ araç çubuğu
 function syncToolbar() {
@@ -30,6 +33,9 @@ function syncToolbar() {
   $('#entryType').value = s.entryType;
   $('#showAll').checked = !!s.showAll;
   $('#onlyPerfect').checked = !!s.onlyPerfect;
+  $('#mode').value = s.mode;
+  // Dalga-3'e özgü kontroller üçgen modunda gizlenir
+  document.body.classList.toggle('mode-triangle', s.mode === 'triangle');
 }
 
 function updateSettings(patch) {
@@ -90,9 +96,10 @@ function recompute() {
   const setups = [];
   for (const r of state.scan.results) {
     if (!r.candles.length) continue;
-    for (const s of findWave3Setups(r.candles, { ...opts, diagnostics }, r.live)) setups.push({ ...s, coin: r.coin, instId: r.instId });
+    r.setups = detect(r, { ...opts, diagnostics });
+    for (const s of r.setups) setups.push({ ...s, coin: r.coin, instId: r.instId });
   }
-  setups.sort((a, b) => compareSetups(a, b, opts));
+  sortSetups(setups, opts);
   state.setups = setups;
   state.diagnostics = diagnostics;
   render();
@@ -121,6 +128,7 @@ function setupAutoRefresh() {
 }
 
 function notifyNew(silent) {
+  if (isTri()) return notifyTriangles(silent);
   const vis = pickSetups(state.setups, toScanOptions(state.settings));
   const keys = new Set(vis.map(setupKey));
   const approaching = new Set(vis.filter((s) => s.zone?.state === 'approaching').map(setupKey));
@@ -143,12 +151,33 @@ function notifyNew(silent) {
   } catch { /* bazı tarayıcılarda yalnızca SW ile */ }
 }
 
+/** Üçgen modu bildirimi: yeni kırılımlar ve kırılıma yaklaşanlar. */
+function notifyTriangles(silent) {
+  const vis = visibleSetups();
+  const keyed = (st) => new Set(vis.filter((t) => t.state === st).map(setupKey));
+  const broken = keyed('broken'), near = keyed('near');
+  const prevB = state.seenBroken, prevN = state.seenNear;
+  state.seenBroken = broken;
+  state.seenNear = near;
+  if (!silent || !prevB) return;
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const tf = state.scan.tf.id;
+  const line = (t) => `${t.coin} ${t.typeLabel} · ${t.contextLabel} · R:R ${fmtX(t.rr, 1)}`;
+  const nb = vis.filter((t) => broken.has(setupKey(t)) && !prevB.has(setupKey(t)));
+  const nn = vis.filter((t) => near.has(setupKey(t)) && !prevN?.has(setupKey(t)));
+  try {
+    if (nb.length) new Notification(`Üçgen kırıldı (${tf})`, { body: nb.slice(0, 5).map(line).join('\n') });
+    if (nn.length) new Notification(`Üçgen kırılıma yakın (${tf})`, { body: nn.slice(0, 5).map(line).join('\n') });
+  } catch { /* yoksay */ }
+}
+
 // ------------------------------------------------------------------ çizim
 const useBreak = () => state.settings.entryType !== 'zone';
 const useZone = () => state.settings.entryType !== 'break';
 const dirTxt = (s) => (s.direction === 'long' ? 'LONG ▲' : 'SHORT ▼');
 
 function visibleSetups() {
+  if (isTri()) return state.settings.showAll ? state.setups : pickTriangles(state.setups, toScanOptions(state.settings));
   if (!state.settings.showAll) return pickSetups(state.setups, toScanOptions(state.settings));
   return state.settings.onlyPerfect ? state.setups.filter((s) => s.zone?.perfect) : state.setups;
 }
@@ -184,6 +213,13 @@ const REASONS = [
 function renderSummary() {
   const r = state.scan;
   const opts = toScanOptions(state.settings);
+  if (isTri()) {
+    $('#summary').innerHTML = triSummary(null, {
+      results: r.results, setups: state.setups, visible: pickTriangles(state.setups, opts), tf: r.tf, at: r.at, fmtTime, minRR: opts.triMinRR,
+    });
+    $('#listTitle').textContent = `Üçgenler (${visibleSetups().length})`;
+    return;
+  }
   const errors = r.results.filter((x) => x.error);
   const vis = pickSetups(state.setups, opts);
   const nBreak = vis.filter((s) => activePlans(s, opts).some((p) => p.type === 'break')).length;
@@ -286,7 +322,12 @@ function renderCards() {
     box.innerHTML = `<div class="empty muted">Bu zaman diliminde tüm koşulları sağlayan setup yok.<br/>Başka bir zaman dilimi ya da giriş tipi dene veya “Kaçan / bozulanları da göster”i aç.</div>`;
     return;
   }
-  box.innerHTML = vis.map(card).join('');
+  if (isTri()) {
+    const sel = state.selected && setupKey(state.selected);
+    box.innerHTML = vis.map((t) => triCard(t, { selected: setupKey(t) === sel, active: ['forming', 'near', 'broken'].includes(t.state) })).join('');
+  } else {
+    box.innerHTML = vis.map(card).join('');
+  }
   for (const el of box.querySelectorAll('.card')) {
     el.addEventListener('click', () => select(vis.find((s) => setupKey(s) === el.dataset.key)));
   }
@@ -354,6 +395,12 @@ function renderDetail() {
     return;
   }
   const r = resultOf(s);
+  if (s.kind === 'triangle') {
+    box.innerHTML = triDetail(s, { tfId: state.scan.tf.id, feePct: state.settings.feePct });
+    $('#triLegend').innerHTML = TRI_LEGEND.map(([t, c, cls]) => `<span><i class="${cls}" style="border-top-color:${c}"></i>${esc(t)}</span>`).join('');
+    drawTriangle($('#chart'), r.longCandles, r.live, s);
+    return;
+  }
   const rsi = [];
   if (s.rsi.divergence) rsi.push(`C/A uyumsuzluk ${s.rsi.divergence.ok ? 'var ✓' : 'yok'} (${s.rsi.divergence.rA.toFixed(0)} → ${s.rsi.divergence.rC.toFixed(0)})`);
   if (s.rsi.w1Momentum) rsi.push(`dalga 1 RSI ${s.rsi.w1Momentum.r1.toFixed(0)} ${s.rsi.w1Momentum.ok ? '✓' : ''}`);
@@ -411,6 +458,7 @@ function init() {
   for (const b of document.querySelectorAll('#tf button')) b.addEventListener('click', () => updateSettings({ timeframe: b.dataset.tf }));
   $('#ruleSet').addEventListener('change', (e) => updateSettings({ ruleSet: e.target.value }));
   $('#entryType').addEventListener('change', (e) => updateSettings({ entryType: e.target.value }));
+  $('#mode').addEventListener('change', (e) => { state.selected = null; updateSettings({ mode: e.target.value }); });
   $('#onlyPerfect').addEventListener('change', (e) => updateSettings({ onlyPerfect: e.target.checked }));
   $('#showAll').addEventListener('change', (e) => { state.settings.showAll = e.target.checked; saveSettings(state.settings); if (state.scan) render(); });
   $('#scanBtn').addEventListener('click', () => scan());
