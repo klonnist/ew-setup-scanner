@@ -14,8 +14,8 @@ const QUICK = {
   '4H': [['3 ay', 91], ['6 ay', 182], ['1 yıl', 365]],
   '1D': [['1 yıl', 365], ['2 yıl', 730], ['3 yıl', 1095]],
 };
-const TYPE_NAME = { break: 'B kırılımı', zone: 'Limit bölge', triangle: 'Üçgen kırılımı' };
-const windowFor = (mode) => (mode === 'triangle' ? TRI_WINDOW : BT_DEFAULTS.window);
+const TYPE_NAME = { break: 'B kırılımı', zone: 'Limit bölge', triangle: 'Üçgen kırılımı', elimit: 'ABCDE · E limiti (C–D %61,8)', econfirm: 'ABCDE · E onayı' };
+const windowFor = (mode) => (mode === 'triangle' || mode === 'abcde' ? TRI_WINDOW : BT_DEFAULTS.window);
 
 let settings = loadSettings();
 let params = loadParams();
@@ -50,6 +50,7 @@ function syncForm() {
   for (const k of ['from', 'to', 'topN', 'mode', 'entryType', 'onlyPerfect', 'exitTarget', 'feePct', 'maxPending', 'maxHold', 'note']) $('#' + k).value = params[k];
   $('#to').max = isoDay(Date.now());
   document.body.classList.toggle('mode-triangle', params.mode === 'triangle');
+  document.body.classList.toggle('mode-abcde', params.mode === 'abcde');
   $('#quick').innerHTML = QUICK[params.tf].map(([t, d]) => `<button type="button" class="ghost sm" data-days="${d}">${t}</button>`).join('');
   for (const b of document.querySelectorAll('#quick button')) {
     b.addEventListener('click', () => {
@@ -209,7 +210,8 @@ async function run() {
 const SETTING_KEYS = ['ruleSet', 'sensitivities', 'w1Extend', 'retrMin', 'retrMax', 'requireAbc', 'abcKinds', 'minTimeRatio', 'minW1Atr',
   'rsiMode', 'volume', 'stopMode', 'stopAtr', 'targets', 'minRR', 'direction', 'zoneCExt', 'zoneRetr', 'zoneEntry', 'zoneStop', 'zoneTime',
   'perfectAtr', 'zoneFrontAtr', 'approachAtr', 'onlyPerfect', 'minRiskPct',
-  'triType', 'triContext', 'flatAtr', 'minTops', 'minBottoms', 'minWidthBars', 'triTarget', 'triMinRR'];
+  'triType', 'triContext', 'flatAtr', 'minTops', 'minBottoms', 'minWidthBars', 'triTarget', 'triMinRR',
+  'abcdeEntry', 'eRetr', 'innerAbc', 'abcdeVariant', 'abcdeSens', 'abcdeStopAtr', 'abcdeTarget', 'abcdeMinRR'];
 const TRI_TARGET_TXT = { mm: 'ölçülü hareket', f382: '%38,2', f50: '%50', f618: '%61,8', f786: '%78,6', f100: '%100' };
 function pickSettings(o) { return Object.fromEntries(SETTING_KEYS.map((k) => [k, o[k]])); }
 
@@ -224,6 +226,16 @@ function settingsText(p) {
       { all: 'tüm bağlamlar', 'after-down': 'düşüş sonrası', 'after-up': 'yükseliş sonrası' }[s.triContext] || 'tüm bağlamlar',
       `düz kenar ±${s.flatAtr} ATR`, `dokunuş ≥${s.minTops}/${s.minBottoms}`, `çıkış: ${TRI_TARGET_TXT[s.triTarget] || s.triTarget}`,
       `min R:R ${s.triMinRR}`, `kom. %${p.feePct}`,
+    ].join(' · ');
+  }
+  if (p.mode === 'abcde') {
+    return [
+      'ABCDE üçgen',
+      { both: 'E limiti + E onayı', limit: 'sadece E limiti', confirm: 'sadece E onayı' }[s.abcdeEntry] || s.abcdeEntry,
+      `E = C–D %${+(s.eRetr * 100).toFixed(1)}`,
+      s.innerAbc === 'prefer' ? 'iç ABC tercih' : 'iç ABC zorunlu',
+      { all: 'running + daralan', running: 'sadece running', contracting: 'sadece daralan' }[s.abcdeVariant],
+      `çıkış: ${s.abcdeTarget}`, `min R:R ${s.abcdeMinRR}`, `kom. %${p.feePct}`,
     ].join(' · ');
   }
   const w1 = { 0: 'son pivot', 1: '1 geri', 2: '2 geri', 99: 'en geniş' }[s.w1Extend] ?? s.w1Extend;
@@ -319,6 +331,24 @@ function reachTable(list) {
     aynı yöndeyse kırılım seviyesinden önceki hareket boyunun izdüşümü. Her Fib sütunu yalnızca kırılım anında o seviyenin henüz ileride olduğu işlemleri sayar (zaten geçilmiş seviyeler hariç). Örnek: "%61,8 → %40" bu kırılımların %40'ı stop olmadan önce %61,8'e ulaştı demek.</p></div>`;
 }
 
+/** ABCDE: girişten sonra stop görülmeden hangi hedeflere ulaşıldı (plan ve tipe göre). */
+function abcdeReachTable(list) {
+  if (!list.length) return '';
+  const KEYS = [['top', "Dalga 3 ucu (running'de B)"], ['thrust', 'Thrust'], ['e1236', 'Dalga 3 × 1,236'], ['e1618', 'Dalga 3 × 1,618']];
+  const groups = [
+    ['Hepsi', list],
+    ...['elimit', 'econfirm'].map((ty) => [TYPE_NAME[ty], list.filter((t) => t.type === ty)]),
+    ['Running', list.filter((t) => t.pattern === 'running')],
+    ['Daralan', list.filter((t) => t.pattern === 'contracting')],
+    ['LONG ▲', list.filter((t) => t.dir === 'long')],
+    ['SHORT ▼', list.filter((t) => t.dir === 'short')],
+  ].filter(([, g]) => g.length);
+  const rows = groups.map(([name, g]) => `<tr><td>${esc(name)}</td><td class="num">${g.length}</td>${KEYS.map(([k]) => `<td class="num">${pctOf(g, (t) => t.reach[k])}</td>`).join('')}</tr>`).join('');
+  return `<div class="bd reach"><h3>ABCDE: nereye kadar gitti? (girişten sonra, stop görülmeden önce)</h3>
+    <table class="stat"><thead><tr><th>Grup</th><th>İşlem</th>${KEYS.map(([, n]) => `<th>${esc(n)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>
+    <p class="muted small">Ana hedefte çıkılsa bile fiyat stop görülene (ya da maks. pozisyon süresi dolana) kadar izlenir.</p></div>`;
+}
+
 function tile(label, value, cls = '') { return `<div class="tile"><b>${esc(label)}</b><span class="num ${cls}">${value}</span></div>`; }
 
 function show(runObj) {
@@ -350,7 +380,7 @@ function show(runObj) {
   $('#tiles').innerHTML = `${blocks}<p class="muted small">${runObj.orders} emir oluştu, ${trades.length} tanesi doldu.</p>${canc ? `<div class="chips"><span class="chip muted">Dolmayan emirler →</span>${canc}</div>` : ''}`;
 
   drawEquity(trades, types);
-  $('#reach').innerHTML = reachTable(trades.filter((t) => t.type === 'triangle' && t.mfeH != null));
+  $('#reach').innerHTML = reachTable(trades.filter((t) => t.type === 'triangle' && t.mfeH != null)) + abcdeReachTable(trades.filter((t) => t.reach));
 
   const closed = trades.filter((t) => t.outcome !== 'open');
   $('#breakdowns').innerHTML = [
@@ -360,6 +390,8 @@ function show(runObj) {
     groupTable(`Komisyon maliyeti (%${p.feePct} → R)`, closed, (t) => feeBucket(tradeFeeR(t, p.feePct)), { order: FEE_BUCKETS }),
     groupTable('Üçgen tipi', closed.filter((t) => t.type === 'triangle'), (t) => (t.pattern === 'asc' ? 'Yükselen (yukarı kırılım)' : t.pattern === 'desc' ? 'Alçalan (aşağı kırılım)' : null)),
     groupTable('Önceki hareket (üçgen)', closed.filter((t) => t.type === 'triangle'), (t) => CONTEXT_TXT[t.context] || 'bağlam yok'),
+    groupTable('ABCDE tipi', closed.filter((t) => t.reach), (t) => (t.pattern === 'running' ? 'Running (B, 3 ucunu geçti)' : 'Daralan')),
+    groupTable('ABCDE iç yapı', closed.filter((t) => t.reach), (t) => (t.context === 'inner' ? 'Her bacak 3’lü' : 'Eksik iç yapı')),
     groupTable('Bölge gücü (limit bölge)', closed.filter((t) => t.type === 'zone'), (t) => t.strength),
     groupTable('Bölgede çakışan seviye', closed.filter((t) => t.type === 'zone'), (t) => `${t.inside} çakışma`),
     groupTable('★ Mükemmel mi (iki kenar çakışıyor)', closed, (t) => (t.perfect == null ? null : t.perfect ? '★ Mükemmel' : 'Değil')),
@@ -379,7 +411,7 @@ function show(runObj) {
   renderRuns();
 }
 
-const EQ_COLORS = { break: '#3987e5', zone: '#ff9f43', all: '#e8ebf1' };
+const EQ_COLORS = { break: '#3987e5', zone: '#ff9f43', elimit: '#ff9f43', econfirm: '#3987e5', all: '#e8ebf1' };
 function drawEquity(trades, types) {
   const el = $('#equity');
   if (eqChart) { eqChart.remove(); eqChart = null; }
@@ -481,7 +513,7 @@ function init() {
     el.hidden = !el.hidden;
     $('#settingsBtn').setAttribute('aria-expanded', String(!el.hidden));
   });
-  $('#mode').addEventListener('change', () => document.body.classList.toggle('mode-triangle', params.mode === 'triangle'));
+  $('#mode').addEventListener('change', () => { document.body.classList.toggle('mode-triangle', params.mode === 'triangle'); document.body.classList.toggle('mode-abcde', params.mode === 'abcde'); });
   $('#runBtn').addEventListener('click', run);
   $('#stopBtn').addEventListener('click', () => { running?.ctrl.abort(); running?.pool.terminate(); });
   $('#exportBtn').addEventListener('click', exportRuns);

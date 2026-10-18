@@ -61,6 +61,24 @@ Araç çubuğunda **Mod → Üçgen kırılımı**. Son 600 mumda (üçgenler ay
 - **Backtest → Mod: Üçgen kırılımı:** her kırılımın stop görülmeden önce ulaştığı en uç nokta kaydedilir;
   "Nereye kadar gitti?" tablosu Fib seviyelerine ve ölçülü hareket katlarına ulaşma oranlarını tip ve bağlama göre verir.
 
+## Running üçgen (ABCDE) modu
+
+Araç çubuğunda **Mod → Running üçgen (ABCDE)**. Dalga 3'ten sonra (dalga 4 yerinde) oluşan daralan / running üçgen,
+son 600 mumda ZigZag'in art arda 6 dönüş noktası olarak aranır: 0 = dalga 3 ucu, ardından A-B-C-D-E (short için ayna).
+
+- **Kurallar:** C, A'nın sonunu geçemez · D, B'nin sonunu geçemez · E, C'nin sonunu geçemez.
+  Tek istisna B: dalga 3'ün ucunu geçebilir (**running**; geçmezse **daralan**).
+- **Her bacak 3'lü:** A, B, C, D, E alt derecede ABC (zigzag / flat, kural motorunda geçerli) olmalı. Ayarlardan "tercih" yapılırsa
+  elemez, puanı düşürür. Bacak iç yapısı doğrusal ölçekte kontrol edilir.
+- **Bacak oranı:** her bacak bir öncekinin ≈ 0,618'i beklenir; aşmalar olabildiği için eleme değil, puan.
+- **Planlar** (Ayarlar → ABCDE: giriş):
+  - **E limiti (kural):** E = D − 0,618 × (D − C) seviyesinde limit emir; E bu seviyeyi aşabilir. Fiyat limite gelmeden D'yi geçerse iptal.
+  - **E onayı:** ZigZag E'yi onayladığı (fiyat E'den k × ATR döndüğü) mumun kapanışından giriş.
+  - Stop: C'nin 0,25 ATR ötesi. Hedefler: dalga 3 ucu (running'de B), thrust (E + en geniş bacak), dalga 3 × 1,236 / 1,618 (log).
+- Kartta ★ ile takibe alınır; takip grafiğinde 3-A-B-C-D-E ve A–C / B–D çizgileri görünür.
+- **Backtest → Mod: Running üçgen:** iki plan ayrı raporlanır; "ABCDE: nereye kadar gitti?" tablosu girişten sonra
+  stop görülmeden hangi hedeflere ulaşıldığını plan, tip (running / daralan) ve yöne göre verir.
+
 ## Backtest
 
 [`backtest.html`](https://klonnist.github.io/ew-setup-scanner/backtest.html): zaman dilimi (15m / 4H / 1D) ve tarih aralığı seçilir;

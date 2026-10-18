@@ -2,9 +2,11 @@
 import { runScan, detect, sortSetups } from '../scan/scanner.js';
 import { pickSetups, activePlans, riskPct, feeR } from '../scan/wave3.js';
 import { pickTriangles, findTriangles } from '../scan/triangle.js';
+import { pickAbcde } from '../scan/abcde.js';
 import { loadSettings, saveSettings, renderSettings, toScanOptions, UI_DEFAULTS } from './settings.js';
-import { drawSetup, drawTriangle, destroyChart, LEGEND, TRI_LEGEND } from './chart.js';
+import { drawSetup, drawTriangle, drawAbcde, destroyChart, LEGEND, TRI_LEGEND, ABCDE_LEGEND } from './chart.js';
 import { triCard, triDetail, triSummary, triKey } from './triangleView.js';
+import { abcdeCard, abcdeDetail, abcdeSummary, abcdeKey } from './abcdeView.js';
 import { drawWatch } from './chart.js';
 import { watchCard, watchDetail } from './watchView.js';
 import { snapshot, evaluatePlan, isOpen, triangleShape } from '../watch/track.js';
@@ -33,7 +35,9 @@ const state = {
 };
 
 const isTri = () => state.settings.mode === 'triangle';
-const setupKey = (s) => (s.kind === 'triangle' ? triKey(s) : `${s.coin}|${s.direction}|${s.phase}|${s.points.p0.price}|${s.points.p1.price}`);
+const isAbc = () => state.settings.mode === 'abcde';
+const LONG_KINDS = new Set(['triangle', 'abcde']); // 600 mumluk pencerede bulunanlar
+const setupKey = (s) => (s.kind === 'triangle' ? triKey(s) : s.kind === 'abcde' ? abcdeKey(s) : `${s.coin}|${s.direction}|${s.phase}|${s.points.p0.price}|${s.points.p1.price}`);
 
 // ------------------------------------------------------------------ araç çubuğu
 function syncToolbar() {
@@ -46,6 +50,7 @@ function syncToolbar() {
   $('#mode').value = s.mode;
   // Dalga-3'e özgü kontroller üçgen modunda gizlenir
   document.body.classList.toggle('mode-triangle', s.mode === 'triangle');
+  document.body.classList.toggle('mode-abcde', s.mode === 'abcde');
 }
 
 function updateSettings(patch) {
@@ -140,6 +145,7 @@ function setupAutoRefresh() {
 
 function notifyNew(silent) {
   if (isTri()) return notifyTriangles(silent);
+  if (isAbc()) return notifyAbcde(silent);
   const vis = pickSetups(state.setups, toScanOptions(state.settings));
   const keys = new Set(vis.map(setupKey));
   const approaching = new Set(vis.filter((s) => s.zone?.state === 'approaching').map(setupKey));
@@ -182,6 +188,22 @@ function notifyTriangles(silent) {
   } catch { /* yoksay */ }
 }
 
+/** ABCDE modu bildirimi: limite yaklaşan / dolan ve E'si yeni onaylanan üçgenler. */
+function notifyAbcde(silent) {
+  const vis = visibleSetups();
+  const keyed = (sts) => new Set(vis.filter((t) => t.plans.some((p) => sts.includes(p.state))).map(setupKey));
+  const hot = keyed(['approaching', 'filled', 'ready']);
+  const prev = state.seenAbcde;
+  state.seenAbcde = hot;
+  if (!silent || !prev) return;
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const fresh = vis.filter((t) => hot.has(setupKey(t)) && !prev.has(setupKey(t)));
+  const line = (t) => `${t.coin} ${dirTxt(t)} · ${t.variantLabel} · ${t.plans.map((p) => p.stateLabel).join(' / ')}`;
+  try {
+    if (fresh.length) new Notification(`ABCDE üçgen: E bölgesi (${state.scan.tf.id})`, { body: fresh.slice(0, 5).map(line).join('\n') });
+  } catch { /* yoksay */ }
+}
+
 // ------------------------------------------------------------------ çizim
 const useBreak = () => state.settings.entryType !== 'zone';
 const useZone = () => state.settings.entryType !== 'break';
@@ -189,6 +211,7 @@ const dirTxt = (s) => (s.direction === 'long' ? 'LONG ▲' : 'SHORT ▼');
 
 function visibleSetups() {
   if (isTri()) return state.settings.showAll ? state.setups : pickTriangles(state.setups, toScanOptions(state.settings));
+  if (isAbc()) return state.settings.showAll ? state.setups : pickAbcde(state.setups, toScanOptions(state.settings));
   if (!state.settings.showAll) return pickSetups(state.setups, toScanOptions(state.settings));
   return state.settings.onlyPerfect ? state.setups.filter((s) => s.zone?.perfect) : state.setups;
 }
@@ -229,6 +252,13 @@ function renderSummary() {
       results: r.results, setups: state.setups, visible: pickTriangles(state.setups, opts), tf: r.tf, at: r.at, fmtTime, minRR: opts.triMinRR,
     });
     $('#listTitle').textContent = `Üçgenler (${visibleSetups().length})`;
+    return;
+  }
+  if (isAbc()) {
+    $('#summary').innerHTML = abcdeSummary({
+      results: r.results, setups: state.setups, visible: pickAbcde(state.setups, opts), tf: r.tf, at: r.at, fmtTime, minRR: opts.abcdeMinRR,
+    });
+    $('#listTitle').textContent = `ABCDE üçgenler (${visibleSetups().length})`;
     return;
   }
   const errors = r.results.filter((x) => x.error);
@@ -336,6 +366,9 @@ function renderCards() {
   if (isTri()) {
     const sel = state.selected && setupKey(state.selected);
     box.innerHTML = vis.map((t) => triCard(t, { selected: setupKey(t) === sel, active: ['forming', 'near', 'broken'].includes(t.state) })).join('');
+  } else if (isAbc()) {
+    const sel = state.selected && setupKey(state.selected);
+    box.innerHTML = vis.map((t) => abcdeCard(t, { selected: setupKey(t) === sel })).join('');
   } else {
     box.innerHTML = vis.map(card).join('');
   }
@@ -349,7 +382,7 @@ function renderCards() {
 // ------------------------------------------------------------------ ★ takip listesi
 function watchKeyOf(s) {
   const r = resultOf(s);
-  return snapshot(s, s.kind === 'triangle' ? r.longCandles : r.candles, { tf: state.scan.tf, mode: state.settings.mode }).key;
+  return snapshot(s, LONG_KINDS.has(s.kind) ? r.longCandles : r.candles, { tf: state.scan.tf, mode: state.settings.mode }).key;
 }
 
 /** Kart başlığına (ya da ayrıntı başlığına) ☆/★ düğmesi; tıklama kartı seçmez. */
@@ -371,7 +404,7 @@ function addStar(head, s) {
 
 function toggleStar(s) {
   const r = resultOf(s);
-  const snap = snapshot(s, s.kind === 'triangle' ? r.longCandles : r.candles, { tf: state.scan.tf, mode: state.settings.mode });
+  const snap = snapshot(s, LONG_KINDS.has(s.kind) ? r.longCandles : r.candles, { tf: state.scan.tf, mode: state.settings.mode });
   const existing = findByKey(snap.key);
   if (existing) removeWatch(existing.id);
   else {
@@ -524,7 +557,9 @@ function renderWatchDetail() {
   const evals = state.watchEval.get(it.id) || [];
   box.innerHTML = watchDetail(it, evals, { price: watchPrice(it) });
   const data = state.watchData.get(`${it.instId}|${it.tf}`);
-  const legend = it.shape
+  const legend = it.kind === 'abcde'
+    ? [['3-A-B-C-D-E', '#f0c75e', ''], ['A–C / B–D', '#ef5350', ''], ['Giriş', '#3987e5', ''], ['Stop (C ötesi)', '#ef5350', 'dash'], ['Hedefler', '#7cc4a8', 'dash']]
+    : it.shape
     ? [...TRI_LEGEND.slice(0, 3), ['Giriş', '#3987e5', ''], ['Stop', '#ef5350', 'dash'], ['Hedefler', '#7cc4a8', 'dash']]
     : [['Dalga yolu', '#f0c75e', ''], ['Giriş', '#3987e5', ''], ['Stop', '#ef5350', 'dash'], ['0 / geçersiz', '#b06cf0', 'dash'], ['Hedefler', '#7cc4a8', 'dash']];
   $('#watchLegend').innerHTML = legend.map(([t, c, cls]) => `<span><i class="${cls}" style="border-top-color:${c}"></i>${esc(t)}</span>`).join('');
@@ -631,6 +666,12 @@ function renderDetail() {
     box.innerHTML = triDetail(s, { tfId: state.scan.tf.id, feePct: state.settings.feePct });
     $('#triLegend').innerHTML = TRI_LEGEND.map(([t, c, cls]) => `<span><i class="${cls}" style="border-top-color:${c}"></i>${esc(t)}</span>`).join('');
     drawTriangle($('#chart'), r.longCandles, r.live, s);
+    return;
+  }
+  if (s.kind === 'abcde') {
+    box.innerHTML = abcdeDetail(s, { tfId: state.scan.tf.id, feePct: state.settings.feePct, eRetr: state.settings.eRetr });
+    $('#abcdeLegend').innerHTML = ABCDE_LEGEND.map(([t, c, cls]) => `<span><i class="${cls}" style="border-top-color:${c}"></i>${esc(t)}</span>`).join('');
+    drawAbcde($('#chart'), r.longCandles, r.live, s);
     return;
   }
   const rsi = [];

@@ -2,7 +2,7 @@
 import { fmtPrice, fmtTime, esc } from './format.js';
 import { PLAN_NAME } from '../watch/track.js';
 
-const MODE_TXT = { wave3: 'Dalga-3', triangle: 'Üçgen' };
+const MODE_TXT = { wave3: 'Dalga-3', triangle: 'Üçgen', abcde: 'ABCDE üçgen' };
 const fmtR = (r) => (r == null ? '–' : `${r > 0 ? '+' : ''}${r.toFixed(2).replace('.', ',')}R`);
 const ago = (ms) => {
   const m = Math.round((Date.now() - ms) / 60000);

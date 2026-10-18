@@ -215,7 +215,89 @@ export const TRI_LEGEND = [
   ['Fib hedefleri', T.fib, 'dash'],
 ];
 
+// ---------------------------------------------------------------- ABCDE üçgen (dalga 4)
+const A5 = { path: '#e8ebf1', w3: '#8f99aa', ac: '#ef5350', bd: '#ef5350', limit: '#ff9f43', entry: '#3987e5', stop: '#ef5350', target: '#7cc4a8' };
+
+/** ABCDE: 3-A-B-C-D-E yolu ve etiketler, A–C ve B–D çizgileri (ileri uzatılmış), dalga 3, E limiti / giriş / stop / hedefler. */
+export function drawAbcde(el, candles, live, t, { plans = t.plans } = {}) {
+  destroyChart();
+  const LW = window.LightweightCharts;
+  if (!LW) {
+    el.innerHTML = '<p class="error">Grafik kütüphanesi yüklenemedi.</p>';
+    return;
+  }
+  const prec = decimals(t.price);
+  const pf = { type: 'price', precision: prec, minMove: 10 ** -prec };
+  const chart = LW.createChart(el, {
+    width: el.clientWidth,
+    height: el.clientHeight,
+    layout: { background: { type: 'solid', color: C.bg }, textColor: C.text, fontSize: 11, fontFamily: getComputedStyle(document.body).fontFamily },
+    grid: { vertLines: { color: C.grid }, horzLines: { color: C.grid } },
+    rightPriceScale: { borderColor: C.grid },
+    timeScale: { borderColor: C.grid, timeVisible: true, secondsVisible: false, rightOffset: 6 },
+    crosshair: { mode: LW.CrosshairMode.Normal },
+    localization: { locale: 'tr-TR' },
+  });
+  const series = chart.addSeries(LW.CandlestickSeries, {
+    upColor: C.up, downColor: C.down, borderUpColor: C.up, borderDownColor: C.down, wickUpColor: C.up, wickDownColor: C.down,
+    priceFormat: pf,
+  });
+  const all = live ? [...candles, live] : candles;
+  series.setData(all.map((c) => ({ time: sec(c.time), open: c.open, high: c.high, low: c.low, close: c.close })));
+  const tm = (i) => sec(all[Math.min(i, all.length - 1)].time);
+  const lastI = all.length - 1;
+  const lineOpts = (color, style = LW.LineStyle.Solid, width = 2) => ({
+    color, lineWidth: width, lineStyle: style, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, priceFormat: pf,
+  });
+  const P = t.points;
+  // Dalga 3 (kesikli) ve 3-A-B-C-D-E yolu
+  chart.addSeries(LW.LineSeries, lineOpts(A5.w3, LW.LineStyle.Dashed, 1)).setData([{ time: tm(P.w3s.i), value: P.w3s.price }, { time: tm(P.p0.i), value: P.p0.price }]);
+  const seq = [P.p0, P.A, P.B, P.C, P.D, P.E];
+  chart.addSeries(LW.LineSeries, lineOpts(A5.path, LW.LineStyle.Solid, 1)).setData(seq.map((p) => ({ time: tm(p.i), value: p.price })));
+  // A–C ve B–D çizgileri: E'nin biraz ötesine kadar
+  const ext = Math.min(lastI, P.E.i + Math.max(5, Math.round((P.E.i - P.p0.i) * 0.25)));
+  const ray = (L, color) => {
+    const v = (i) => L.p1 + ((L.p2 - L.p1) * (i - L.i1)) / (L.i2 - L.i1);
+    chart.addSeries(LW.LineSeries, lineOpts(color)).setData([{ time: tm(L.i1), value: L.p1 }, { time: tm(ext), value: v(ext) }]);
+  };
+  ray(t.lineAC, A5.ac);
+  ray(t.lineBD, A5.bd);
+  const names = ['3', 'A', 'B', 'C', 'D', t.forming ? 'E?' : 'E'];
+  LW.createSeriesMarkers(series, [
+    { time: tm(P.w3s.i), position: P.w3s.type === 'H' ? 'aboveBar' : 'belowBar', shape: 'circle', color: A5.w3, text: '' },
+    ...seq.map((p, n) => ({ time: tm(p.i), position: p.type === 'H' ? 'aboveBar' : 'belowBar', shape: p.type === 'H' ? 'arrowDown' : 'arrowUp', color: n === 0 ? '#f0c75e' : A5.path, text: names[n] })),
+  ].sort((a, b) => a.time - b.time));
+
+  const line = (price, color, title, style = LW.LineStyle.Dashed) =>
+    series.createPriceLine({ price, color, lineWidth: 1, lineStyle: style, axisLabelVisible: true, title });
+  for (const p of plans) {
+    if (p.type === 'elimit') line(p.level, A5.limit, 'E limiti %61,8', LW.LineStyle.Solid);
+    else line(p.entry, A5.entry, 'E onayı', LW.LineStyle.Solid);
+  }
+  line(t.levels.stop, A5.stop, 'Stop (C)');
+  for (const x of t.levels.targets) line(x.price, A5.target, x.key === 'top' ? '3 ucu' : x.key === 'thrust' ? 'Thrust' : x.key === 'e1236' ? '1,236' : '1,618');
+
+  chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, P.w3s.i - 10), to: all.length + 6 });
+  const ro = new ResizeObserver(([e]) => {
+    const r = e.contentRect;
+    if (r.width > 0 && r.height > 0) chart.resize(Math.floor(r.width), Math.floor(r.height));
+  });
+  ro.observe(el);
+  current = { chart, ro };
+}
+
+export const ABCDE_LEGEND = [
+  ['Dalga 3', A5.w3, 'dash'],
+  ['3-A-B-C-D-E', A5.path, ''],
+  ['A–C / B–D çizgileri', A5.ac, ''],
+  ['E limiti (C–D %61,8)', A5.limit, ''],
+  ['E onayı girişi', A5.entry, ''],
+  ['Stop', A5.stop, 'dash'],
+  ['Hedefler', A5.target, 'dash'],
+];
+
 // ---------------------------------------------------------------- takip listesi
+const PLAN_TAG = { zone: ' (bölge)', break: ' (B)', elimit: ' (E limiti)', econfirm: ' (E onayı)' };
 const W = { wave: '#f0c75e', entry: '#3987e5', stop: '#ef5350', target: '#7cc4a8', inval: '#b06cf0', flat: '#f0c75e', fill: '#ff9f43' };
 
 /**
@@ -249,12 +331,12 @@ export function drawWatch(el, candles, live, item, evals) {
   series.setData(all.map((c) => ({ time: sec(c.time), open: c.open, high: c.high, low: c.low, close: c.close })));
   const times = new Set(all.map((c) => c.time));
   const pts = item.points.filter((p) => times.has(p.time)).sort((a, b) => a.time - b.time);
-  if (item.kind === 'wave3' && pts.length > 1) {
+  if ((item.kind === 'wave3' || item.kind === 'abcde') && pts.length > 1) {
     chart.addSeries(LW.LineSeries, { color: W.wave, lineWidth: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, priceFormat: pf })
       .setData(pts.map((p) => ({ time: sec(p.time), value: p.price })));
   }
   // Kayıt anı ve giriş işaretleri
-  const marks = pts.map((p) => ({ time: sec(p.time), position: p.type === 'H' ? 'aboveBar' : 'belowBar', shape: item.kind === 'wave3' ? (p.type === 'H' ? 'arrowDown' : 'arrowUp') : 'circle', color: W.wave, text: p.label }));
+  const marks = pts.map((p) => ({ time: sec(p.time), position: p.type === 'H' ? 'aboveBar' : 'belowBar', shape: item.kind !== 'triangle' ? (p.type === 'H' ? 'arrowDown' : 'arrowUp') : 'circle', color: W.wave, text: p.label }));
   const savedBar = all.find((c) => c.time >= item.savedAt) || all[all.length - 1];
   if (savedBar) marks.push({ time: sec(savedBar.time), position: item.d === 1 ? 'belowBar' : 'aboveBar', shape: 'square', color: '#e8ebf1', text: '★ kayıt' });
   evals.forEach((ev) => {
@@ -269,22 +351,32 @@ export function drawWatch(el, candles, live, item, evals) {
     series.createPriceLine({ price, color, lineWidth: 1, lineStyle: style, axisLabelVisible: true, title });
   const sh = item.shape;
   if (sh) {
-    // Üçgen: tarama ekranındaki gibi düz kenar segmenti, eğik kenar ve önceki hareket (zamanlar mumlara oturtulur)
+    // Üçgenler: tarama ekranındaki çizgiler (zamanlar mumlara oturtulur)
     const t0 = all[0].time, tN = all[all.length - 1].time;
     const snap = (t) => (all.find((c) => c.time >= t) || all[all.length - 1]).time;
     const seg = (color, style, width, a, b) => chart.addSeries(LW.LineSeries, {
       color, lineWidth: width, lineStyle: style, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, priceFormat: pf,
     }).setData(a.time === b.time ? [a] : [a, b]);
-    const end = sh.breakTime != null ? Math.min(sh.breakTime, tN) : tN;
-    const fStart = snap(Math.max(sh.flat.t1, t0));
-    seg(T.flat, LW.LineStyle.Solid, 2, { time: sec(fStart), value: sh.flat.price }, { time: sec(snap(end)), value: sh.flat.price });
-    const s = sh.slope;
-    const at = (t) => s.p1 + ((s.p2 - s.p1) * (t - s.t1)) / (s.t2 - s.t1 || 1);
-    const sStart = snap(Math.max(s.t1, t0));
-    seg(T.slope, LW.LineStyle.Solid, 2, { time: sec(sStart), value: at(sStart) }, { time: sec(snap(end)), value: at(snap(end)) });
-    if (sh.prior && sh.prior.from.time >= t0) {
-      const pa = snap(sh.prior.from.time);
-      seg(T.prior, LW.LineStyle.Dashed, 1, { time: sec(pa), value: sh.prior.from.price }, { time: sec(snap(sh.prior.to.time)), value: sh.prior.to.price });
+    if (sh.lines) {
+      // ABCDE: A–C ve B–D çizgileri, E'nin biraz ötesine kadar
+      const last = snap(Math.min(sh.until ?? tN, tN));
+      for (const l of sh.lines) {
+        const at = (t) => l.p1 + ((l.p2 - l.p1) * (t - l.t1)) / (l.t2 - l.t1 || 1);
+        const a = snap(Math.max(l.t1, t0));
+        seg(A5.ac, LW.LineStyle.Solid, 2, { time: sec(a), value: at(a) }, { time: sec(last), value: at(last) });
+      }
+    } else {
+      const end = sh.breakTime != null ? Math.min(sh.breakTime, tN) : tN;
+      const fStart = snap(Math.max(sh.flat.t1, t0));
+      seg(T.flat, LW.LineStyle.Solid, 2, { time: sec(fStart), value: sh.flat.price }, { time: sec(snap(end)), value: sh.flat.price });
+      const s = sh.slope;
+      const at = (t) => s.p1 + ((s.p2 - s.p1) * (t - s.t1)) / (s.t2 - s.t1 || 1);
+      const sStart = snap(Math.max(s.t1, t0));
+      seg(T.slope, LW.LineStyle.Solid, 2, { time: sec(sStart), value: at(sStart) }, { time: sec(snap(end)), value: at(snap(end)) });
+      if (sh.prior && sh.prior.from.time >= t0) {
+        const pa = snap(sh.prior.from.time);
+        seg(T.prior, LW.LineStyle.Dashed, 1, { time: sec(pa), value: sh.prior.from.price }, { time: sec(snap(sh.prior.to.time)), value: sh.prior.to.price });
+      }
     }
   }
   for (const l of item.lines) {
@@ -292,7 +384,7 @@ export function drawWatch(el, candles, live, item, evals) {
     line(l.price, l.kind === 'flat' ? W.flat : W.inval, l.title, l.kind === 'flat' ? LW.LineStyle.Solid : LW.LineStyle.Dotted);
   }
   item.plans.forEach((p, i) => {
-    const tag = item.plans.length > 1 ? (p.type === 'zone' ? ' (bölge)' : ' (B)') : '';
+    const tag = item.plans.length > 1 ? PLAN_TAG[p.type] || '' : '';
     p.legs.forEach((lv) => line(lv, W.entry, `Giriş${tag}`, LW.LineStyle.Solid));
     line(p.stop, W.stop, `Stop${tag}`);
     if (i === 0) p.targets.forEach((t, k) => line(t.price, W.target, `H${k + 1}`));

@@ -11,7 +11,7 @@ export const WATCH_STATE = {
   invalid: 'Bozuldu (giriş öncesi)',
   expired: 'Süre doldu',
 };
-export const PLAN_NAME = { break: 'B kırılımı', zone: 'Limit bölge', triangle: 'Üçgen kırılımı' };
+export const PLAN_NAME = { break: 'B kırılımı', zone: 'Limit bölge', triangle: 'Üçgen kırılımı', elimit: 'E limiti (C–D %61,8)', econfirm: 'E onayı' };
 const OPEN = new Set(['waiting', 'entered']);
 export const isOpen = (st) => OPEN.has(st);
 
@@ -63,6 +63,37 @@ export function snapshot(s, candles, ctx) {
         targets: L.targets.filter((x) => s.d * (x.price - L.entry) > 0).sort((a, b) => s.d * (a.price - b.price)).map((x) => ({ name: x.name, price: x.price })),
         cancelBeyond: L.stop, cancelFav: null, activeFrom: null,
       }],
+    };
+  }
+  if (s.kind === 'abcde') {
+    const P = s.points;
+    const L = s.levels;
+    const line = (l) => ({ t1: tAt(l.i1), p1: l.p1, t2: tAt(l.i2), p2: l.p2 });
+    const plans = [];
+    for (const p of s.plans) {
+      const limitOpen = p.type === 'elimit' && (p.state === 'waiting' || p.state === 'approaching');
+      const marketNow = (p.type === 'elimit' && p.state === 'filled') || (p.type === 'econfirm' && p.state === 'ready');
+      if (!limitOpen && !marketNow) continue;
+      const entry = limitOpen ? p.level : s.price;
+      plans.push({
+        type: p.type,
+        entryKind: limitOpen ? 'limit' : 'market',
+        legs: [entry],
+        stop: p.stop,
+        targets: L.targets.filter((x) => s.d * (x.price - entry) > 0).map((x) => ({ name: x.name, price: x.price })),
+        cancelBeyond: null, cancelFav: limitOpen ? P.D.price : null, activeFrom: null,
+      });
+    }
+    const names = ['3', 'A', 'B', 'C', 'D', s.forming ? 'E?' : 'E'];
+    return {
+      ...base,
+      kind: 'abcde',
+      key: `${s.coin}|${ctx.tf.id}|abcde|${s.direction}|${tAt(P.p0.i)}|${tAt(P.A.i)}|${tAt(P.C.i)}`,
+      title: `${s.variantLabel} · ${s.stateLabel}`,
+      points: [P.p0, P.A, P.B, P.C, P.D, P.E].map((p, n) => pt(p, names[n])),
+      lines: [], // stop zaten plan çizgisi
+      shape: { lines: [line(s.lineAC), line(s.lineBD)], until: tAt(P.E.i + Math.max(5, Math.round((P.E.i - P.p0.i) * 0.25))) },
+      plans,
     };
   }
   const plans = [];

@@ -340,3 +340,17 @@ button:disabled { opacity: 0.45; cursor: default; }
 button.danger { color: var(--bad); border-color: rgba(240, 90, 90, 0.4); }
 .list-head select { background: var(--surface-2); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); padding: 4px 6px; }
 .filebtn.sm { padding: 3px 9px; font-size: 12px; }
+
+/* ABCDE üçgen modu */
+body.mode-abcde .wave-only { display: none; }
+.state.ab-waiting { color: var(--warn); background: rgba(250, 178, 25, 0.14); }
+.state.ab-approaching { color: #1a1300; background: #ffcf5c; font-weight: 600; }
+.state.ab-filled { color: #fff; background: #c9771f; }
+.state.ab-ready { color: #fff; background: var(--accent); }
+.state.ab-stopped { color: var(--bad); }
+.state.ab-target { color: var(--good); }
+.state.ab-missed, .state.ab-old { color: var(--muted); }
+.rule-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.rule-list li { padding: 6px 8px; background: var(--surface-2); border-radius: var(--radius-sm); }
+.rule-list .ok { color: var(--good); font-weight: 700; }
+.rule-list .bad { color: var(--bad); font-weight: 700; }

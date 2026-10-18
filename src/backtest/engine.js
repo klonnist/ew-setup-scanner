@@ -4,6 +4,7 @@
 // t mumunda görülen setup'ın emri en erken t+1 mumunda dolabilir (tetiklenmişse t kapanışından piyasa emri).
 import { findWave3Setups, DEFAULTS, riskOk } from '../scan/wave3.js';
 import { findTriangles, TRI_DEFAULTS, reachOf } from '../scan/triangle.js';
+import { findAbcde, ABCDE_DEFAULTS, abcdeReach } from '../scan/abcde.js';
 
 // Üçgen modunda canlı tarayıcıyla aynı uzun pencere (bkz. scanner.js LONG_BARS)
 export const TRI_WINDOW = 600;
@@ -25,10 +26,11 @@ const sideExt = (c, d) => ({ adverse: d === 1 ? c.low : c.high, fav: d === 1 ? c
  */
 export function backtestCoin(candles, cfg) {
   const c = { ...BT_DEFAULTS, ...cfg };
-  const opts = { ...TRI_DEFAULTS, ...DEFAULTS, ...c.opts, diagnostics: undefined };
+  const opts = { ...TRI_DEFAULTS, ...ABCDE_DEFAULTS, ...DEFAULTS, ...c.opts, diagnostics: undefined };
   const triMode = opts.mode === 'triangle';
-  if (triMode) c.window = Math.max(c.window, TRI_WINDOW);
-  const trackers = []; // üçgen: kırılım sonrası en uç fiyatı (stop görülene kadar) izler
+  const abcMode = opts.mode === 'abcde';
+  if (triMode || abcMode) c.window = Math.max(c.window, TRI_WINDOW);
+  const trackers = []; // üçgenler: girişten sonra en uç fiyatı (stop görülene kadar) izler
   const useBreak = opts.entryType !== 'zone';
   const useZone = opts.entryType !== 'break';
   const n = candles.length;
@@ -60,6 +62,10 @@ export function backtestCoin(candles, cfg) {
     const win = candles.slice(off, t + 1);
     if (triMode) {
       triangleStep(win, off, bar, t);
+      continue;
+    }
+    if (abcMode) {
+      abcdeStep(win, off, bar, t);
       continue;
     }
     const setups = findWave3Setups(win, opts, null);
@@ -146,19 +152,67 @@ export function backtestCoin(candles, cfg) {
     }
   }
 
+  // ---------------------------------------------------------------- ABCDE üçgen (dalga 4)
+  // E limiti: üçgen ilk kez "E oluşuyor" görülünce C–D %61,8'e limit emir (D aşılırsa iptal).
+  // E onayı: ZigZag E'yi bu mumda onayladıysa kapanıştan piyasa emri.
+  function abcdeStep(win, off, bar, t) {
+    const last = win.length - 1;
+    for (const tr of findAbcde(win, opts, null)) {
+      const P = tr.points;
+      const abs = (p) => candles[p.i + off].time;
+      const base = `${tr.direction}|${abs(P.p0)}|${abs(P.A)}|${abs(P.B)}|${abs(P.C)}|${abs(P.D)}`;
+      const meta = { sensitivity: tr.sensitivity, score: tr.score, pattern: tr.variant, context: tr.innerOk ? 'inner' : 'loose', strength: null, abc: null, retr: null, timeRatio: null };
+      for (const p of tr.plans) {
+        const isLimit = p.type === 'elimit';
+        if (isLimit && !tr.forming) continue; // limit yalnızca E oluşurken verilir
+        if (!isLimit && tr.confirmIdx !== last) continue; // onay bu mumda
+        const key = `${p.type}|${base}${isLimit ? '' : `|${abs(P.E)}`}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        orderCount++;
+        if (isLimit && p.state !== 'waiting' && p.state !== 'approaching') { cancel({ type: p.type }, 'geç algılandı'); continue; }
+        const entry = isLimit ? p.level : bar.close;
+        if (p.rr < opts.abcdeMinRR) { cancel({ type: p.type }, 'R:R düşük'); continue; }
+        if (!riskOk(entry, p.stop, opts)) { cancel({ type: p.type }, 'stop çok yakın'); continue; }
+        const targets = tr.levels.targets;
+        const o = {
+          type: p.type, d: tr.d, created: t, key,
+          legs: [{ level: entry, w: 1, market: !isLimit }],
+          activeFrom: -Infinity,
+          stop: p.stop, target: p.main.price, t1: targets[0].price,
+          cancelBeyond: null, cancelFav: isLimit ? P.D.price : null,
+          meta,
+        };
+        if (!isLimit) fillLeg(o, o.legs[0], bar.close, t);
+        orders.push(o);
+        trackers.push({ o, d: tr.d, stop: p.stop, start: t, mfe: isLimit ? null : bar.close, done: false, reach: (m) => ({ reach: abcdeReach(targets, tr.d, m) }) });
+      }
+    }
+  }
+
   function track(k, b, t) {
-    const { adverse, fav } = sideExt(b, k.tr.d);
+    const d = k.d ?? k.tr.d;
+    const stop = k.stop ?? k.tr.levels.stop;
+    if (k.mfe == null) { // limit emri: dolunca izlemeye başla
+      if (k.o.done && !k.o.trade) { k.done = true; return; } // dolmadan iptal
+      if (!k.o.legs.some((l) => l.filled)) return;
+      k.mfe = k.o.legs[0].price;
+      if (k.o.trade?.outcome === 'stop') return finishTrack(k); // dolum mumunda stop
+      if (k.o.entryT === t) return; // dolum mumunda fav sayılmaz
+    }
+    const { adverse, fav } = sideExt(b, d);
     // Stop mumunda fav sayılmaz (mum içi sıra bilinmez)
-    if (k.tr.d * (adverse - k.tr.levels.stop) <= 0) return finishTrack(k);
-    if (k.tr.d * (fav - k.mfe) > 0) k.mfe = fav;
-    if (t - k.start >= c.maxHold) finishTrack(k);
+    if (d * (adverse - stop) <= 0) return finishTrack(k);
+    if (d * (fav - k.mfe) > 0) k.mfe = fav;
+    if (t - (k.o.entryT ?? k.start) >= c.maxHold) finishTrack(k); // süre girişten sayılır (limit emri sonra dolabilir)
   }
 
   function finishTrack(k) {
     k.done = true;
-    const r = reachOf(k.tr, k.mfe);
+    if (k.mfe == null) return;
+    const r = k.reach ? k.reach(k.mfe) : reachOf(k.tr, k.mfe);
     const trade = k.o.trade;
-    if (trade) { trade.mfeH = r.mfeH; trade.mfeFib = r.mfeFib; }
+    if (trade) Object.assign(trade, r.reach ? { reach: r.reach } : { mfeH: r.mfeH, mfeFib: r.mfeFib });
     else k.o.reach = r; // pozisyon henüz kapanmadı: close() bunu işleme yazar
   }
 
@@ -210,7 +264,7 @@ export function backtestCoin(candles, cfg) {
 
     const nowOpen = o.legs.some((l) => l.filled);
     if (!nowOpen) {
-      if (o.cancelFav != null && d * (fav - o.cancelFav) > 0) return cancel(o, 'B kırıldı, bölgeye gelmedi');
+      if (o.cancelFav != null && d * (fav - o.cancelFav) > 0) return cancel(o, o.type === 'elimit' ? 'D aşıldı, E limite gelmedi' : 'B kırıldı, bölgeye gelmedi');
       if (d * (fav - o.t1) >= 0) return cancel(o, 'hedef 1 dolmadan görüldü');
       if (t - o.created > c.maxPending) return cancel(o, 'süre aşımı');
       return;
@@ -257,7 +311,7 @@ export function backtestCoin(candles, cfg) {
       outcome,
       bars: t - o.entryT,
       ...o.meta,
-      ...(o.reach ? { mfeH: o.reach.mfeH, mfeFib: o.reach.mfeFib } : {}),
+      ...(o.reach ? (o.reach.reach ? { reach: o.reach.reach } : { mfeH: o.reach.mfeH, mfeFib: o.reach.mfeFib }) : {}),
     };
     o.trade = trade;
     trades.push(trade);

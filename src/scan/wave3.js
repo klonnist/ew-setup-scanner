@@ -93,7 +93,7 @@ export function findAbc(candles, atrArr, i1, i2, type1, k, opts) {
     if (A.type === type1) continue;
     const pts = [pt(candles, i1, type1), { t: A.i, p: A.price }, { t: B.i, p: B.price }, pt(candles, i2, A.type)];
     const evals = kinds
-      .map((id) => evaluate(id, pts, { ruleSet: opts.ruleSet, logScale: true }))
+      .map((id) => evaluate(id, pts, { ruleSet: opts.ruleSet, logScale: opts.abcLog ?? true }))
       .filter((e) => e.valid)
       .sort((a, b) => b.score - a.score);
     if (evals.length) return { A, B, div, eval: evals[0], kind: evals[0].pattern };
