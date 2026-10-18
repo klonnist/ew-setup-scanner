@@ -41,6 +41,7 @@ export function watchCard(item, evals, { selected, price }) {
       <span class="dir ${item.direction}">${dir}</span>
       <span class="chip">${esc(item.tf)} · ${esc(MODE_TXT[item.mode] || item.mode)}</span>
       <span class="score">${ago(item.savedAt)}</span>
+      <button type="button" class="rm" data-remove="${esc(item.id)}" title="Takipten çıkar" aria-label="${esc(item.coin)} takipten çıkar">✕</button>
     </div>
     <div class="meta"><span>${esc(item.title)}</span><span>kayıt fiyatı ${fmtPrice(item.priceAtSave, ref)}</span>${price != null ? `<span>şimdi ${fmtPrice(price, ref)}</span>` : ''}</div>
     ${item.plans.map((p, i) => planRow(item, p, evals?.[i], ref)).join('')}
@@ -71,6 +72,7 @@ export function watchDetail(item, evals, { price }) {
       <span class="dir ${item.direction}">${item.d === 1 ? 'LONG ▲' : 'SHORT ▼'}</span>
       <span class="chip">★ takipte · ${esc(item.tf)} · ${esc(MODE_TXT[item.mode] || item.mode)}</span>
       <a class="ext" href="${tv}" target="_blank" rel="noopener">TradingView'de aç ↗</a>
+      <button type="button" id="watchRemove" class="ghost sm danger">Takipten çıkar</button>
     </div>
     <div class="chart" id="chart"></div>
     <div class="legend" id="watchLegend"></div>
@@ -85,7 +87,6 @@ export function watchDetail(item, evals, { price }) {
     <textarea id="watchNote" class="watch-note" rows="3" placeholder="Bu işlem hakkında notun (yalnızca bu tarayıcıda saklanır)">${esc(item.note || '')}</textarea>
     <div class="watch-actions">
       <button type="button" id="watchSaveNote" class="ghost sm">Notu kaydet</button>
-      <button type="button" id="watchRemove" class="ghost sm danger">Takipten çıkar</button>
     </div>
     <p class="muted small">Durum, kayıttan sonra açılan mumlarla hesaplanır (backtest ile aynı dolum kuralları). Giriş 50 mum içinde gelmezse "Süre doldu" olur.</p>`;
 }

@@ -469,11 +469,48 @@ function renderWatch() {
     for (const el of box.querySelectorAll('.watch-card')) {
       const open = () => { state.selectedWatch = el.dataset.wid; renderWatch(); };
       el.addEventListener('click', open);
-      el.addEventListener('keydown', (e) => { if (e.key === 'Enter') open(); });
+      el.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target === el) open(); });
+    }
+    for (const b of box.querySelectorAll('[data-remove]')) {
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const it = loadWatch().find((x) => x.id === b.dataset.remove);
+        if (it) removeItem(it);
+      });
     }
   }
   if (!list.some((x) => x.id === state.selectedWatch)) state.selectedWatch = list[0]?.id ?? null;
+  $('#watchClearClosed').disabled = !closedItems().length;
   renderWatchDetail();
+}
+
+/** Durumu hesaplanmış ve hiçbir planı açık olmayan kayıtlar. */
+function closedItems() {
+  return loadWatch().filter((it) => {
+    const evals = state.watchEval.get(it.id);
+    return evals?.length && !evals.some((e) => isOpen(e.state));
+  });
+}
+
+function removeItem(it) {
+  if (!confirm(`${it.coin} ${it.tf} takipten çıkarılsın mı?`)) return;
+  removeWatch(it.id);
+  state.watchEval.delete(it.id);
+  if (state.selectedWatch === it.id) state.selectedWatch = null;
+  updateWatchCount();
+  renderWatch();
+}
+
+function clearClosed() {
+  const list = closedItems();
+  if (!list.length) return;
+  if (!confirm(`${list.length} kapanmış kayıt silinsin mi?\n${list.map((x) => `${x.coin} ${x.tf}`).join(', ')}`)) return;
+  const ids = new Set(list.map((x) => x.id));
+  saveAll(loadWatch().filter((x) => !ids.has(x.id)));
+  for (const id of ids) state.watchEval.delete(id);
+  if (ids.has(state.selectedWatch)) state.selectedWatch = null;
+  updateWatchCount();
+  renderWatch();
 }
 
 function renderWatchDetail() {
@@ -494,13 +531,7 @@ function renderWatchDetail() {
   if (data) drawWatch($('#chart'), data.candles, data.live, it, evals);
   else $('#chart').innerHTML = '<p class="muted" style="padding:16px">Grafik verisi yükleniyor…</p>';
   $('#watchSaveNote').addEventListener('click', () => { updateWatch(it.id, { note: $('#watchNote').value.trim() }); renderWatch(); });
-  $('#watchRemove').addEventListener('click', () => {
-    if (!confirm(`${it.coin} takipten çıkarılsın mı?`)) return;
-    removeWatch(it.id);
-    state.selectedWatch = null;
-    updateWatchCount();
-    renderWatch();
-  });
+  $('#watchRemove').addEventListener('click', () => removeItem(it));
 }
 
 function setView(v) {
@@ -677,6 +708,7 @@ function init() {
   $('#watchFilter').addEventListener('change', renderWatch);
   $('#watchRefresh').addEventListener('click', () => refreshWatch());
   $('#watchExport').addEventListener('click', exportWatchFile);
+  $('#watchClearClosed').addEventListener('click', clearClosed);
   $('#watchImport').addEventListener('change', (e) => { if (e.target.files[0]) importWatchFile(e.target.files[0]); e.target.value = ''; });
   updateWatchCount();
   let v = 'setups';

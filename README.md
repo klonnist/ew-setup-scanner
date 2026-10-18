@@ -42,7 +42,8 @@ Tüm eşikler sayfadaki **Ayarlar** bölmesinden değiştirilebilir. Ağ gerekti
 Kartlardaki ☆ ile bir setup takibe alınır: o anki giriş / stop / hedefler dondurulur. **★ Takip listem** sekmesinde her plan
 kayıttan sonraki mumlarla değerlendirilir (backtest ile aynı dolum kuralları): Bekliyor → Girildi → Stop oldu / Hedef görüldü,
 ayrıca Girişe gelmedi / Bozuldu / Süre doldu; açık pozisyonda anlık R. Her taramada ve otomatik yenilemede güncellenir;
-durum değişince bildirim gelir. Not eklenebilir.
+durum değişince bildirim gelir. Not eklenebilir. Kayıt, kartın sağ üstündeki **✕** ya da ayrıntı başlığındaki
+**Takipten çıkar** ile silinir; **Kapananları sil** açık planı kalmamış tüm kayıtları tek seferde temizler.
 
 Liste **bu tarayıcıda** saklanır (sunucuya gitmez; başka bilgisayar / telefon kendi listesini tutar).
 Taşımak için **Dışa aktar** → diğer cihazda **İçe aktar**.
