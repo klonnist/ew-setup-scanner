@@ -267,7 +267,30 @@ export function drawWatch(el, candles, live, item, evals) {
 
   const line = (price, color, title, style = LW.LineStyle.Dashed) =>
     series.createPriceLine({ price, color, lineWidth: 1, lineStyle: style, axisLabelVisible: true, title });
-  for (const l of item.lines) line(l.price, l.kind === 'flat' ? W.flat : W.inval, l.title, l.kind === 'flat' ? LW.LineStyle.Solid : LW.LineStyle.Dotted);
+  const sh = item.shape;
+  if (sh) {
+    // Üçgen: tarama ekranındaki gibi düz kenar segmenti, eğik kenar ve önceki hareket (zamanlar mumlara oturtulur)
+    const t0 = all[0].time, tN = all[all.length - 1].time;
+    const snap = (t) => (all.find((c) => c.time >= t) || all[all.length - 1]).time;
+    const seg = (color, style, width, a, b) => chart.addSeries(LW.LineSeries, {
+      color, lineWidth: width, lineStyle: style, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, priceFormat: pf,
+    }).setData(a.time === b.time ? [a] : [a, b]);
+    const end = sh.breakTime != null ? Math.min(sh.breakTime, tN) : tN;
+    const fStart = snap(Math.max(sh.flat.t1, t0));
+    seg(T.flat, LW.LineStyle.Solid, 2, { time: sec(fStart), value: sh.flat.price }, { time: sec(snap(end)), value: sh.flat.price });
+    const s = sh.slope;
+    const at = (t) => s.p1 + ((s.p2 - s.p1) * (t - s.t1)) / (s.t2 - s.t1 || 1);
+    const sStart = snap(Math.max(s.t1, t0));
+    seg(T.slope, LW.LineStyle.Solid, 2, { time: sec(sStart), value: at(sStart) }, { time: sec(snap(end)), value: at(snap(end)) });
+    if (sh.prior && sh.prior.from.time >= t0) {
+      const pa = snap(sh.prior.from.time);
+      seg(T.prior, LW.LineStyle.Dashed, 1, { time: sec(pa), value: sh.prior.from.price }, { time: sec(snap(sh.prior.to.time)), value: sh.prior.to.price });
+    }
+  }
+  for (const l of item.lines) {
+    if (sh && l.kind === 'flat') continue; // düz kenar zaten segment olarak çizildi
+    line(l.price, l.kind === 'flat' ? W.flat : W.inval, l.title, l.kind === 'flat' ? LW.LineStyle.Solid : LW.LineStyle.Dotted);
+  }
   item.plans.forEach((p, i) => {
     const tag = item.plans.length > 1 ? (p.type === 'zone' ? ' (bölge)' : ' (B)') : '';
     p.legs.forEach((lv) => line(lv, W.entry, `Giriş${tag}`, LW.LineStyle.Solid));
@@ -275,7 +298,7 @@ export function drawWatch(el, candles, live, item, evals) {
     if (i === 0) p.targets.forEach((t, k) => line(t.price, W.target, `H${k + 1}`));
   });
 
-  const first = Math.min(...item.points.map((p) => p.time), item.savedAt);
+  const first = Math.min(...item.points.map((p) => p.time), item.savedAt, item.shape?.prior?.from.time ?? Infinity);
   const fromIdx = Math.max(0, all.findIndex((c) => c.time >= first) - 10);
   chart.timeScale().setVisibleLogicalRange({ from: fromIdx, to: all.length + 6 });
   const ro = new ResizeObserver(([e]) => {

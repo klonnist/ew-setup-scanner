@@ -1,13 +1,13 @@
 // Panel: araç çubuğu, tarama, özet, setup kartları ve ayrıntı (grafik + kural kontrolleri).
 import { runScan, detect, sortSetups } from '../scan/scanner.js';
 import { pickSetups, activePlans, riskPct, feeR } from '../scan/wave3.js';
-import { pickTriangles } from '../scan/triangle.js';
+import { pickTriangles, findTriangles } from '../scan/triangle.js';
 import { loadSettings, saveSettings, renderSettings, toScanOptions, UI_DEFAULTS } from './settings.js';
 import { drawSetup, drawTriangle, destroyChart, LEGEND, TRI_LEGEND } from './chart.js';
 import { triCard, triDetail, triSummary, triKey } from './triangleView.js';
 import { drawWatch } from './chart.js';
 import { watchCard, watchDetail } from './watchView.js';
-import { snapshot, evaluatePlan, isOpen } from '../watch/track.js';
+import { snapshot, evaluatePlan, isOpen, triangleShape } from '../watch/track.js';
 import { loadWatch, addWatch, removeWatch, updateWatch, saveAll, findByKey, exportWatch, importWatch } from '../watch/store.js';
 import { getCandles, TIMEFRAMES } from '../data/okx.js';
 import { LONG_BARS } from '../scan/scanner.js';
@@ -413,6 +413,7 @@ async function refreshWatch({ notify = false, ids = null } = {}) {
   for (const it of items) {
     const data = state.watchData.get(`${it.instId}|${it.tf}`);
     if (!data) continue;
+    if (it.kind === 'triangle' && !it.shape) backfillShape(it, data);
     const all = data.live ? [...data.candles, data.live] : data.candles;
     const price = all[all.length - 1]?.close;
     const evals = it.plans.map((p) => evaluatePlan(p, all, it.savedAt, { d: it.d, price }));
@@ -430,6 +431,20 @@ async function refreshWatch({ notify = false, ids = null } = {}) {
     try { new Notification('★ Takip listesinde değişiklik', { body }); } catch { /* yoksay */ }
   }
   if (state.view === 'watch') renderWatch();
+}
+
+/**
+ * Çizgi bilgisi olmadan kaydedilmiş eski üçgen kaydı: aynı mumlarda üçgeni yeniden bul, kayıt anahtarı eşleşirse
+ * düz kenar / eğik kenar / önceki hareketi bir kez tamamla.
+ */
+function backfillShape(it, data) {
+  const c = data.candles;
+  const tAt = (i) => (i < c.length ? c[i].time : c[c.length - 1].time);
+  const match = findTriangles(c, toScanOptions(state.settings), data.live)
+    .find((t) => `${it.coin}|${it.tf}|tri|${t.type}|${tAt(t.first.i)}` === it.key);
+  if (!match) return;
+  it.shape = triangleShape(match, tAt);
+  updateWatch(it.id, { shape: it.shape });
 }
 
 function watchPrice(it) {
@@ -472,6 +487,10 @@ function renderWatchDetail() {
   const evals = state.watchEval.get(it.id) || [];
   box.innerHTML = watchDetail(it, evals, { price: watchPrice(it) });
   const data = state.watchData.get(`${it.instId}|${it.tf}`);
+  const legend = it.shape
+    ? [...TRI_LEGEND.slice(0, 3), ['Giriş', '#3987e5', ''], ['Stop', '#ef5350', 'dash'], ['Hedefler', '#7cc4a8', 'dash']]
+    : [['Dalga yolu', '#f0c75e', ''], ['Giriş', '#3987e5', ''], ['Stop', '#ef5350', 'dash'], ['0 / geçersiz', '#b06cf0', 'dash'], ['Hedefler', '#7cc4a8', 'dash']];
+  $('#watchLegend').innerHTML = legend.map(([t, c, cls]) => `<span><i class="${cls}" style="border-top-color:${c}"></i>${esc(t)}</span>`).join('');
   if (data) drawWatch($('#chart'), data.candles, data.live, it, evals);
   else $('#chart').innerHTML = '<p class="muted" style="padding:16px">Grafik verisi yükleniyor…</p>';
   $('#watchSaveNote').addEventListener('click', () => { updateWatch(it.id, { note: $('#watchNote').value.trim() }); renderWatch(); });

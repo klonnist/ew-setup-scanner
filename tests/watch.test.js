@@ -95,3 +95,21 @@ test('depolama: ekle (tekrar yok), not güncelle, sil, dışa/içe aktar', () =>
   assert.equal(loadWatch()[0].note, 'güzel yapı');
   assert.equal(importWatch(JSON.parse(dump)), 0); // aynısı tekrar eklenmez
 });
+
+test('üçgen kaydı çizgileri zamanla saklar: düz kenar, eğik kenar, önceki hareket', () => {
+  const tf = { id: '1H', ms: H };
+  const tc = build([[0, 130], [30, 100], [45, 112], [60, 104], [75, 112.2], [90, 107], [100, 111.9], [108, 109]]);
+  const t = { ...findTriangles(tc, { sensitivities: [2] })[0], coin: 'Y', instId: 'Y-USDT' };
+  const sh = snapshot(t, tc, { tf, mode: 'triangle', now: 1 }).shape;
+  assert.equal(sh.flat.t1, tc[t.first.i].time);
+  assert.equal(sh.flat.price, t.level);
+  assert.equal(sh.slope.t1, tc[t.slopeLine.i1].time);
+  assert.equal(sh.slope.t2, tc[t.slopeLine.i2].time);
+  // Ara bir zamandaki eğik çizgi değeri indeksle hesaplanan değerle aynı (mumlar eşit aralıklı)
+  const i = Math.round((t.slopeLine.i1 + t.slopeLine.i2) / 2);
+  const byIdx = t.slopeLine.p1 + ((t.slopeLine.p2 - t.slopeLine.p1) * (i - t.slopeLine.i1)) / (t.slopeLine.i2 - t.slopeLine.i1);
+  const byTime = sh.slope.p1 + ((sh.slope.p2 - sh.slope.p1) * (tc[i].time - sh.slope.t1)) / (sh.slope.t2 - sh.slope.t1);
+  assert.ok(Math.abs(byIdx - byTime) < 1e-9);
+  assert.equal(sh.prior.from.price, t.prior.from.price);
+  assert.equal(sh.breakTime, null);
+});

@@ -73,6 +73,7 @@ export function watchDetail(item, evals, { price }) {
       <a class="ext" href="${tv}" target="_blank" rel="noopener">TradingView'de aç ↗</a>
     </div>
     <div class="chart" id="chart"></div>
+    <div class="legend" id="watchLegend"></div>
     <div class="facts">
       <div><b>Kaydedildi</b><span class="num">${fmtTime(item.savedAt)}</span></div>
       <div><b>Kayıt fiyatı</b><span class="num">${fmtPrice(item.priceAtSave, ref)}</span></div>

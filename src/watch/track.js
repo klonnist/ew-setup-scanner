@@ -16,6 +16,20 @@ const OPEN = new Set(['waiting', 'entered']);
 export const isOpen = (st) => OPEN.has(st);
 
 /**
+ * Üçgenin çizgileri, zamanlarla (indeksler mumlar kaydıkça değişir): düz kenar, eğik kenar, önceki hareket, kırılım anı.
+ * @param tAt  indeks → zaman
+ */
+export function triangleShape(s, tAt) {
+  const L = s.slopeLine;
+  return {
+    flat: { t1: tAt(s.first.i), price: s.level, title: s.type === 'asc' ? 'Direnç' : 'Destek' },
+    slope: { t1: tAt(L.i1), p1: L.p1, t2: tAt(L.i2), p2: L.p2 },
+    prior: s.prior ? { from: { time: tAt(s.prior.from.i), price: s.prior.from.price }, to: { time: tAt(s.prior.to.i), price: s.prior.to.price } } : null,
+    breakTime: s.breakIdx >= 0 ? tAt(s.breakIdx) : null,
+  };
+}
+
+/**
  * Taramadaki setup'tan (dalga-3 ya da üçgen) takip kaydı oluşturur. Pivot indeksleri zamana çevrilir
  * (mumlar kaydırıldıkça indeksler değişir; zaman değişmez).
  * @param s        setup (coin/instId eklenmiş)
@@ -40,6 +54,7 @@ export function snapshot(s, candles, ctx) {
       title: `${s.typeLabel} · ${s.contextLabel}`,
       points: [...s.flat.map((p) => pt(p, '')), ...s.slope.map((p) => pt(p, ''))],
       lines: [{ price: s.level, kind: 'flat', title: s.type === 'asc' ? 'Direnç' : 'Destek' }],
+      shape: triangleShape(s, tAt),
       plans: [{
         type: 'triangle',
         entryKind: s.state === 'broken' ? 'market' : 'stop',
