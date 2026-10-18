@@ -2,6 +2,7 @@
 
 OKX'te 24 saatlik hacme göre **ilk 50 kripto parayı** (stablecoin, tokenize hisse ve altın hariç) tarar
 ve **Elliott Wave dalga 3 girişi** setup'larını listeler. Tarayıcıda çalışır; sunucu ve API anahtarı gerekmez.
+Zaman dilimleri: 1m, 5m, 15m, 4H, 1D. 1m ve 5m'de sayım gürültülüdür ve dar stopta komisyon R'nin büyük kısmını yer.
 
 ## Setup tanımı
 
@@ -81,7 +82,7 @@ son 600 mumda ZigZag'in art arda 6 dönüş noktası olarak aranır: 0 = dalga 3
 
 ## Backtest
 
-[`backtest.html`](https://klonnist.github.io/ew-setup-scanner/backtest.html): zaman dilimi (15m / 4H / 1D) ve tarih aralığı seçilir;
+[`backtest.html`](https://klonnist.github.io/ew-setup-scanner/backtest.html): zaman dilimi (1m / 5m / 15m / 4H / 1D) ve tarih aralığı seçilir (1m en fazla 14 gün, 5m en fazla 60 gün);
 OKX geçmiş mumlarıyla her mum kapanışında canlı tarayıcının göreceği setup'lar bulunur ve emirler sonraki mumlarda simüle edilir
 (gelecek veri kullanılmaz). Hesap Web Worker'larda yapılır.
 

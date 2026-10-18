@@ -17,6 +17,7 @@ import { fmtPrice, fmtPct, fmtX, fmtTime, esc } from './format.js';
 
 const $ = (sel) => document.querySelector(sel);
 const NET_KEYS = ['timeframe', 'topN', 'manualCoins'];
+const SHORT_TF = new Set(['1m', '5m']); // gürültü / komisyon uyarısı
 
 const state = {
   settings: loadSettings(),
@@ -718,6 +719,10 @@ function select(s) {
 function render() {
   document.querySelector('.layout').classList.remove('stale');
   renderSummary();
+  if (SHORT_TF.has(state.scan.tf.id)) {
+    $('#summary').insertAdjacentHTML('afterbegin', `<p class="note">⚠ ${esc(state.scan.tf.id)}: 600 mum yalnızca ${state.scan.tf.id === '1m' ? '10 saat' : '2 gün'}; dalga sayımı gürültülü.
+      Stop dar olduğu için komisyon R'nin büyük kısmını yer (kartlardaki komisyon uyarısına bak).</p>`);
+  }
   const vis = visibleSetups();
   const keep = state.selected && vis.find((s) => setupKey(s) === setupKey(state.selected));
   state.selected = keep || vis[0] || null;

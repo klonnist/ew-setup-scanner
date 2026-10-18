@@ -9,7 +9,11 @@ import { fmtPct, fmtX, esc } from '../ui/format.js';
 const $ = (s) => document.querySelector(s);
 const PKEY = 'ew-setup-scanner:btparams:v1';
 const DAY = 86400e3;
+// Kısa zaman dilimlerinde istek sayısı çok büyür (1m'de 1 yıl ≈ coin başına 5000+ istek): aralık sınırlı.
+const MAX_DAYS = { '1m': 14, '5m': 60 };
 const QUICK = {
+  '1m': [['1 gün', 1], ['3 gün', 3], ['7 gün', 7]],
+  '5m': [['7 gün', 7], ['14 gün', 14], ['30 gün', 30]],
   '15m': [['7 gün', 7], ['30 gün', 30], ['90 gün', 90]],
   '4H': [['3 ay', 91], ['6 ay', 182], ['1 yıl', 365]],
   '1D': [['1 yıl', 365], ['2 yıl', 730], ['3 yıl', 1095]],
@@ -67,14 +71,33 @@ function coinCount() {
   return toScanOptions(settings).manualCoins?.length || 0;
 }
 
+/** Seçilen aralık; kısa zaman diliminde en fazla MAX_DAYS gün (başlangıç ileri alınır). */
+function rangeOf() {
+  const to = Math.min(dayMs(params.to, true), Date.now());
+  let from = dayMs(params.from);
+  const max = MAX_DAYS[params.tf];
+  const clipped = max != null && to - from > max * DAY;
+  if (clipped) from = to - max * DAY;
+  return { from, to, clipped, max };
+}
+
 function updateEstimate() {
   const tf = TIMEFRAMES[params.tf];
-  const from = dayMs(params.from), to = dayMs(params.to, true);
+  const { from, to, clipped, max } = rangeOf();
   if (!(to > from)) { $('#estimate').textContent = 'Bitiş tarihi başlangıçtan sonra olmalı.'; return; }
+  if (clipped) {
+    $('#estimate').textContent = `${params.tf}'de en fazla ${max} gün test edilir: başlangıç ${isoDay(from)} alınacak. `;
+    $('#estimate').append(estimateText(tf, from, to));
+    return;
+  }
+  $('#estimate').textContent = estimateText(tf, from, to);
+}
+
+function estimateText(tf, from, to) {
   const req = estimateRequests(tf, from - windowFor(params.mode) * tf.ms, to) * coinCount();
   const bars = Math.round((Math.min(to, Date.now()) - from) / tf.ms);
   const sec = Math.round(req * 0.12 + (bars * coinCount() * 0.0006) / Math.max(1, workerCount()));
-  $('#estimate').textContent = `${coinCount()} coin × ${bars.toLocaleString('tr-TR')} mum · ~${req.toLocaleString('tr-TR')} OKX isteği · tahmini süre ${sec < 90 ? sec + ' sn' : Math.round(sec / 60) + ' dk'} (aynı aralık sayfa açıkken tekrar indirilmez)`;
+  return `${coinCount()} coin × ${bars.toLocaleString('tr-TR')} mum · ~${req.toLocaleString('tr-TR')} OKX isteği · tahmini süre ${sec < 90 ? sec + ' sn' : Math.round(sec / 60) + ' dk'} (aynı aralık sayfa açıkken tekrar indirilmez)`;
 }
 
 const workerCount = () => Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1));
@@ -118,7 +141,7 @@ function setStatus(html) { $('#status').innerHTML = html; }
 async function run() {
   if (running) return;
   const tf = TIMEFRAMES[params.tf];
-  const from = dayMs(params.from), to = Math.min(dayMs(params.to, true), Date.now());
+  const { from, to } = rangeOf();
   if (!(to > from)) return setStatus('<p class="error">Bitiş tarihi başlangıçtan sonra olmalı.</p>');
   const scan = toScanOptions(settings);
   const opts = { ...scan, mode: params.mode, entryType: params.entryType, onlyPerfect: !!params.onlyPerfect };

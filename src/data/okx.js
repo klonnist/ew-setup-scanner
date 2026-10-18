@@ -17,6 +17,8 @@ export const STABLES = new Set([
 ]);
 
 export const TIMEFRAMES = {
+  '1m': { id: '1m', okxBar: '1m', label: '1 dakika', ms: 60e3 },
+  '5m': { id: '5m', okxBar: '5m', label: '5 dakika', ms: 5 * 60e3 },
   '15m': { id: '15m', okxBar: '15m', label: '15 dakika', ms: 15 * 60e3 },
   '4H': { id: '4H', okxBar: '4H', label: '4 saat', ms: 4 * 3600e3 },
   '1D': { id: '1D', okxBar: '1Dutc', label: '1 gün', ms: 86400e3 },
