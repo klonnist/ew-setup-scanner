@@ -20,7 +20,9 @@ function path(points, { lead = [[0, 50]], tail = [] } = {}) {
 }
 
 // Dalga 3: 50 → 100 (40 mum). Üçgen: A 70, B, C 76, D 92, E 80; ardından yükseliş (E onayı).
-const W3 = [[0, 50], [40, 100]];
+// Dalga 3: 50 → 100, 5 dalgalı itki (1: 70, 2: 62, 3: 90, 4: 84, 5: 100). Düz çizgi versiyonu itki değildir.
+const W3 = [[0, 50], [8, 70], [14, 62], [26, 90], [32, 84], [40, 100]];
+const W3_FLAT = [[0, 50], [40, 100]];
 const TRI = (B) => [70, B, 76, 92, 80];
 const O = { abcdeSens: [4.5] };
 const run = (B, tail = [[12, 98]], opts = O) => findAbcde(build(path(TRI(B), { lead: W3, tail })), opts);
@@ -97,8 +99,8 @@ test('short aynası', () => {
 test('iç ABC: düz bacak zorunlu modda elenir, tercih modunda kalır', () => {
   // D bacağı düz çizgi (iç yapı yok)
   const pts = path(TRI(95), { lead: W3, tail: [[12, 98]] });
-  // D bacağı: 9.-11. noktalar (lead 2 + 3×3 = 11) → ara iki noktayı doğrusal yap
-  const i = 2 + 3 * 3; // D'nin a noktası
+  // D bacağının ilk iç noktası (lead + 3 bacak × 3 nokta) → doğrusal yap
+  const i = W3.length + 3 * 3; // D'nin a noktası
   const p = pts[i - 1][1], q = pts[i + 1][1];
   pts[i][1] = p + (q - p) * 0.5;
   const c = build(pts);
@@ -127,9 +129,20 @@ test('takip kaydı: ABCDE planları ve A–C / B–D çizgileri zamanla saklanı
   const t = { ...findAbcde(c, O).find((x) => x.direction === 'long'), coin: 'X', instId: 'X-USDT' };
   const snap = snapshot(t, c, { tf: { id: '4H', ms: 3600e3 }, mode: 'abcde' });
   assert.equal(snap.kind, 'abcde');
-  assert.deepEqual(snap.points.map((p) => p.label), ['3', 'A', 'B', 'C', 'D', 'E?']);
+  assert.deepEqual(snap.points.map((p) => p.label), ['0', 'A', 'B', 'C', 'D', 'E?']);
   assert.equal(snap.plans[0].type, 'elimit');
   assert.equal(snap.plans[0].entryKind, 'limit');
   assert.equal(snap.plans[0].cancelFav, t.points.D.price);
   assert.equal(snap.shape.lines[0].t1, c[t.points.A.i].time);
+});
+
+test('önceki hareket: 5 dalgalı itki bulunur; düz harekette itki yok, zorunlu modda üçgen elenir', () => {
+  const t = run(95)[0];
+  assert.ok(t.w3Impulse.ok, 'itki bulunamadı');
+  assert.deepEqual(t.w3Impulse.points.map((p) => Math.round(p.price)), [70, 62, 90, 84]);
+  const flat = build(path(TRI(95), { lead: W3_FLAT, tail: [[12, 98]] }));
+  const f = findAbcde(flat, O).find((x) => x.direction === 'long');
+  assert.ok(f && !f.w3Impulse.ok);
+  assert.ok(f.rules.some((r) => r.id === 'W3' && !r.ok));
+  assert.equal(findAbcde(flat, { ...O, w3Check: 'require' }).filter((x) => x.direction === 'long').length, 0);
 });

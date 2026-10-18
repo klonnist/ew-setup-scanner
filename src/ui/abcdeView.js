@@ -36,6 +36,7 @@ export function abcdeCard(t, { selected }) {
     </div>
     <div class="meta">
       <span>${ratios}</span>
+      <span>${t.w3Impulse?.ok ? 'önceki hareket itki ✓' : 'önceki hareket itki ✗'}</span>
       <span>${t.innerOk ? 'iç ABC ✓' : `iç yapı bulunamadı: ${esc(t.missing.join(', '))}`}</span>
       <span>derece ${t.sensitivity}×ATR</span>
     </div>
@@ -93,7 +94,7 @@ export function abcdeDetail(t, { tfId, feePct, eRetr }) {
     <div class="legend" id="abcdeLegend"></div>
     <div class="facts">
       ${fact('Güncel fiyat', fmtPrice(t.price))}
-      ${fact('Dalga 3', `${fmtPrice(P.w3s.price, t.price)} → ${fmtPrice(P.p0.price, t.price)}`, ` <small class="muted">${pct(P.p0.price, P.w3s.price)}</small>`)}
+      ${fact('Önceki hareket → 0', `${fmtPrice(P.w3s.price, t.price)} → ${fmtPrice(P.p0.price, t.price)}`, ` <small class="muted">${pct(P.p0.price, P.w3s.price)} · ${t.w3Impulse?.ok ? `5 dalgalı itki ✓ (dalga 3, alt derece ÷${t.w3Impulse.div})` : 'itki doğrulanamadı ✗'}</small>`)}
       ${fact('E limiti (C–D %61,8)', fmtPrice(t.levels.eLimit, t.price))}
       ${fact('Stop', fmtPrice(t.levels.stop, t.price))}
       ${fact('Skor', `${t.score}/100`)}
@@ -106,5 +107,5 @@ export function abcdeDetail(t, { tfId, feePct, eRetr }) {
     <div class="table-wrap"><table class="stat"><thead><tr><th>Bacak</th><th>Fiyat</th><th>Boy</th><th>Mum</th><th>Oran</th><th>İç yapı</th></tr></thead><tbody>${legs}</tbody></table></div>
     <h3 class="sec">Hedefler</h3>
     <ul class="levels">${targets}</ul>
-    <p class="muted small">Dalga 3 uzantıları log ölçekte, görünen penceredeki dalga 3 başlangıcından ölçülür.</p>`;
+    <p class="muted small">0 = üçgenin başlangıcı (önceki hareket itkiyse dalga 3'ün sonu). Uzantılar log ölçekte, görünen pencerede önceki hareketin başından ölçülür.</p>`;
 }

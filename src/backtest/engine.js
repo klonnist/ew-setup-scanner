@@ -161,7 +161,7 @@ export function backtestCoin(candles, cfg) {
       const P = tr.points;
       const abs = (p) => candles[p.i + off].time;
       const base = `${tr.direction}|${abs(P.p0)}|${abs(P.A)}|${abs(P.B)}|${abs(P.C)}|${abs(P.D)}`;
-      const meta = { sensitivity: tr.sensitivity, score: tr.score, pattern: tr.variant, context: tr.innerOk ? 'inner' : 'loose', strength: null, abc: null, retr: null, timeRatio: null };
+      const meta = { sensitivity: tr.sensitivity, score: tr.score, pattern: tr.variant, context: tr.innerOk ? 'inner' : 'loose', strength: null, abc: tr.w3Impulse.ok ? 'impulse' : 'no-impulse', retr: null, timeRatio: null };
       for (const p of tr.plans) {
         const isLimit = p.type === 'elimit';
         if (isLimit && !tr.forming) continue; // limit yalnızca E oluşurken verilir

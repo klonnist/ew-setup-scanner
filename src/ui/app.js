@@ -559,7 +559,7 @@ function renderWatchDetail() {
   box.innerHTML = watchDetail(it, evals, { price: watchPrice(it) });
   const data = state.watchData.get(`${it.instId}|${it.tf}`);
   const legend = it.kind === 'abcde'
-    ? [['3-A-B-C-D-E', '#f0c75e', ''], ['A–C / B–D', '#ef5350', ''], ['Giriş', '#3987e5', ''], ['Stop (C ötesi)', '#ef5350', 'dash'], ['Hedefler', '#7cc4a8', 'dash']]
+    ? [['0-A-B-C-D-E', '#f0c75e', ''], ['A–C / B–D', '#ef5350', ''], ['Giriş', '#3987e5', ''], ['Stop (C ötesi)', '#ef5350', 'dash'], ['Hedefler', '#7cc4a8', 'dash']]
     : it.shape
     ? [...TRI_LEGEND.slice(0, 3), ['Giriş', '#3987e5', ''], ['Stop', '#ef5350', 'dash'], ['Hedefler', '#7cc4a8', 'dash']]
     : [['Dalga yolu', '#f0c75e', ''], ['Giriş', '#3987e5', ''], ['Stop', '#ef5350', 'dash'], ['0 / geçersiz', '#b06cf0', 'dash'], ['Hedefler', '#7cc4a8', 'dash']];

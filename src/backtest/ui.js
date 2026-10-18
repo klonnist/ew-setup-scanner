@@ -234,7 +234,7 @@ const SETTING_KEYS = ['ruleSet', 'sensitivities', 'w1Extend', 'retrMin', 'retrMa
   'rsiMode', 'volume', 'stopMode', 'stopAtr', 'targets', 'minRR', 'direction', 'zoneCExt', 'zoneRetr', 'zoneEntry', 'zoneStop', 'zoneTime',
   'perfectAtr', 'zoneFrontAtr', 'approachAtr', 'onlyPerfect', 'minRiskPct',
   'triType', 'triContext', 'flatAtr', 'minTops', 'minBottoms', 'minWidthBars', 'triTarget', 'triMinRR',
-  'abcdeEntry', 'eRetr', 'innerAbc', 'abcdeVariant', 'abcdeSens', 'abcdeStopAtr', 'abcdeTarget', 'abcdeMinRR'];
+  'abcdeEntry', 'eRetr', 'innerAbc', 'w3Check', 'abcdeVariant', 'abcdeSens', 'abcdeStopAtr', 'abcdeTarget', 'abcdeMinRR'];
 const TRI_TARGET_TXT = { mm: 'ölçülü hareket', f382: '%38,2', f50: '%50', f618: '%61,8', f786: '%78,6', f100: '%100' };
 function pickSettings(o) { return Object.fromEntries(SETTING_KEYS.map((k) => [k, o[k]])); }
 
@@ -254,6 +254,7 @@ function settingsText(p) {
   if (p.mode === 'abcde') {
     return [
       'ABCDE üçgen',
+      s.w3Check === 'require' ? 'önceki hareket itki zorunlu' : 'itki tercih',
       { both: 'E limiti + E onayı', limit: 'sadece E limiti', confirm: 'sadece E onayı' }[s.abcdeEntry] || s.abcdeEntry,
       `E = C–D %${+(s.eRetr * 100).toFixed(1)}`,
       s.innerAbc === 'prefer' ? 'iç ABC tercih' : 'iç ABC zorunlu',
@@ -357,7 +358,7 @@ function reachTable(list) {
 /** ABCDE: girişten sonra stop görülmeden hangi hedeflere ulaşıldı (plan ve tipe göre). */
 function abcdeReachTable(list) {
   if (!list.length) return '';
-  const KEYS = [['top', "Dalga 3 ucu (running'de B)"], ['thrust', 'Thrust'], ['e1236', 'Dalga 3 × 1,236'], ['e1618', 'Dalga 3 × 1,618']];
+  const KEYS = [['top', "Başlangıç 0 (running'de B)"], ['thrust', 'Thrust'], ['e1236', 'Önceki hareket × 1,236'], ['e1618', 'Önceki hareket × 1,618']];
   const groups = [
     ['Hepsi', list],
     ...['elimit', 'econfirm'].map((ty) => [TYPE_NAME[ty], list.filter((t) => t.type === ty)]),
@@ -413,13 +414,14 @@ function show(runObj) {
     groupTable(`Komisyon maliyeti (%${p.feePct} → R)`, closed, (t) => feeBucket(tradeFeeR(t, p.feePct)), { order: FEE_BUCKETS }),
     groupTable('Üçgen tipi', closed.filter((t) => t.type === 'triangle'), (t) => (t.pattern === 'asc' ? 'Yükselen (yukarı kırılım)' : t.pattern === 'desc' ? 'Alçalan (aşağı kırılım)' : null)),
     groupTable('Önceki hareket (üçgen)', closed.filter((t) => t.type === 'triangle'), (t) => CONTEXT_TXT[t.context] || 'bağlam yok'),
-    groupTable('ABCDE tipi', closed.filter((t) => t.reach), (t) => (t.pattern === 'running' ? 'Running (B, 3 ucunu geçti)' : 'Daralan')),
+    groupTable('ABCDE tipi', closed.filter((t) => t.reach), (t) => (t.pattern === 'running' ? "Running (B, 0'ı geçti)" : 'Daralan')),
     groupTable('ABCDE iç yapı', closed.filter((t) => t.reach), (t) => (t.context === 'inner' ? 'Her bacak 3’lü' : 'Eksik iç yapı')),
+    groupTable('ABCDE önceki hareket', closed.filter((t) => t.reach), (t) => (t.abc === 'impulse' ? 'İtki (dalga 3) ✓' : 'İtki doğrulanamadı')),
     groupTable('Bölge gücü (limit bölge)', closed.filter((t) => t.type === 'zone'), (t) => t.strength),
     groupTable('Bölgede çakışan seviye', closed.filter((t) => t.type === 'zone'), (t) => `${t.inside} çakışma`),
     groupTable('★ Mükemmel mi (iki kenar çakışıyor)', closed, (t) => (t.perfect == null ? null : t.perfect ? '★ Mükemmel' : 'Değil')),
     groupTable('Bölge genişliği (iki kenar farkı)', closed, (t) => widthBucket(t.widthAtr), { order: WIDTH_BUCKETS }),
-    groupTable('Dalga 2 tipi', closed, (t) => t.abc || 'ABC yok'),
+    groupTable('Dalga 2 tipi', closed.filter((t) => !t.reach), (t) => t.abc || 'ABC yok'),
     groupTable('Derece (× ATR)', closed, (t) => `${t.sensitivity}×`),
     groupTable('Kademeli dolum', closed.filter((t) => t.type === 'zone' && t.legs > 1), (t) => `${t.filledLegs}/${t.legs} doldu`),
     groupTable('Coin (en iyi / en kötü)', closed, (t) => t.coin, { limit: 5, sort: 'R' }),

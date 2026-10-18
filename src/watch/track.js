@@ -84,7 +84,7 @@ export function snapshot(s, candles, ctx) {
         cancelBeyond: null, cancelFav: limitOpen ? P.D.price : null, activeFrom: null,
       });
     }
-    const names = ['3', 'A', 'B', 'C', 'D', s.forming ? 'E?' : 'E'];
+    const names = ['0', 'A', 'B', 'C', 'D', s.forming ? 'E?' : 'E'];
     return {
       ...base,
       kind: 'abcde',

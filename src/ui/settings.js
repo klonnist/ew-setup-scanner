@@ -87,10 +87,11 @@ const FIELDS = [
   ['abcdeEntry', 'ABCDE: giriş', 'select', { options: [['both', 'İkisi: E limiti + E onayı'], ['limit', "Sadece E limiti (C–D %61,8)"], ['confirm', 'Sadece E onayı']] }],
   ['eRetr', 'ABCDE: E limiti (C–D geri alımı)', 'pct', { hint: 'E = D − oran × (D − C). Varsayılan %61,8; E aşabilir, stop C’nin ötesinde.' }],
   ['innerAbc', 'ABCDE: her bacak 3’lü (ABC)', 'select', { options: [['require', 'Zorunlu'], ['prefer', 'Tercih (elemez, puan düşer)']] }],
+  ['w3Check', 'ABCDE: önceki hareket 5 dalgalı itki (dalga 3)', 'select', { options: [['prefer', 'Tercih (elemez, puan)'], ['require', 'Zorunlu']] }],
   ['abcdeVariant', 'ABCDE: tip', 'select', { options: [['all', 'Running + daralan'], ['running', "Sadece running (B, 3'ün ucunu geçti)"], ['contracting', 'Sadece daralan']] }],
   ['abcdeSens', 'ABCDE: ZigZag duyarlılığı (× ATR)', 'list', { hint: 'Üçgenler büyük dereceli olabilir; 6 da taranır.' }],
   ['abcdeStopAtr', 'ABCDE: stop tamponu (C ötesi, × ATR)', 'number', { step: 0.05, min: 0 }],
-  ['abcdeTarget', 'ABCDE: ana hedef (R:R)', 'select', { options: [['thrust', 'Thrust (E + en geniş bacak)'], ['top', 'Dalga 3 ucu'], ['e1236', 'Dalga 3 × 1,236'], ['e1618', 'Dalga 3 × 1,618']] }],
+  ['abcdeTarget', 'ABCDE: ana hedef (R:R)', 'select', { options: [['thrust', 'Thrust (E + en geniş bacak)'], ['top', 'Başlangıç (0)'], ['e1236', 'Önceki hareket × 1,236'], ['e1618', 'Önceki hareket × 1,618']] }],
   ['abcdeMinRR', 'ABCDE: min. R:R', 'number', { step: 0.25, min: 0 }],
   ['autoRefresh','Otomatik yenileme', 'select', { options: [[0, 'Kapalı'], [5, '5 dakikada bir'], [15, '15 dakikada bir']], num: true, hint: 'Sekme açıkken çalışır; yeni setup çıkınca bildirim gösterir.' }],
 ];

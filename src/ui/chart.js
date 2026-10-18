@@ -218,7 +218,7 @@ export const TRI_LEGEND = [
 // ---------------------------------------------------------------- ABCDE üçgen (dalga 4)
 const A5 = { path: '#e8ebf1', w3: '#8f99aa', ac: '#ef5350', bd: '#ef5350', limit: '#ff9f43', entry: '#3987e5', stop: '#ef5350', target: '#7cc4a8' };
 
-/** ABCDE: 3-A-B-C-D-E yolu ve etiketler, A–C ve B–D çizgileri (ileri uzatılmış), dalga 3, E limiti / giriş / stop / hedefler. */
+/** ABCDE: 0-A-B-C-D-E yolu ve etiketler, A–C ve B–D çizgileri (ileri uzatılmış), önceki hareket, E limiti / giriş / stop / hedefler. */
 export function drawAbcde(el, candles, live, t, { plans = t.plans } = {}) {
   destroyChart();
   const LW = window.LightweightCharts;
@@ -250,8 +250,9 @@ export function drawAbcde(el, candles, live, t, { plans = t.plans } = {}) {
     color, lineWidth: width, lineStyle: style, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, priceFormat: pf,
   });
   const P = t.points;
-  // Dalga 3 (kesikli) ve 3-A-B-C-D-E yolu
-  chart.addSeries(LW.LineSeries, lineOpts(A5.w3, LW.LineStyle.Dashed, 1)).setData([{ time: tm(P.w3s.i), value: P.w3s.price }, { time: tm(P.p0.i), value: P.p0.price }]);
+  // Önceki hareket: itki bulunduysa 1-2-3-4 üzerinden, yoksa düz kesikli çizgi
+  const imp = t.w3Impulse?.ok ? t.w3Impulse.points : [];
+  chart.addSeries(LW.LineSeries, lineOpts(A5.w3, LW.LineStyle.Dashed, 1)).setData([P.w3s, ...imp, P.p0].map((p) => ({ time: tm(p.i), value: p.price })));
   const seq = [P.p0, P.A, P.B, P.C, P.D, P.E];
   chart.addSeries(LW.LineSeries, lineOpts(A5.path, LW.LineStyle.Solid, 1)).setData(seq.map((p) => ({ time: tm(p.i), value: p.price })));
   // A–C ve B–D çizgileri: E'nin biraz ötesine kadar
@@ -262,9 +263,10 @@ export function drawAbcde(el, candles, live, t, { plans = t.plans } = {}) {
   };
   ray(t.lineAC, A5.ac);
   ray(t.lineBD, A5.bd);
-  const names = ['3', 'A', 'B', 'C', 'D', t.forming ? 'E?' : 'E'];
+  const names = ['0', 'A', 'B', 'C', 'D', t.forming ? 'E?' : 'E'];
   LW.createSeriesMarkers(series, [
     { time: tm(P.w3s.i), position: P.w3s.type === 'H' ? 'aboveBar' : 'belowBar', shape: 'circle', color: A5.w3, text: '' },
+    ...imp.map((p, n) => ({ time: tm(p.i), position: p.type === 'H' ? 'aboveBar' : 'belowBar', shape: 'circle', color: A5.w3, text: `(${n + 1})` })),
     ...seq.map((p, n) => ({ time: tm(p.i), position: p.type === 'H' ? 'aboveBar' : 'belowBar', shape: p.type === 'H' ? 'arrowDown' : 'arrowUp', color: n === 0 ? '#f0c75e' : A5.path, text: names[n] })),
   ].sort((a, b) => a.time - b.time));
 
@@ -275,7 +277,7 @@ export function drawAbcde(el, candles, live, t, { plans = t.plans } = {}) {
     else line(p.entry, A5.entry, 'E onayı', LW.LineStyle.Solid);
   }
   line(t.levels.stop, A5.stop, 'Stop (C)');
-  for (const x of t.levels.targets) line(x.price, A5.target, x.key === 'top' ? '3 ucu' : x.key === 'thrust' ? 'Thrust' : x.key === 'e1236' ? '1,236' : '1,618');
+  for (const x of t.levels.targets) line(x.price, A5.target, x.key === 'top' ? '0 (başlangıç)' : x.key === 'thrust' ? 'Thrust' : x.key === 'e1236' ? '1,236' : '1,618');
 
   chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, P.w3s.i - 10), to: all.length + 6 });
   const ro = new ResizeObserver(([e]) => {
@@ -287,8 +289,8 @@ export function drawAbcde(el, candles, live, t, { plans = t.plans } = {}) {
 }
 
 export const ABCDE_LEGEND = [
-  ['Dalga 3', A5.w3, 'dash'],
-  ['3-A-B-C-D-E', A5.path, ''],
+  ['Önceki hareket', A5.w3, 'dash'],
+  ['0-A-B-C-D-E', A5.path, ''],
   ['A–C / B–D çizgileri', A5.ac, ''],
   ['E limiti (C–D %61,8)', A5.limit, ''],
   ['E onayı girişi', A5.entry, ''],
