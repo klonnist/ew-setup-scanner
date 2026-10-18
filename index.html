@@ -62,10 +62,25 @@
 
     <main class="layout">
       <section class="list" aria-label="Setup listesi">
-        <div class="list-head">
+        <div class="tabs" role="tablist">
+          <button type="button" role="tab" data-view="setups" id="tabSetups">Setup'lar</button>
+          <button type="button" role="tab" data-view="watch" id="tabWatch">★ Takip listem <span id="watchCount" class="count">0</span></button>
+        </div>
+        <div class="list-head setups-only">
           <h2 id="listTitle">Setup'lar</h2>
           <label class="check perfect-toggle wave-only"><input type="checkbox" id="onlyPerfect" /> ★ Sadece mükemmel</label>
           <label class="check"><input type="checkbox" id="showAll" /> Kaçan / bozulanları da göster</label>
+        </div>
+        <div class="list-head watch-only">
+          <select id="watchFilter" aria-label="Takip listesi filtresi">
+            <option value="all">Hepsi</option>
+            <option value="open">Açık (bekliyor / girildi)</option>
+            <option value="closed">Kapanan</option>
+          </select>
+          <button type="button" id="watchRefresh" class="ghost sm">Yenile</button>
+          <button type="button" id="watchExport" class="ghost sm">Dışa aktar</button>
+          <label class="ghost filebtn sm">İçe aktar<input type="file" id="watchImport" accept="application/json,.json" hidden /></label>
+          <span class="muted small" id="watchInfo"></span>
         </div>
         <div id="cards" class="cards"></div>
       </section>

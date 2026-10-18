@@ -5,6 +5,12 @@ import { pickTriangles } from '../scan/triangle.js';
 import { loadSettings, saveSettings, renderSettings, toScanOptions, UI_DEFAULTS } from './settings.js';
 import { drawSetup, drawTriangle, destroyChart, LEGEND, TRI_LEGEND } from './chart.js';
 import { triCard, triDetail, triSummary, triKey } from './triangleView.js';
+import { drawWatch } from './chart.js';
+import { watchCard, watchDetail } from './watchView.js';
+import { snapshot, evaluatePlan, isOpen } from '../watch/track.js';
+import { loadWatch, addWatch, removeWatch, updateWatch, saveAll, findByKey, exportWatch, importWatch } from '../watch/store.js';
+import { getCandles, TIMEFRAMES } from '../data/okx.js';
+import { LONG_BARS } from '../scan/scanner.js';
 import { fmtPrice, fmtPct, fmtX, fmtTime, esc } from './format.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -20,6 +26,10 @@ const state = {
   abort: null,
   timer: null,
   seenKeys: null,
+  view: 'setups', // 'setups' | 'watch'
+  watchEval: new Map(), // kayıt id → planların evaluatePlan sonuçları
+  watchData: new Map(), // "instId|tf" → { candles, live }
+  selectedWatch: null,
 };
 
 const isTri = () => state.settings.mode === 'triangle';
@@ -76,6 +86,7 @@ async function scan({ silent = false } = {}) {
     state.setups = res.setups;
     notifyNew(silent);
     render();
+    refreshWatch({ notify: silent });
   } catch (err) {
     if (err.name === 'AbortError' && ctrl.signal.aborted) return; // yerine yeni tarama başladı
     $('#summary').innerHTML = `<p class="error">Tarama başarısız: ${esc(err.message)}</p>`;
@@ -329,7 +340,178 @@ function renderCards() {
     box.innerHTML = vis.map(card).join('');
   }
   for (const el of box.querySelectorAll('.card')) {
-    el.addEventListener('click', () => select(vis.find((s) => setupKey(s) === el.dataset.key)));
+    const s = vis.find((x) => setupKey(x) === el.dataset.key);
+    el.addEventListener('click', () => select(s));
+    addStar(el.querySelector('.head'), s);
+  }
+}
+
+// ------------------------------------------------------------------ ★ takip listesi
+function watchKeyOf(s) {
+  const r = resultOf(s);
+  return snapshot(s, s.kind === 'triangle' ? r.longCandles : r.candles, { tf: state.scan.tf, mode: state.settings.mode }).key;
+}
+
+/** Kart başlığına (ya da ayrıntı başlığına) ☆/★ düğmesi; tıklama kartı seçmez. */
+function addStar(head, s) {
+  if (!head || !s) return;
+  const on = !!findByKey(watchKeyOf(s));
+  const star = document.createElement('span');
+  star.className = `star${on ? ' on' : ''}`;
+  star.setAttribute('role', 'button');
+  star.setAttribute('tabindex', '0');
+  star.setAttribute('aria-label', on ? 'Takipten çıkar' : 'Takibe al');
+  star.title = on ? 'Takipten çıkar' : 'Takibe al';
+  star.textContent = on ? '★' : '☆';
+  const act = (e) => { e.preventDefault(); e.stopPropagation(); toggleStar(s); };
+  star.addEventListener('click', act);
+  star.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') act(e); });
+  head.appendChild(star);
+}
+
+function toggleStar(s) {
+  const r = resultOf(s);
+  const snap = snapshot(s, s.kind === 'triangle' ? r.longCandles : r.candles, { tf: state.scan.tf, mode: state.settings.mode });
+  const existing = findByKey(snap.key);
+  if (existing) removeWatch(existing.id);
+  else {
+    if (!snap.plans.length) { alert('Bu setup\'ın takip edilecek aktif planı yok.'); return; }
+    addWatch(snap);
+    refreshWatch({ ids: [snap.id] });
+  }
+  updateWatchCount();
+  renderCards();
+  if (state.selected) {
+    renderDetail();
+    addStar(document.querySelector('#detail .detail-head'), state.selected);
+  }
+}
+
+function updateWatchCount() {
+  const list = loadWatch();
+  $('#watchCount').textContent = String(list.length);
+}
+
+/** Takip listesindeki coin / zaman dilimi çiftleri için mumları getirir ve durumları hesaplar. */
+async function refreshWatch({ notify = false, ids = null } = {}) {
+  const list = loadWatch();
+  const items = ids ? list.filter((x) => ids.includes(x.id)) : list;
+  if (!items.length) { if (state.view === 'watch') renderWatch(); return; }
+  $('#watchInfo').textContent = 'güncelleniyor…';
+  const pairs = [...new Set(items.map((x) => `${x.instId}|${x.tf}`))];
+  await Promise.all(pairs.map(async (pk) => {
+    const [instId, tf] = pk.split('|');
+    // Bu taramada zaten indirildiyse yeniden indirme
+    const r = state.scan?.tf.id === tf ? state.scan.results.find((x) => x.instId === instId && x.longCandles?.length) : null;
+    if (r) { state.watchData.set(pk, { candles: r.longCandles, live: r.live }); return; }
+    try {
+      const { candles, live } = await getCandles(instId, TIMEFRAMES[tf] || TIMEFRAMES['4H'], LONG_BARS);
+      state.watchData.set(pk, { candles, live });
+    } catch { /* ağ hatası: önceki veri kalır */ }
+  }));
+  const changes = [];
+  for (const it of items) {
+    const data = state.watchData.get(`${it.instId}|${it.tf}`);
+    if (!data) continue;
+    const all = data.live ? [...data.candles, data.live] : data.candles;
+    const price = all[all.length - 1]?.close;
+    const evals = it.plans.map((p) => evaluatePlan(p, all, it.savedAt, { d: it.d, price }));
+    state.watchEval.set(it.id, evals);
+    const keys = evals.map((e) => e.key);
+    if (it.lastStatus && keys.some((k, i) => k !== it.lastStatus[i])) changes.push({ it, evals });
+    it.lastStatus = keys;
+  }
+  // lastStatus'u kalıcı yaz (aynı olay iki kez bildirilmesin)
+  const byId = new Map(items.map((x) => [x.id, x]));
+  saveAll(loadWatch().map((x) => (byId.has(x.id) ? { ...x, lastStatus: byId.get(x.id).lastStatus } : x)));
+  $('#watchInfo').textContent = `güncellendi ${fmtTime(Date.now())}`;
+  if (notify && changes.length && 'Notification' in window && Notification.permission === 'granted') {
+    const body = changes.slice(0, 6).map(({ it, evals }) => `${it.coin} ${it.tf} ${it.d === 1 ? '▲' : '▼'} · ${evals.map((e) => e.stateLabel + (e.targetsHit ? ` H${e.targetsHit}` : '')).join(' / ')}`).join('\n');
+    try { new Notification('★ Takip listesinde değişiklik', { body }); } catch { /* yoksay */ }
+  }
+  if (state.view === 'watch') renderWatch();
+}
+
+function watchPrice(it) {
+  const d = state.watchData.get(`${it.instId}|${it.tf}`);
+  if (!d) return null;
+  return (d.live || d.candles[d.candles.length - 1])?.close ?? null;
+}
+
+function renderWatch() {
+  const filter = $('#watchFilter').value;
+  const list = loadWatch().filter((it) => {
+    if (filter === 'all') return true;
+    const evals = state.watchEval.get(it.id);
+    const open = !evals || evals.some((e) => isOpen(e.state));
+    return filter === 'open' ? open : !open;
+  });
+  const box = $('#cards');
+  if (!list.length) {
+    box.innerHTML = `<div class="empty muted">${loadWatch().length ? 'Bu filtrede kayıt yok.' : 'Takip listen boş.<br/>Setup\'lar sekmesinde bir kartın ☆ simgesine basınca buraya eklenir.'}</div>`;
+  } else {
+    box.innerHTML = list.map((it) => watchCard(it, state.watchEval.get(it.id), { selected: it.id === state.selectedWatch, price: watchPrice(it) })).join('');
+    for (const el of box.querySelectorAll('.watch-card')) {
+      const open = () => { state.selectedWatch = el.dataset.wid; renderWatch(); };
+      el.addEventListener('click', open);
+      el.addEventListener('keydown', (e) => { if (e.key === 'Enter') open(); });
+    }
+  }
+  if (!list.some((x) => x.id === state.selectedWatch)) state.selectedWatch = list[0]?.id ?? null;
+  renderWatchDetail();
+}
+
+function renderWatchDetail() {
+  const it = loadWatch().find((x) => x.id === state.selectedWatch);
+  const box = $('#detail');
+  if (!it) {
+    destroyChart();
+    box.innerHTML = '<div class="empty muted">Takip listesinden bir işlem seçince grafiği ve durumu burada görünür.</div>';
+    return;
+  }
+  const evals = state.watchEval.get(it.id) || [];
+  box.innerHTML = watchDetail(it, evals, { price: watchPrice(it) });
+  const data = state.watchData.get(`${it.instId}|${it.tf}`);
+  if (data) drawWatch($('#chart'), data.candles, data.live, it, evals);
+  else $('#chart').innerHTML = '<p class="muted" style="padding:16px">Grafik verisi yükleniyor…</p>';
+  $('#watchSaveNote').addEventListener('click', () => { updateWatch(it.id, { note: $('#watchNote').value.trim() }); renderWatch(); });
+  $('#watchRemove').addEventListener('click', () => {
+    if (!confirm(`${it.coin} takipten çıkarılsın mı?`)) return;
+    removeWatch(it.id);
+    state.selectedWatch = null;
+    updateWatchCount();
+    renderWatch();
+  });
+}
+
+function setView(v) {
+  state.view = v;
+  try { localStorage.setItem('ew-setup-scanner:view', v); } catch { /* yoksay */ }
+  document.body.classList.toggle('view-watch', v === 'watch');
+  $('#tabSetups').setAttribute('aria-selected', String(v === 'setups'));
+  $('#tabWatch').setAttribute('aria-selected', String(v === 'watch'));
+  if (v === 'watch') { renderWatch(); refreshWatch(); }
+  else if (state.scan) { renderCards(); renderDetail(); }
+  else { destroyChart(); $('#cards').innerHTML = ''; $('#detail').innerHTML = '<div class="empty muted">Bir setup seçince grafik ve kural kontrolleri burada görünür.</div>'; }
+}
+
+function exportWatchFile() {
+  const blob = new Blob([exportWatch()], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `ew-takip-listesi-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+async function importWatchFile(file) {
+  try {
+    const n = importWatch(JSON.parse(await file.text()));
+    $('#watchInfo').textContent = `${n} işlem içe aktarıldı`;
+    updateWatchCount();
+    refreshWatch();
+  } catch (err) {
+    $('#watchInfo').textContent = `içe aktarılamadı: ${err.message}`;
   }
 }
 
@@ -438,6 +620,7 @@ function select(s) {
   state.selected = s || null;
   renderCards();
   renderDetail();
+  addStar(document.querySelector('#detail .detail-head'), state.selected);
   if (s && window.matchMedia('(max-width: 900px)').matches) $('#detail').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -447,8 +630,10 @@ function render() {
   const vis = visibleSetups();
   const keep = state.selected && vis.find((s) => setupKey(s) === setupKey(state.selected));
   state.selected = keep || vis[0] || null;
+  if (state.view === 'watch') return renderWatch();
   renderCards();
   renderDetail();
+  addStar(document.querySelector('#detail .detail-head'), state.selected);
 }
 
 // ------------------------------------------------------------------ başlat
@@ -467,6 +652,17 @@ function init() {
     el.hidden = !el.hidden;
     $('#settingsBtn').setAttribute('aria-expanded', String(!el.hidden));
   });
+  // Takip listesi sekmesi
+  $('#tabSetups').addEventListener('click', () => setView('setups'));
+  $('#tabWatch').addEventListener('click', () => setView('watch'));
+  $('#watchFilter').addEventListener('change', renderWatch);
+  $('#watchRefresh').addEventListener('click', () => refreshWatch());
+  $('#watchExport').addEventListener('click', exportWatchFile);
+  $('#watchImport').addEventListener('change', (e) => { if (e.target.files[0]) importWatchFile(e.target.files[0]); e.target.value = ''; });
+  updateWatchCount();
+  let v = 'setups';
+  try { v = localStorage.getItem('ew-setup-scanner:view') === 'watch' ? 'watch' : 'setups'; } catch { /* yoksay */ }
+  setView(v);
   setupAutoRefresh();
   scan();
 }

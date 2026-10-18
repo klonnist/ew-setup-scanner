@@ -37,6 +37,16 @@ Araç çubuğundaki **Giriş tipi** ile seçilir; "İkisi birden" seçilince kar
 
 Tüm eşikler sayfadaki **Ayarlar** bölmesinden değiştirilebilir. Ağ gerektirmeyen ayarlar önbellekteki mumlarla anında yeniden hesaplanır.
 
+## ★ Takip listem
+
+Kartlardaki ☆ ile bir setup takibe alınır: o anki giriş / stop / hedefler dondurulur. **★ Takip listem** sekmesinde her plan
+kayıttan sonraki mumlarla değerlendirilir (backtest ile aynı dolum kuralları): Bekliyor → Girildi → Stop oldu / Hedef görüldü,
+ayrıca Girişe gelmedi / Bozuldu / Süre doldu; açık pozisyonda anlık R. Her taramada ve otomatik yenilemede güncellenir;
+durum değişince bildirim gelir. Not eklenebilir.
+
+Liste **bu tarayıcıda** saklanır (sunucuya gitmez; başka bilgisayar / telefon kendi listesini tutar).
+Taşımak için **Dışa aktar** → diğer cihazda **İçe aktar**.
+
 ## Üçgen kırılımı modu
 
 Araç çubuğunda **Mod → Üçgen kırılımı**. Son 600 mumda (üçgenler aylarca sürebilir) ZigZag dönüş noktalarından:

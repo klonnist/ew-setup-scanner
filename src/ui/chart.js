@@ -214,3 +214,74 @@ export const TRI_LEGEND = [
   ['Ölçülü hedef', T.mm, 'dash'],
   ['Fib hedefleri', T.fib, 'dash'],
 ];
+
+// ---------------------------------------------------------------- takip listesi
+const W = { wave: '#f0c75e', entry: '#3987e5', stop: '#ef5350', target: '#7cc4a8', inval: '#b06cf0', flat: '#f0c75e', fill: '#ff9f43' };
+
+/**
+ * Takip kaydı: güncel mumlar + kayıttaki seviyeler. Pivotlar zamanla eşlenir; pencere dışında kalanlar çizilmez.
+ * @param item  watch kaydı (snapshot)   @param evals  planların evaluatePlan sonuçları
+ */
+export function drawWatch(el, candles, live, item, evals) {
+  destroyChart();
+  const LW = window.LightweightCharts;
+  if (!LW) {
+    el.innerHTML = '<p class="error">Grafik kütüphanesi yüklenemedi.</p>';
+    return;
+  }
+  const all = live ? [...candles, live] : candles;
+  const ref = all[all.length - 1]?.close ?? item.priceAtSave;
+  const prec = decimals(ref);
+  const pf = { type: 'price', precision: prec, minMove: 10 ** -prec };
+  const chart = LW.createChart(el, {
+    width: el.clientWidth,
+    height: el.clientHeight,
+    layout: { background: { type: 'solid', color: C.bg }, textColor: C.text, fontSize: 11, fontFamily: getComputedStyle(document.body).fontFamily },
+    grid: { vertLines: { color: C.grid }, horzLines: { color: C.grid } },
+    rightPriceScale: { borderColor: C.grid },
+    timeScale: { borderColor: C.grid, timeVisible: true, secondsVisible: false, rightOffset: 6 },
+    crosshair: { mode: LW.CrosshairMode.Normal },
+    localization: { locale: 'tr-TR' },
+  });
+  const series = chart.addSeries(LW.CandlestickSeries, {
+    upColor: C.up, downColor: C.down, borderUpColor: C.up, borderDownColor: C.down, wickUpColor: C.up, wickDownColor: C.down, priceFormat: pf,
+  });
+  series.setData(all.map((c) => ({ time: sec(c.time), open: c.open, high: c.high, low: c.low, close: c.close })));
+  const times = new Set(all.map((c) => c.time));
+  const pts = item.points.filter((p) => times.has(p.time)).sort((a, b) => a.time - b.time);
+  if (item.kind === 'wave3' && pts.length > 1) {
+    chart.addSeries(LW.LineSeries, { color: W.wave, lineWidth: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, priceFormat: pf })
+      .setData(pts.map((p) => ({ time: sec(p.time), value: p.price })));
+  }
+  // Kayıt anı ve giriş işaretleri
+  const marks = pts.map((p) => ({ time: sec(p.time), position: p.type === 'H' ? 'aboveBar' : 'belowBar', shape: item.kind === 'wave3' ? (p.type === 'H' ? 'arrowDown' : 'arrowUp') : 'circle', color: W.wave, text: p.label }));
+  const savedBar = all.find((c) => c.time >= item.savedAt) || all[all.length - 1];
+  if (savedBar) marks.push({ time: sec(savedBar.time), position: item.d === 1 ? 'belowBar' : 'aboveBar', shape: 'square', color: '#e8ebf1', text: '★ kayıt' });
+  evals.forEach((ev) => {
+    if (!ev.entryTime) return;
+    const bar = all.find((c) => c.time >= ev.entryTime);
+    if (bar) marks.push({ time: sec(bar.time), position: item.d === 1 ? 'belowBar' : 'aboveBar', shape: item.d === 1 ? 'arrowUp' : 'arrowDown', color: W.fill, text: 'giriş' });
+  });
+  const seenM = new Set();
+  LW.createSeriesMarkers(series, marks.sort((a, b) => a.time - b.time).filter((m) => !seenM.has(m.time + m.text) && seenM.add(m.time + m.text)));
+
+  const line = (price, color, title, style = LW.LineStyle.Dashed) =>
+    series.createPriceLine({ price, color, lineWidth: 1, lineStyle: style, axisLabelVisible: true, title });
+  for (const l of item.lines) line(l.price, l.kind === 'flat' ? W.flat : W.inval, l.title, l.kind === 'flat' ? LW.LineStyle.Solid : LW.LineStyle.Dotted);
+  item.plans.forEach((p, i) => {
+    const tag = item.plans.length > 1 ? (p.type === 'zone' ? ' (bölge)' : ' (B)') : '';
+    p.legs.forEach((lv) => line(lv, W.entry, `Giriş${tag}`, LW.LineStyle.Solid));
+    line(p.stop, W.stop, `Stop${tag}`);
+    if (i === 0) p.targets.forEach((t, k) => line(t.price, W.target, `H${k + 1}`));
+  });
+
+  const first = Math.min(...item.points.map((p) => p.time), item.savedAt);
+  const fromIdx = Math.max(0, all.findIndex((c) => c.time >= first) - 10);
+  chart.timeScale().setVisibleLogicalRange({ from: fromIdx, to: all.length + 6 });
+  const ro = new ResizeObserver(([e]) => {
+    const r = e.contentRect;
+    if (r.width > 0 && r.height > 0) chart.resize(Math.floor(r.width), Math.floor(r.height));
+  });
+  ro.observe(el);
+  current = { chart, ro };
+}
