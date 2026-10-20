@@ -5,6 +5,7 @@
 import { findWave3Setups, DEFAULTS, riskOk } from '../scan/wave3.js';
 import { findTriangles, TRI_DEFAULTS, reachOf } from '../scan/triangle.js';
 import { findAbcde, ABCDE_DEFAULTS, abcdeReach } from '../scan/abcde.js';
+import { findDiagonals, DIAG_DEFAULTS } from '../scan/diagonal.js';
 
 // Üçgen modunda canlı tarayıcıyla aynı uzun pencere (bkz. scanner.js LONG_BARS)
 export const TRI_WINDOW = 600;
@@ -26,10 +27,11 @@ const sideExt = (c, d) => ({ adverse: d === 1 ? c.low : c.high, fav: d === 1 ? c
  */
 export function backtestCoin(candles, cfg) {
   const c = { ...BT_DEFAULTS, ...cfg };
-  const opts = { ...TRI_DEFAULTS, ...ABCDE_DEFAULTS, ...DEFAULTS, ...c.opts, diagnostics: undefined };
+  const opts = { ...TRI_DEFAULTS, ...ABCDE_DEFAULTS, ...DIAG_DEFAULTS, ...DEFAULTS, ...c.opts, diagnostics: undefined };
   const triMode = opts.mode === 'triangle';
   const abcMode = opts.mode === 'abcde';
-  if (triMode || abcMode) c.window = Math.max(c.window, TRI_WINDOW);
+  const diagMode = opts.mode === 'diagonal';
+  if (triMode || abcMode || diagMode) c.window = Math.max(c.window, TRI_WINDOW);
   const trackers = []; // üçgenler: girişten sonra en uç fiyatı (stop görülene kadar) izler
   const useBreak = opts.entryType !== 'zone';
   const useZone = opts.entryType !== 'break';
@@ -66,6 +68,10 @@ export function backtestCoin(candles, cfg) {
     }
     if (abcMode) {
       abcdeStep(win, off, bar, t);
+      continue;
+    }
+    if (diagMode) {
+      diagStep(win, off, bar, t);
       continue;
     }
     const setups = findWave3Setups(win, opts, null);
@@ -190,6 +196,40 @@ export function backtestCoin(candles, cfg) {
     }
   }
 
+  // ---------------------------------------------------------------- diagonal
+  // Ending: kapanış 2–4 çizgisini bu mumda kırdıysa kapanıştan ters yöne piyasa emri.
+  // Leading: diagonal ilk kez tamamlanmış görülünce dalga 2 limiti (5 aşılırsa iptal).
+  function diagStep(win, off, bar, t) {
+    const last = win.length - 1;
+    for (const tr of findDiagonals(win, opts, null)) {
+      const P = tr.points;
+      const p = tr.plans[0];
+      const abs = (q) => candles[q.i + off].time;
+      const key = `${p.type}|${tr.direction}|${abs(P.p0)}|${abs(P.p2)}|${abs(P.p4)}`;
+      const isLimit = p.type === 'dlead';
+      if (!isLimit && !(p.state === 'triggered' && p.fillIdx === last)) continue; // ending: kırılım bu mumda
+      if (seen.has(key)) continue;
+      seen.add(key);
+      orderCount++;
+      if (isLimit && p.state !== 'lwaiting' && p.state !== 'lapproaching') { cancel({ type: p.type }, 'geç algılandı'); continue; }
+      const entry = isLimit ? p.level : bar.close;
+      if (p.rr < opts.diagMinRR) { cancel({ type: p.type }, 'R:R düşük'); continue; }
+      if (!riskOk(entry, p.stop, opts)) { cancel({ type: p.type }, 'stop çok yakın'); continue; }
+      const o = {
+        type: p.type, d: tr.d, created: t, key,
+        legs: [{ level: entry, w: 1, market: !isLimit }],
+        activeFrom: -Infinity,
+        stop: p.stop, target: p.main.price, t1: p.targets[0].price,
+        cancelBeyond: null, cancelFav: isLimit ? P.p5.price : null,
+        meta: { sensitivity: tr.sensitivity, score: tr.score, pattern: tr.shape, context: tr.type, strength: null, abc: null, retr: null, timeRatio: null },
+      };
+      if (!isLimit) fillLeg(o, o.legs[0], bar.close, t);
+      orders.push(o);
+      const targets = p.targets;
+      trackers.push({ o, d: tr.d, stop: p.stop, start: t, mfe: isLimit ? null : bar.close, done: false, reach: (m) => ({ reach: abcdeReach(targets, tr.d, m) }) });
+    }
+  }
+
   function track(k, b, t) {
     const d = k.d ?? k.tr.d;
     const stop = k.stop ?? k.tr.levels.stop;
@@ -264,7 +304,7 @@ export function backtestCoin(candles, cfg) {
 
     const nowOpen = o.legs.some((l) => l.filled);
     if (!nowOpen) {
-      if (o.cancelFav != null && d * (fav - o.cancelFav) > 0) return cancel(o, o.type === 'elimit' ? 'D aşıldı, E limite gelmedi' : 'B kırıldı, bölgeye gelmedi');
+      if (o.cancelFav != null && d * (fav - o.cancelFav) > 0) return cancel(o, { elimit: 'D aşıldı, E limite gelmedi', dlead: '5 aşıldı, dalga 2 limite gelmedi' }[o.type] || 'B kırıldı, bölgeye gelmedi');
       if (d * (fav - o.t1) >= 0) return cancel(o, 'hedef 1 dolmadan görüldü');
       if (t - o.created > c.maxPending) return cancel(o, 'süre aşımı');
       return;

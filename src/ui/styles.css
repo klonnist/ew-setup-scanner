@@ -354,3 +354,13 @@ body.mode-abcde .wave-only { display: none; }
 .rule-list li { padding: 6px 8px; background: var(--surface-2); border-radius: var(--radius-sm); }
 .rule-list .ok { color: var(--good); font-weight: 700; }
 .rule-list .bad { color: var(--bad); font-weight: 700; }
+
+/* Diagonal modu: kural seti seçimi görünür kalır (diagonal kuralları sete göre değişir) */
+body.mode-diagonal .wave-only:not(.diag-show) { display: none; }
+.state.dg-waiting, .state.dg-lwaiting { color: var(--warn); background: rgba(250, 178, 25, 0.14); }
+.state.dg-approaching, .state.dg-lapproaching { color: #1a1300; background: #ffcf5c; font-weight: 600; }
+.state.dg-triggered { color: #fff; background: var(--accent); }
+.state.dg-filled { color: #fff; background: #c9771f; }
+.state.dg-stopped, .state.dg-failed { color: var(--bad); }
+.state.dg-target { color: var(--good); }
+.state.dg-missed, .state.dg-old { color: var(--muted); }

@@ -83,6 +83,21 @@ son 600 mumda ZigZag'in art arda 6 dönüş noktası olarak aranır: 0 = üçgen
 - **Backtest → Mod: Running üçgen:** iki plan ayrı raporlanır; "ABCDE: nereye kadar gitti?" tablosu girişten sonra
   stop görülmeden hangi hedeflere ulaşıldığını plan, tip (running / daralan) ve yöne göre verir.
 
+## Diagonal modu (ending / leading)
+
+Araç çubuğunda **Mod → Diagonal**. Son 600 mumda ZigZag'in art arda 6 dönüş noktası 0-1-2-3-4-5, seçilen kural setinde
+(Kurs / Frost & Prechter / Neely) diagonal olarak geçerli olmalı: dalga 4 dalga 1 bölgesine girer, daralan tipte 1>3>5 ve 2>4
+(genişleyende tersi), 1–3 ve 2–4 çizgileri kama oluşturur. Kurs kuralları en katısıdır; daha fazla aday için kural setini değiştir.
+
+Her diagonal iki ayrı setup verebilir; **Ayarlar → Diagonal: türü** ile süzülür:
+
+- **Ending (dönüş):** 5. / C dalgası yerinde. Kapanış 2–4 çizgisini (0,1 ATR tamponla) kırınca diagonal'in **tersine** giriş.
+  Stop 5'in ötesi; hedefler 4 → 2 → 0 (başlangıç). Kırılım beklenirken tetik o anki 2–4 çizgisi seviyesidir.
+- **Leading (devam):** 1. / A dalgası yerinde. Dalga 2 için 0→5'in %61,8'inde limit, stop 0'ın ötesi;
+  hedefler 5'in ucu, dalga 3 = 1 × ve 1,618 × dalga 1 (limitten). Fiyat limite inmeden 5'i aşarsa kaçtı sayılır.
+- Hangi türün geçerli olduğuna bağlam değil, senin seçimin karar verir (aynı kama ikisi de olabilir).
+- Backtest'te iki tür ayrı raporlanır; "Diagonal: nereye kadar gitti?" tablosu hedeflere ulaşma oranlarını verir.
+
 ## Backtest
 
 [`backtest.html`](https://klonnist.github.io/ew-setup-scanner/backtest.html): zaman dilimi (1m / 5m / 15m / 4H / 1D) ve tarih aralığı seçilir (1m en fazla 14 gün, 5m en fazla 60 gün);

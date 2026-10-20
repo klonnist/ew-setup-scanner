@@ -3,10 +3,12 @@ import { runScan, detect, sortSetups } from '../scan/scanner.js';
 import { pickSetups, activePlans, riskPct, feeR } from '../scan/wave3.js';
 import { pickTriangles, findTriangles } from '../scan/triangle.js';
 import { pickAbcde } from '../scan/abcde.js';
+import { pickDiagonals } from '../scan/diagonal.js';
 import { loadSettings, saveSettings, renderSettings, toScanOptions, UI_DEFAULTS } from './settings.js';
-import { drawSetup, drawTriangle, drawAbcde, destroyChart, LEGEND, TRI_LEGEND, ABCDE_LEGEND } from './chart.js';
+import { drawSetup, drawTriangle, drawAbcde, drawDiagonal, destroyChart, LEGEND, TRI_LEGEND, ABCDE_LEGEND, DIAG_LEGEND } from './chart.js';
 import { triCard, triDetail, triSummary, triKey } from './triangleView.js';
 import { abcdeCard, abcdeDetail, abcdeSummary, abcdeKey } from './abcdeView.js';
+import { diagCard, diagDetail, diagSummary, diagKey } from './diagonalView.js';
 import { drawWatch } from './chart.js';
 import { watchCard, watchDetail } from './watchView.js';
 import { snapshot, evaluatePlan, isOpen, triangleShape } from '../watch/track.js';
@@ -37,8 +39,9 @@ const state = {
 
 const isTri = () => state.settings.mode === 'triangle';
 const isAbc = () => state.settings.mode === 'abcde';
-const LONG_KINDS = new Set(['triangle', 'abcde']); // 600 mumluk pencerede bulunanlar
-const setupKey = (s) => (s.kind === 'triangle' ? triKey(s) : s.kind === 'abcde' ? abcdeKey(s) : `${s.coin}|${s.direction}|${s.phase}|${s.points.p0.price}|${s.points.p1.price}`);
+const isDiag = () => state.settings.mode === 'diagonal';
+const LONG_KINDS = new Set(['triangle', 'abcde', 'diagonal']); // 600 mumluk pencerede bulunanlar
+const setupKey = (s) => (s.kind === 'triangle' ? triKey(s) : s.kind === 'abcde' ? abcdeKey(s) : s.kind === 'diagonal' ? diagKey(s) : `${s.coin}|${s.direction}|${s.phase}|${s.points.p0.price}|${s.points.p1.price}`);
 
 // ------------------------------------------------------------------ araç çubuğu
 function syncToolbar() {
@@ -52,6 +55,7 @@ function syncToolbar() {
   // Dalga-3'e özgü kontroller üçgen modunda gizlenir
   document.body.classList.toggle('mode-triangle', s.mode === 'triangle');
   document.body.classList.toggle('mode-abcde', s.mode === 'abcde');
+  document.body.classList.toggle('mode-diagonal', s.mode === 'diagonal');
 }
 
 function updateSettings(patch) {
@@ -147,6 +151,7 @@ function setupAutoRefresh() {
 function notifyNew(silent) {
   if (isTri()) return notifyTriangles(silent);
   if (isAbc()) return notifyAbcde(silent);
+  if (isDiag()) return notifyDiagonals(silent);
   const vis = pickSetups(state.setups, toScanOptions(state.settings));
   const keys = new Set(vis.map(setupKey));
   const approaching = new Set(vis.filter((s) => s.zone?.state === 'approaching').map(setupKey));
@@ -189,6 +194,21 @@ function notifyTriangles(silent) {
   } catch { /* yoksay */ }
 }
 
+/** Diagonal modu bildirimi: 2–4 kırılımı (ending), limite yaklaşan / dolan (leading). */
+function notifyDiagonals(silent) {
+  const vis = visibleSetups();
+  const hot = new Set(vis.filter((t) => ['approaching', 'triggered', 'lapproaching', 'filled'].includes(t.state)).map(setupKey));
+  const prev = state.seenDiag;
+  state.seenDiag = hot;
+  if (!silent || !prev) return;
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const fresh = vis.filter((t) => hot.has(setupKey(t)) && !prev.has(setupKey(t)));
+  const line = (t) => `${t.coin} ${dirTxt(t)} · ${t.typeLabel} · ${t.stateLabel}`;
+  try {
+    if (fresh.length) new Notification(`Diagonal (${state.scan.tf.id})`, { body: fresh.slice(0, 5).map(line).join('\n') });
+  } catch { /* yoksay */ }
+}
+
 /** ABCDE modu bildirimi: limite yaklaşan / dolan ve E'si yeni onaylanan üçgenler. */
 function notifyAbcde(silent) {
   const vis = visibleSetups();
@@ -213,6 +233,7 @@ const dirTxt = (s) => (s.direction === 'long' ? 'LONG ▲' : 'SHORT ▼');
 function visibleSetups() {
   if (isTri()) return state.settings.showAll ? state.setups : pickTriangles(state.setups, toScanOptions(state.settings));
   if (isAbc()) return state.settings.showAll ? state.setups : pickAbcde(state.setups, toScanOptions(state.settings));
+  if (isDiag()) return state.settings.showAll ? state.setups : pickDiagonals(state.setups, toScanOptions(state.settings));
   if (!state.settings.showAll) return pickSetups(state.setups, toScanOptions(state.settings));
   return state.settings.onlyPerfect ? state.setups.filter((s) => s.zone?.perfect) : state.setups;
 }
@@ -260,6 +281,13 @@ function renderSummary() {
       results: r.results, setups: state.setups, visible: pickAbcde(state.setups, opts), tf: r.tf, at: r.at, fmtTime, minRR: opts.abcdeMinRR,
     });
     $('#listTitle').textContent = `ABCDE üçgenler (${visibleSetups().length})`;
+    return;
+  }
+  if (isDiag()) {
+    $('#summary').innerHTML = diagSummary({
+      results: r.results, setups: state.setups, visible: pickDiagonals(state.setups, opts), tf: r.tf, at: r.at, fmtTime, minRR: opts.diagMinRR,
+    });
+    $('#listTitle').textContent = `Diagonaller (${visibleSetups().length})`;
     return;
   }
   const errors = r.results.filter((x) => x.error);
@@ -370,6 +398,9 @@ function renderCards() {
   } else if (isAbc()) {
     const sel = state.selected && setupKey(state.selected);
     box.innerHTML = vis.map((t) => abcdeCard(t, { selected: setupKey(t) === sel })).join('');
+  } else if (isDiag()) {
+    const sel = state.selected && setupKey(state.selected);
+    box.innerHTML = vis.map((t) => diagCard(t, { selected: setupKey(t) === sel })).join('');
   } else {
     box.innerHTML = vis.map(card).join('');
   }
@@ -558,7 +589,9 @@ function renderWatchDetail() {
   const evals = state.watchEval.get(it.id) || [];
   box.innerHTML = watchDetail(it, evals, { price: watchPrice(it) });
   const data = state.watchData.get(`${it.instId}|${it.tf}`);
-  const legend = it.kind === 'abcde'
+  const legend = it.kind === 'diagonal'
+    ? [['0-1-2-3-4-5', '#f0c75e', ''], ['1–3 / 2–4', '#ef5350', ''], ['Giriş', '#3987e5', ''], ['Stop', '#ef5350', 'dash'], ['Hedefler', '#7cc4a8', 'dash']]
+    : it.kind === 'abcde'
     ? [['0-A-B-C-D-E', '#f0c75e', ''], ['A–C / B–D', '#ef5350', ''], ['Giriş', '#3987e5', ''], ['Stop (C ötesi)', '#ef5350', 'dash'], ['Hedefler', '#7cc4a8', 'dash']]
     : it.shape
     ? [...TRI_LEGEND.slice(0, 3), ['Giriş', '#3987e5', ''], ['Stop', '#ef5350', 'dash'], ['Hedefler', '#7cc4a8', 'dash']]
@@ -667,6 +700,12 @@ function renderDetail() {
     box.innerHTML = triDetail(s, { tfId: state.scan.tf.id, feePct: state.settings.feePct });
     $('#triLegend').innerHTML = TRI_LEGEND.map(([t, c, cls]) => `<span><i class="${cls}" style="border-top-color:${c}"></i>${esc(t)}</span>`).join('');
     drawTriangle($('#chart'), r.longCandles, r.live, s);
+    return;
+  }
+  if (s.kind === 'diagonal') {
+    box.innerHTML = diagDetail(s, { tfId: state.scan.tf.id, feePct: state.settings.feePct, ruleSet: state.settings.ruleSet });
+    $('#diagLegend').innerHTML = DIAG_LEGEND.map(([t, c, cls]) => `<span><i class="${cls}" style="border-top-color:${c}"></i>${esc(t)}</span>`).join('');
+    drawDiagonal($('#chart'), r.longCandles, r.live, s);
     return;
   }
   if (s.kind === 'abcde') {

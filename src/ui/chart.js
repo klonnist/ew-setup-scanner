@@ -298,8 +298,84 @@ export const ABCDE_LEGEND = [
   ['Hedefler', A5.target, 'dash'],
 ];
 
+// ---------------------------------------------------------------- diagonal
+const DG = { path: '#e8ebf1', l13: '#5299ec', l24: '#f0c75e', entry: '#3987e5', limit: '#ff9f43', stop: '#ef5350', target: '#7cc4a8' };
+
+/** Diagonal: 0-1-2-3-4-5 yolu, 1–3 ve 2–4 çizgileri (ileri uzatılmış), giriş / limit, stop ve hedefler. */
+export function drawDiagonal(el, candles, live, t) {
+  destroyChart();
+  const LW = window.LightweightCharts;
+  if (!LW) {
+    el.innerHTML = '<p class="error">Grafik kütüphanesi yüklenemedi.</p>';
+    return;
+  }
+  const prec = decimals(t.price);
+  const pf = { type: 'price', precision: prec, minMove: 10 ** -prec };
+  const chart = LW.createChart(el, {
+    width: el.clientWidth,
+    height: el.clientHeight,
+    layout: { background: { type: 'solid', color: C.bg }, textColor: C.text, fontSize: 11, fontFamily: getComputedStyle(document.body).fontFamily },
+    grid: { vertLines: { color: C.grid }, horzLines: { color: C.grid } },
+    rightPriceScale: { borderColor: C.grid },
+    timeScale: { borderColor: C.grid, timeVisible: true, secondsVisible: false, rightOffset: 6 },
+    crosshair: { mode: LW.CrosshairMode.Normal },
+    localization: { locale: 'tr-TR' },
+  });
+  const series = chart.addSeries(LW.CandlestickSeries, {
+    upColor: C.up, downColor: C.down, borderUpColor: C.up, borderDownColor: C.down, wickUpColor: C.up, wickDownColor: C.down,
+    priceFormat: pf,
+  });
+  const all = live ? [...candles, live] : candles;
+  series.setData(all.map((c) => ({ time: sec(c.time), open: c.open, high: c.high, low: c.low, close: c.close })));
+  const tm = (i) => sec(all[Math.min(i, all.length - 1)].time);
+  const lastI = all.length - 1;
+  const lineOpts = (color, style = LW.LineStyle.Solid, width = 2) => ({
+    color, lineWidth: width, lineStyle: style, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, priceFormat: pf,
+  });
+  const P = t.points;
+  const seq = [P.p0, P.p1, P.p2, P.p3, P.p4, P.p5];
+  chart.addSeries(LW.LineSeries, lineOpts(DG.path, LW.LineStyle.Solid, 1)).setData(seq.map((p) => ({ time: tm(p.i), value: p.price })));
+  // 1–3 ve 2–4 çizgileri: 5'in biraz ötesine (ending'de kırılıma) kadar
+  const p = t.plans[0];
+  const ext = Math.min(lastI, Math.max(P.p5.i + Math.max(5, Math.round((P.p5.i - P.p0.i) * 0.2)), p.type === 'dend' && p.fillIdx >= 0 ? p.fillIdx : 0));
+  const ray = (L, color) => {
+    const v = (i) => L.p1 + ((L.p2 - L.p1) * (i - L.i1)) / (L.i2 - L.i1);
+    chart.addSeries(LW.LineSeries, lineOpts(color)).setData([{ time: tm(L.i1), value: L.p1 }, { time: tm(ext), value: v(ext) }]);
+  };
+  ray(t.line13, DG.l13);
+  ray(t.line24, DG.l24);
+  const names = ['0', '1', '2', '3', '4', t.forming ? '5?' : '5'];
+  const marks = seq.map((q, n) => ({ time: tm(q.i), position: q.type === 'H' ? 'aboveBar' : 'belowBar', shape: q.type === 'H' ? 'arrowDown' : 'arrowUp', color: DG.path, text: names[n] }));
+  if (p.fillIdx >= 0) marks.push({ time: tm(p.fillIdx), position: t.d === 1 ? 'belowBar' : 'aboveBar', shape: t.d === 1 ? 'arrowUp' : 'arrowDown', color: DG.limit, text: 'giriş' });
+  LW.createSeriesMarkers(series, marks.sort((a, b) => a.time - b.time));
+
+  const line = (price, color, title, style = LW.LineStyle.Dashed) =>
+    series.createPriceLine({ price, color, lineWidth: 1, lineStyle: style, axisLabelVisible: true, title });
+  line(p.entry, p.type === 'dlead' ? DG.limit : DG.entry, p.type === 'dlead' ? 'Dalga 2 limiti' : p.fillIdx >= 0 ? 'Giriş' : 'Tetik (2–4)', LW.LineStyle.Solid);
+  line(p.stop, DG.stop, 'Stop');
+  for (const x of p.targets) line(x.price, DG.target, x.name.replace(' (dalga 1 sonu)', '').replace('Dalga 3 = ', 'D3 '));
+
+  chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, P.p0.i - 15), to: all.length + 6 });
+  const ro = new ResizeObserver(([e]) => {
+    const r = e.contentRect;
+    if (r.width > 0 && r.height > 0) chart.resize(Math.floor(r.width), Math.floor(r.height));
+  });
+  ro.observe(el);
+  current = { chart, ro };
+}
+
+export const DIAG_LEGEND = [
+  ['0-1-2-3-4-5', DG.path, ''],
+  ['1–3 çizgisi', DG.l13, ''],
+  ['2–4 çizgisi', DG.l24, ''],
+  ['Tetik / giriş', DG.entry, ''],
+  ['Dalga 2 limiti (leading)', DG.limit, ''],
+  ['Stop', DG.stop, 'dash'],
+  ['Hedefler', DG.target, 'dash'],
+];
+
 // ---------------------------------------------------------------- takip listesi
-const PLAN_TAG = { zone: ' (bölge)', break: ' (B)', elimit: ' (E limiti)', econfirm: ' (E onayı)' };
+const PLAN_TAG = { zone: ' (bölge)', break: ' (B)', elimit: ' (E limiti)', econfirm: ' (E onayı)', dend: ' (2–4)', dlead: ' (dalga 2)' };
 const W = { wave: '#f0c75e', entry: '#3987e5', stop: '#ef5350', target: '#7cc4a8', inval: '#b06cf0', flat: '#f0c75e', fill: '#ff9f43' };
 
 /**
@@ -333,7 +409,7 @@ export function drawWatch(el, candles, live, item, evals) {
   series.setData(all.map((c) => ({ time: sec(c.time), open: c.open, high: c.high, low: c.low, close: c.close })));
   const times = new Set(all.map((c) => c.time));
   const pts = item.points.filter((p) => times.has(p.time)).sort((a, b) => a.time - b.time);
-  if ((item.kind === 'wave3' || item.kind === 'abcde') && pts.length > 1) {
+  if (item.kind !== 'triangle' && pts.length > 1) {
     chart.addSeries(LW.LineSeries, { color: W.wave, lineWidth: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, priceFormat: pf })
       .setData(pts.map((p) => ({ time: sec(p.time), value: p.price })));
   }

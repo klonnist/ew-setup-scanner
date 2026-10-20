@@ -11,7 +11,7 @@ export const WATCH_STATE = {
   invalid: 'Bozuldu (giriş öncesi)',
   expired: 'Süre doldu',
 };
-export const PLAN_NAME = { break: 'B kırılımı', zone: 'Limit bölge', triangle: 'Üçgen kırılımı', elimit: 'E limiti (C–D %61,8)', econfirm: 'E onayı' };
+export const PLAN_NAME = { break: 'B kırılımı', zone: 'Limit bölge', triangle: 'Üçgen kırılımı', elimit: 'E limiti (C–D %61,8)', econfirm: 'E onayı', dend: 'Ending: 2–4 kırılımı', dlead: 'Leading: dalga 2 limiti' };
 const OPEN = new Set(['waiting', 'entered']);
 export const isOpen = (st) => OPEN.has(st);
 
@@ -63,6 +63,38 @@ export function snapshot(s, candles, ctx) {
         targets: L.targets.filter((x) => s.d * (x.price - L.entry) > 0).sort((a, b) => s.d * (a.price - b.price)).map((x) => ({ name: x.name, price: x.price })),
         cancelBeyond: L.stop, cancelFav: null, activeFrom: null,
       }],
+    };
+  }
+  if (s.kind === 'diagonal') {
+    const P = s.points;
+    const p = s.plans[0];
+    const line = (l) => ({ t1: tAt(l.i1), p1: l.p1, t2: tAt(l.i2), p2: l.p2 });
+    const plans = [];
+    const pending = p.state === 'waiting' || p.state === 'approaching' || p.state === 'lwaiting' || p.state === 'lapproaching';
+    const inPos = p.state === 'triggered' || p.state === 'filled';
+    if (pending || inPos) {
+      // Ending tetiği (2–4 çizgisi) kayıt anındaki seviyeyle dondurulur; leading limiti sabittir.
+      const entry = inPos ? s.price : p.level;
+      plans.push({
+        type: p.type,
+        entryKind: inPos ? 'market' : p.entryKind,
+        legs: [entry],
+        stop: p.stop,
+        targets: p.targets.filter((x) => s.d * (x.price - entry) > 0).map((x) => ({ name: x.name, price: x.price })),
+        cancelBeyond: p.type === 'dend' && !inPos ? P.p5.price : null, // 5 aşılırsa ending bozulur
+        cancelFav: p.type === 'dlead' && !inPos ? P.p5.price : null, // dalga 2 limite inmeden 5 aşılırsa kaçtı
+        activeFrom: null,
+      });
+    }
+    return {
+      ...base,
+      kind: 'diagonal',
+      key: `${s.coin}|${ctx.tf.id}|diag|${s.type}|${s.direction}|${tAt(P.p0.i)}|${tAt(P.p2.i)}|${tAt(P.p4.i)}`,
+      title: `${s.typeLabel} · ${s.shapeLabel} · ${s.stateLabel}`,
+      points: [P.p0, P.p1, P.p2, P.p3, P.p4, P.p5].map((q, n) => pt(q, n === 5 && s.forming ? '5?' : String(n))),
+      lines: [],
+      shape: { lines: [line(s.line13), line(s.line24)], until: tAt(P.p5.i + Math.max(5, Math.round((P.p5.i - P.p0.i) * 0.2))) },
+      plans,
     };
   }
   if (s.kind === 'abcde') {

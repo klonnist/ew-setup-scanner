@@ -1,8 +1,9 @@
-// Tarama akışı: hacme göre coin listesi → her coin için mumlar → moda göre setup'lar (dalga-3, üçgen ya da ABCDE üçgen).
+// Tarama akışı: hacme göre coin listesi → her coin için mumlar → moda göre setup'lar (dalga-3, üçgen, ABCDE üçgen ya da diagonal).
 import { getTopCoins, getCandles, TIMEFRAMES } from '../data/okx.js';
 import { findWave3Setups, compareSetups, DEFAULTS } from './wave3.js';
 import { findTriangles, compareTriangles } from './triangle.js';
 import { findAbcde, compareAbcde } from './abcde.js';
+import { findDiagonals, compareDiagonals } from './diagonal.js';
 
 const CONCURRENCY = 6;
 // Dalga-3 son 300 mumla (canlı ve backtest aynı pencere); üçgenler aylarca sürebildiği için 600 mum indirilir.
@@ -13,11 +14,12 @@ export const LONG_BARS = 600;
 export function detect(r, opts) {
   if (opts.mode === 'triangle') return findTriangles(r.longCandles, opts, r.live);
   if (opts.mode === 'abcde') return findAbcde(r.longCandles, opts, r.live);
+  if (opts.mode === 'diagonal') return findDiagonals(r.longCandles, opts, r.live);
   return findWave3Setups(r.candles, opts, r.live);
 }
 
 export function sortSetups(setups, opts) {
-  const cmp = opts.mode === 'triangle' ? compareTriangles : opts.mode === 'abcde' ? compareAbcde : (a, b) => compareSetups(a, b, opts);
+  const cmp = opts.mode === 'triangle' ? compareTriangles : opts.mode === 'abcde' ? compareAbcde : opts.mode === 'diagonal' ? compareDiagonals : (a, b) => compareSetups(a, b, opts);
   setups.sort(cmp);
   return setups;
 }
