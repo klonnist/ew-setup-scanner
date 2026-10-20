@@ -238,7 +238,7 @@ const SETTING_KEYS = ['ruleSet', 'sensitivities', 'w1Extend', 'retrMin', 'retrMa
   'perfectAtr', 'zoneFrontAtr', 'approachAtr', 'onlyPerfect', 'minRiskPct',
   'triType', 'triContext', 'flatAtr', 'minTops', 'minBottoms', 'minWidthBars', 'triTarget', 'triMinRR',
   'abcdeEntry', 'eRetr', 'innerAbc', 'w3Check', 'abcdeVariant', 'abcdeSens', 'abcdeStopAtr', 'abcdeTarget', 'abcdeMinRR',
-  'diagType', 'diagShape', 'diagSens', 'diagW2Min', 'diagExpMax', 'diagRetr', 'diagStopAtr', 'diagEndTarget', 'diagLeadTarget', 'diagMinRR'];
+  'diagType', 'diagShape', 'diagSens', 'diagW4Entry', 'diagW2Min', 'diagExpMax', 'diagRetr', 'diagStopAtr', 'diagEndTarget', 'diagLeadTarget', 'diagMinRR'];
 const TRI_TARGET_TXT = { mm: 'ölçülü hareket', f382: '%38,2', f50: '%50', f618: '%61,8', f786: '%78,6', f100: '%100' };
 function pickSettings(o) { return Object.fromEntries(SETTING_KEYS.map((k) => [k, o[k]])); }
 

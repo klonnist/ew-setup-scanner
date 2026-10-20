@@ -22,6 +22,7 @@ export const DIAG_DEFAULTS = {
   diagRetr: 0.618, // leading: dalga 2 limiti = 0→5'in bu oranı
   diagEndTarget: 'p0', // ending ana hedef: 'p4' | 'p2' | 'p0'
   diagLeadTarget: 'w3a', // leading ana hedef: 'p5' | 'w3a' (1×) | 'w3b' (1,618×)
+  diagW4Entry: 'near', // dalga 4 limiti: 'near' bölgenin yakın kenarı | 'mid' ortası | 'far' uzak kenarı
   diagW2Min: 0.5, // dalga 4 → 5: dalga 2, dalga 1'in en az bu oranını geri almalı (diagonalde dalga 2 derindir)
   diagExpMax: 1.618, // dalga 4 → 5 genişleyen: dalga 3 en fazla bu × dalga 1
   diagMinRR: 1,
@@ -219,7 +220,7 @@ function evaluateW4({ all, atrArr, cand, k, o, price, last }) {
   const plans = [];
   // 1) Dalga 4 limiti: 3'ten sonra fiyat yakın kenara gelince dolar; dolmadan 3 aşılırsa kaçtı
   {
-    const level = near;
+    const level = o.diagW4Entry === 'far' ? far : o.diagW4Entry === 'mid' ? (near + far) / 2 : near;
     let st = 'lwaiting', fillIdx = -1, fill = null;
     for (let i = P3.i + 1; i <= last; i++) {
       const adverse = d === 1 ? all[i].low : all[i].high;

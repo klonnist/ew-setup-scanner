@@ -102,6 +102,7 @@ const FIELDS = [
   ['diagStopAtr', 'Diagonal: stop tamponu (× ATR)', 'number', { step: 0.05, min: 0, hint: "Ending: 5'in ötesi. Leading: 0'ın ötesi." }],
   ['diagEndTarget', 'Diagonal (ending): ana hedef', 'select', { options: [['p0', 'Başlangıç (0)'], ['p2', '2 ucu'], ['p4', '4 ucu']] }],
   ['diagLeadTarget', 'Diagonal (leading): ana hedef', 'select', { options: [['w3a', 'Dalga 3 = 1 × dalga 1'], ['w3b', 'Dalga 3 = 1,618 × dalga 1'], ['p5', '5 ucu (dalga 1 sonu)']] }],
+  ['diagW4Entry', 'Diagonal (dalga 4): limit yeri', 'select', { options: [['near', 'Bölgenin yakın kenarı'], ['mid', 'Bölgenin ortası'], ['far', 'Bölgenin uzak kenarı']] }],
   ['diagW2Min', 'Diagonal (dalga 4): dalga 2 en az', 'pct', { hint: "Dalga 2'nin dalga 1'i geri alma oranı. Diagonalde dalga 2 derindir; itkiden ayırt etmeye yarar." }],
   ['diagExpMax', 'Diagonal (dalga 4, genişleyen): dalga 3 en fazla (× dalga 1)', 'number', { step: 0.1, min: 1 }],
   ['diagMinRR','Diagonal: min. R:R', 'number', { step: 0.25, min: 0 }],

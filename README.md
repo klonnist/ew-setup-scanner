@@ -91,7 +91,7 @@ oluşturur. Kurs kuralları en katısıdır; daha fazla aday için kural setini 
 
 - **Dalga 4 → 5 (varsayılan):** diagonal'in 4. dalgasında giriş, 5. dalgayı alma. 0-1-2-3 oluşmuş, 4 oluşuyor (ya da yeni bitmiş).
   - Dalga 4 bölgesi: 0→3'ün %38,2–50'si (daralan) / %50–61,8'i (genişleyen), dalga 1 bölgesine kırpılır (örtüşme şartı).
-  - **Dalga 4 limiti:** bölgenin yakın kenarında limit emir. **4 onayı:** ZigZag 4'ü onaylayınca kapanıştan giriş.
+  - **Dalga 4 limiti:** bölgenin yakın kenarında (Ayarlar'dan orta / uzak kenar) limit emir. **4 onayı:** ZigZag 4'ü onaylayınca kapanıştan giriş.
   - Stop: 4'ün geçersizlik seviyesinin ötesi — daralanda 4 dalga 2'den kısa olmalı (3 − dalga 2 boyu), genişleyende 2'nin ucu.
   - Hedef: **3'ün ucu** (kural gereği 5, 3'ü geçmeli). Limit dolmadan 3 aşılırsa kaçtı sayılır.
   - 4 dalga 1 bölgesine girmeden itkiden ayırt etmek için: dalga 2 dalga 1'in en az %50'sini geri almalı, genişleyende
