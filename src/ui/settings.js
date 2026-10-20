@@ -95,14 +95,16 @@ const FIELDS = [
   ['abcdeStopAtr', 'ABCDE: stop tamponu (C ötesi, × ATR)', 'number', { step: 0.05, min: 0 }],
   ['abcdeTarget', 'ABCDE: ana hedef (R:R)', 'select', { options: [['thrust', 'Thrust (E + en geniş bacak)'], ['top', 'Başlangıç (0)'], ['e1236', 'Önceki hareket × 1,236'], ['e1618', 'Önceki hareket × 1,618']] }],
   ['abcdeMinRR', 'ABCDE: min. R:R', 'number', { step: 0.25, min: 0 }],
-  ['diagKind', 'Diagonal: türü', 'select', { options: [['both', 'Ending + leading'], ['ending', 'Sadece ending (dönüş, 2–4 kırılımı)'], ['leading', 'Sadece leading (devam, dalga 2 limiti)']] }],
+  ['diagType', 'Diagonal: türü', 'select', { options: [['w4', 'Dalga 4 → 5 (4. dalgada giriş, hedef 3 ucu)'], ['ending', 'Ending dönüşü (5 bitince, 2–4 kırılımı)'], ['leading', 'Leading (bitince dalga 2 limiti)'], ['all', 'Hepsi']] }],
   ['diagShape', 'Diagonal: şekil', 'select', { options: [['all', 'Daralan + genişleyen'], ['contracting', 'Sadece daralan'], ['expanding', 'Sadece genişleyen']] }],
   ['diagSens', 'Diagonal: ZigZag duyarlılığı (× ATR)', 'list'],
   ['diagRetr', 'Diagonal (leading): dalga 2 limiti', 'pct', { hint: '0→5 hareketinin geri alım oranı. Varsayılan %61,8.' }],
   ['diagStopAtr', 'Diagonal: stop tamponu (× ATR)', 'number', { step: 0.05, min: 0, hint: "Ending: 5'in ötesi. Leading: 0'ın ötesi." }],
   ['diagEndTarget', 'Diagonal (ending): ana hedef', 'select', { options: [['p0', 'Başlangıç (0)'], ['p2', '2 ucu'], ['p4', '4 ucu']] }],
   ['diagLeadTarget', 'Diagonal (leading): ana hedef', 'select', { options: [['w3a', 'Dalga 3 = 1 × dalga 1'], ['w3b', 'Dalga 3 = 1,618 × dalga 1'], ['p5', '5 ucu (dalga 1 sonu)']] }],
-  ['diagMinRR', 'Diagonal: min. R:R', 'number', { step: 0.25, min: 0 }],
+  ['diagW2Min', 'Diagonal (dalga 4): dalga 2 en az', 'pct', { hint: "Dalga 2'nin dalga 1'i geri alma oranı. Diagonalde dalga 2 derindir; itkiden ayırt etmeye yarar." }],
+  ['diagExpMax', 'Diagonal (dalga 4, genişleyen): dalga 3 en fazla (× dalga 1)', 'number', { step: 0.1, min: 1 }],
+  ['diagMinRR','Diagonal: min. R:R', 'number', { step: 0.25, min: 0 }],
   ['autoRefresh', 'Otomatik yenileme', 'select', { options: [[0, 'Kapalı'], [5, '5 dakikada bir'], [15, '15 dakikada bir']], num: true, hint: 'Sekme açıkken çalışır; yeni setup çıkınca bildirim gösterir.' }],
 ];
 

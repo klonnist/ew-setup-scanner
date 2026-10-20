@@ -18,9 +18,9 @@ const QUICK = {
   '4H': [['3 ay', 91], ['6 ay', 182], ['1 yıl', 365]],
   '1D': [['1 yıl', 365], ['2 yıl', 730], ['3 yıl', 1095]],
 };
-const TYPE_NAME = { break: 'B kırılımı', zone: 'Limit bölge', triangle: 'Üçgen kırılımı', elimit: 'ABCDE · E limiti (C–D %61,8)', econfirm: 'ABCDE · E onayı', dend: 'Ending diagonal · 2–4 kırılımı', dlead: 'Leading diagonal · dalga 2 limiti' };
+const TYPE_NAME = { break: 'B kırılımı', zone: 'Limit bölge', triangle: 'Üçgen kırılımı', elimit: 'ABCDE · E limiti (C–D %61,8)', econfirm: 'ABCDE · E onayı', d4lim: 'Diagonal 4 → 5 · dalga 4 limiti', d4conf: 'Diagonal 4 → 5 · 4 onayı', dend: 'Ending diagonal · 2–4 kırılımı', dlead: 'Leading diagonal · dalga 2 limiti' };
 const isAbcdeT = (t) => t.type === 'elimit' || t.type === 'econfirm';
-const isDiagT = (t) => t.type === 'dend' || t.type === 'dlead';
+const isDiagT = (t) => ['d4lim', 'd4conf', 'dend', 'dlead'].includes(t.type);
 const windowFor = (mode) => (['triangle', 'abcde', 'diagonal'].includes(mode) ? TRI_WINDOW : BT_DEFAULTS.window);
 
 let settings = loadSettings();
@@ -238,7 +238,7 @@ const SETTING_KEYS = ['ruleSet', 'sensitivities', 'w1Extend', 'retrMin', 'retrMa
   'perfectAtr', 'zoneFrontAtr', 'approachAtr', 'onlyPerfect', 'minRiskPct',
   'triType', 'triContext', 'flatAtr', 'minTops', 'minBottoms', 'minWidthBars', 'triTarget', 'triMinRR',
   'abcdeEntry', 'eRetr', 'innerAbc', 'w3Check', 'abcdeVariant', 'abcdeSens', 'abcdeStopAtr', 'abcdeTarget', 'abcdeMinRR',
-  'diagKind', 'diagShape', 'diagSens', 'diagRetr', 'diagStopAtr', 'diagEndTarget', 'diagLeadTarget', 'diagMinRR'];
+  'diagType', 'diagShape', 'diagSens', 'diagW2Min', 'diagExpMax', 'diagRetr', 'diagStopAtr', 'diagEndTarget', 'diagLeadTarget', 'diagMinRR'];
 const TRI_TARGET_TXT = { mm: 'ölçülü hareket', f382: '%38,2', f50: '%50', f618: '%61,8', f786: '%78,6', f100: '%100' };
 function pickSettings(o) { return Object.fromEntries(SETTING_KEYS.map((k) => [k, o[k]])); }
 
@@ -258,7 +258,7 @@ function settingsText(p) {
   if (p.mode === 'diagonal') {
     return [
       'Diagonal',
-      { both: 'ending + leading', ending: 'sadece ending', leading: 'sadece leading' }[s.diagKind] || s.diagKind,
+      { w4: 'dalga 4 → 5', ending: 'ending dönüşü', leading: 'leading', all: 'hepsi' }[s.diagType] || s.diagType || 'ending + leading',
       { all: 'daralan + genişleyen', contracting: 'sadece daralan', expanding: 'sadece genişleyen' }[s.diagShape] || s.diagShape,
       `kural seti ${s.ruleSet}`, `dalga 2 limiti %${+(s.diagRetr * 100).toFixed(1)}`,
       `hedef: ending ${s.diagEndTarget} / leading ${s.diagLeadTarget}`, `min R:R ${s.diagMinRR}`, `kom. %${p.feePct}`,
@@ -396,8 +396,11 @@ function diagReachTable(list) {
       <tbody>${g.map(([name, x]) => `<tr><td>${esc(name)}</td><td class="num">${x.length}</td>${keys.map(([k]) => `<td class="num">${pctOf(x, (t) => t.reach[k])}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
   };
   const end = list.filter((t) => t.type === 'dend'), lead = list.filter((t) => t.type === 'dlead');
+  const w4 = list.filter((t) => t.type === 'd4lim' || t.type === 'd4conf');
+  const w4rows = [['Hepsi', w4], ['Dalga 4 limiti', w4.filter((t) => t.type === 'd4lim')], ['4 onayı', w4.filter((t) => t.type === 'd4conf')], ['Daralan', w4.filter((t) => t.pattern === 'contracting')], ['Genişleyen', w4.filter((t) => t.pattern === 'expanding')]];
   const split = (g) => [['Hepsi', g], ['Daralan', g.filter((t) => t.pattern === 'contracting')], ['Genişleyen', g.filter((t) => t.pattern === 'expanding')]];
   return `<div class="bd reach"><h3>Diagonal: nereye kadar gitti? (girişten sonra, stop görülmeden önce)</h3>
+    ${block('Dalga 4 → 5', w4rows, [['p3', "3'ün ucu (hedef)"]])}
     ${block('Ending (dönüş)', split(end), [['p4', '4 ucu'], ['p2', '2 ucu'], ['p0', 'Başlangıç (0)']])}
     ${block('Leading (devam)', split(lead), [['p5', '5 ucu'], ['w3a', 'Dalga 3 = 1×'], ['w3b', 'Dalga 3 = 1,618×']])}</div>`;
 }
@@ -446,7 +449,7 @@ function show(runObj) {
     groupTable('ABCDE tipi', closed.filter(isAbcdeT), (t) => (t.pattern === 'running' ? "Running (B, 0'ı geçti)" : 'Daralan')),
     groupTable('ABCDE iç yapı', closed.filter(isAbcdeT), (t) => (t.context === 'inner' ? 'Her bacak 3’lü' : 'Eksik iç yapı')),
     groupTable('ABCDE önceki hareket', closed.filter(isAbcdeT), (t) => (t.abc === 'impulse' ? 'İtki (dalga 3) ✓' : 'İtki doğrulanamadı')),
-    groupTable('Diagonal türü', closed.filter(isDiagT), (t) => (t.type === 'dend' ? 'Ending (dönüş)' : 'Leading (devam)')),
+    groupTable('Diagonal türü', closed.filter(isDiagT), (t) => TYPE_NAME[t.type]),
     groupTable('Diagonal şekli', closed.filter(isDiagT), (t) => (t.pattern === 'expanding' ? 'Genişleyen' : 'Daralan')),
     groupTable('Bölge gücü (limit bölge)', closed.filter((t) => t.type === 'zone'), (t) => t.strength),
     groupTable('Bölgede çakışan seviye', closed.filter((t) => t.type === 'zone'), (t) => `${t.inside} çakışma`),
@@ -467,7 +470,7 @@ function show(runObj) {
   renderRuns();
 }
 
-const EQ_COLORS = { break: '#3987e5', zone: '#ff9f43', elimit: '#ff9f43', econfirm: '#3987e5', dend: '#3987e5', dlead: '#ff9f43', all: '#e8ebf1' };
+const EQ_COLORS = { break: '#3987e5', zone: '#ff9f43', elimit: '#ff9f43', econfirm: '#3987e5', dend: '#3987e5', dlead: '#ff9f43', d4lim: '#ff9f43', d4conf: '#3987e5', all: '#e8ebf1' };
 function drawEquity(trades, types) {
   const el = $('#equity');
   if (eqChart) { eqChart.remove(); eqChart = null; }

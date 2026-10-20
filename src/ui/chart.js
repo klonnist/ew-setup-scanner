@@ -333,25 +333,35 @@ export function drawDiagonal(el, candles, live, t) {
     color, lineWidth: width, lineStyle: style, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, priceFormat: pf,
   });
   const P = t.points;
-  const seq = [P.p0, P.p1, P.p2, P.p3, P.p4, P.p5];
-  chart.addSeries(LW.LineSeries, lineOpts(DG.path, LW.LineStyle.Solid, 1)).setData(seq.map((p) => ({ time: tm(p.i), value: p.price })));
-  // 1–3 ve 2–4 çizgileri: 5'in biraz ötesine (ending'de kırılıma) kadar
-  const p = t.plans[0];
-  const ext = Math.min(lastI, Math.max(P.p5.i + Math.max(5, Math.round((P.p5.i - P.p0.i) * 0.2)), p.type === 'dend' && p.fillIdx >= 0 ? p.fillIdx : 0));
+  const w4 = t.type === 'w4';
+  const seq = [P.p0, P.p1, P.p2, P.p3, P.p4, P.p5].filter(Boolean);
+  const endP = seq[seq.length - 1];
+  chart.addSeries(LW.LineSeries, lineOpts(DG.path, LW.LineStyle.Solid, 1)).setData(seq.map((q) => ({ time: tm(q.i), value: q.price })));
+  // 1–3 ve 2–4 çizgileri: son dalganın biraz ötesine (ending'de kırılıma) kadar
+  const p = t.plans.find((x) => x.fillIdx >= 0) ?? t.plans[0];
+  const ext = Math.min(lastI, Math.max(endP.i + Math.max(5, Math.round((endP.i - P.p0.i) * 0.25)), p.type === 'dend' && p.fillIdx >= 0 ? p.fillIdx : 0, w4 ? lastI : 0));
   const ray = (L, color) => {
     const v = (i) => L.p1 + ((L.p2 - L.p1) * (i - L.i1)) / (L.i2 - L.i1);
     chart.addSeries(LW.LineSeries, lineOpts(color)).setData([{ time: tm(L.i1), value: L.p1 }, { time: tm(ext), value: v(ext) }]);
   };
   ray(t.line13, DG.l13);
   ray(t.line24, DG.l24);
-  const names = ['0', '1', '2', '3', '4', t.forming ? '5?' : '5'];
+  const names = w4 ? ['0', '1', '2', '3', t.forming ? '4?' : '4'] : ['0', '1', '2', '3', '4', t.forming ? '5?' : '5'];
   const marks = seq.map((q, n) => ({ time: tm(q.i), position: q.type === 'H' ? 'aboveBar' : 'belowBar', shape: q.type === 'H' ? 'arrowDown' : 'arrowUp', color: DG.path, text: names[n] }));
-  if (p.fillIdx >= 0) marks.push({ time: tm(p.fillIdx), position: t.d === 1 ? 'belowBar' : 'aboveBar', shape: t.d === 1 ? 'arrowUp' : 'arrowDown', color: DG.limit, text: 'giriş' });
+  for (const q of t.plans) if (q.fillIdx >= 0) marks.push({ time: tm(q.fillIdx), position: t.d === 1 ? 'belowBar' : 'aboveBar', shape: t.d === 1 ? 'arrowUp' : 'arrowDown', color: q.entryKind === 'limit' ? DG.limit : DG.entry, text: 'giriş' });
   LW.createSeriesMarkers(series, marks.sort((a, b) => a.time - b.time));
 
   const line = (price, color, title, style = LW.LineStyle.Dashed) =>
     series.createPriceLine({ price, color, lineWidth: 1, lineStyle: style, axisLabelVisible: true, title });
-  line(p.entry, p.type === 'dlead' ? DG.limit : DG.entry, p.type === 'dlead' ? 'Dalga 2 limiti' : p.fillIdx >= 0 ? 'Giriş' : 'Tetik (2–4)', LW.LineStyle.Solid);
+  const ENTRY_TXT = { d4lim: 'Dalga 4 limiti', d4conf: '4 onayı', dlead: 'Dalga 2 limiti' };
+  for (const q of t.plans) {
+    const lim = q.entryKind === 'limit';
+    line(q.entry, lim ? DG.limit : DG.entry, ENTRY_TXT[q.type] || (q.fillIdx >= 0 ? 'Giriş' : 'Tetik (2–4)'), LW.LineStyle.Solid);
+  }
+  if (t.zone) {
+    line(t.zone.far, DG.limit, '4 bölgesi', LW.LineStyle.Dotted);
+    line(t.zone.invalid, DG.stop, '4 geçersiz', LW.LineStyle.Dotted);
+  }
   line(p.stop, DG.stop, 'Stop');
   for (const x of p.targets) line(x.price, DG.target, x.name.replace(' (dalga 1 sonu)', '').replace('Dalga 3 = ', 'D3 '));
 
@@ -369,13 +379,13 @@ export const DIAG_LEGEND = [
   ['1–3 çizgisi', DG.l13, ''],
   ['2–4 çizgisi', DG.l24, ''],
   ['Tetik / giriş', DG.entry, ''],
-  ['Dalga 2 limiti (leading)', DG.limit, ''],
+  ['Limit (dalga 4 / dalga 2)', DG.limit, ''],
   ['Stop', DG.stop, 'dash'],
   ['Hedefler', DG.target, 'dash'],
 ];
 
 // ---------------------------------------------------------------- takip listesi
-const PLAN_TAG = { zone: ' (bölge)', break: ' (B)', elimit: ' (E limiti)', econfirm: ' (E onayı)', dend: ' (2–4)', dlead: ' (dalga 2)' };
+const PLAN_TAG = { zone: ' (bölge)', break: ' (B)', elimit: ' (E limiti)', econfirm: ' (E onayı)', dend: ' (2–4)', dlead: ' (dalga 2)', d4lim: ' (4 limiti)', d4conf: ' (4 onayı)' };
 const W = { wave: '#f0c75e', entry: '#3987e5', stop: '#ef5350', target: '#7cc4a8', inval: '#b06cf0', flat: '#f0c75e', fill: '#ff9f43' };
 
 /**

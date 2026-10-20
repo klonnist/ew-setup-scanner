@@ -83,20 +83,24 @@ son 600 mumda ZigZag'in art arda 6 dönüş noktası olarak aranır: 0 = üçgen
 - **Backtest → Mod: Running üçgen:** iki plan ayrı raporlanır; "ABCDE: nereye kadar gitti?" tablosu girişten sonra
   stop görülmeden hangi hedeflere ulaşıldığını plan, tip (running / daralan) ve yöne göre verir.
 
-## Diagonal modu (ending / leading)
+## Diagonal modu (dalga 4 → 5 / ending / leading)
 
-Araç çubuğunda **Mod → Diagonal**. Son 600 mumda ZigZag'in art arda 6 dönüş noktası 0-1-2-3-4-5, seçilen kural setinde
-(Kurs / Frost & Prechter / Neely) diagonal olarak geçerli olmalı: dalga 4 dalga 1 bölgesine girer, daralan tipte 1>3>5 ve 2>4
-(genişleyende tersi), 1–3 ve 2–4 çizgileri kama oluşturur. Kurs kuralları en katısıdır; daha fazla aday için kural setini değiştir.
+Araç çubuğunda **Mod → Diagonal**. Diagonal (kama), seçilen kural setinde (Kurs / Frost & Prechter / Neely) diagonal olarak
+geçerli olmalı: dalga 4 dalga 1 bölgesine girer, daralan tipte 1>3>5 ve 2>4 (genişleyende tersi), 1–3 ve 2–4 çizgileri kama
+oluşturur. Kurs kuralları en katısıdır; daha fazla aday için kural setini değiştir. **Ayarlar → Diagonal: türü** ile seçilir:
 
-Her diagonal iki ayrı setup verebilir; **Ayarlar → Diagonal: türü** ile süzülür:
-
-- **Ending (dönüş):** 5. / C dalgası yerinde. Kapanış 2–4 çizgisini (0,1 ATR tamponla) kırınca diagonal'in **tersine** giriş.
-  Stop 5'in ötesi; hedefler 4 → 2 → 0 (başlangıç). Kırılım beklenirken tetik o anki 2–4 çizgisi seviyesidir.
-- **Leading (devam):** 1. / A dalgası yerinde. Dalga 2 için 0→5'in %61,8'inde limit, stop 0'ın ötesi;
-  hedefler 5'in ucu, dalga 3 = 1 × ve 1,618 × dalga 1 (limitten). Fiyat limite inmeden 5'i aşarsa kaçtı sayılır.
-- Hangi türün geçerli olduğuna bağlam değil, senin seçimin karar verir (aynı kama ikisi de olabilir).
-- Backtest'te iki tür ayrı raporlanır; "Diagonal: nereye kadar gitti?" tablosu hedeflere ulaşma oranlarını verir.
+- **Dalga 4 → 5 (varsayılan):** diagonal'in 4. dalgasında giriş, 5. dalgayı alma. 0-1-2-3 oluşmuş, 4 oluşuyor (ya da yeni bitmiş).
+  - Dalga 4 bölgesi: 0→3'ün %38,2–50'si (daralan) / %50–61,8'i (genişleyen), dalga 1 bölgesine kırpılır (örtüşme şartı).
+  - **Dalga 4 limiti:** bölgenin yakın kenarında limit emir. **4 onayı:** ZigZag 4'ü onaylayınca kapanıştan giriş.
+  - Stop: 4'ün geçersizlik seviyesinin ötesi — daralanda 4 dalga 2'den kısa olmalı (3 − dalga 2 boyu), genişleyende 2'nin ucu.
+  - Hedef: **3'ün ucu** (kural gereği 5, 3'ü geçmeli). Limit dolmadan 3 aşılırsa kaçtı sayılır.
+  - 4 dalga 1 bölgesine girmeden itkiden ayırt etmek için: dalga 2 dalga 1'in en az %50'sini geri almalı, genişleyende
+    dalga 3 ≤ 1,618 × dalga 1, 0–2 ve 1–3 çizgileri kama oluşturmalı (Ayarlar'dan değiştirilebilir).
+- **Ending dönüşü:** 5. / C dalgası bittikten sonra. Kapanış 2–4 çizgisini (0,1 ATR tamponla) kırınca diagonal'in **tersine** giriş.
+  Stop 5'in ötesi; hedefler 4 → 2 → 0 (başlangıç).
+- **Leading:** 1. / A dalgası olarak bittikten sonra dalga 2 için 0→5'in %61,8'inde limit, stop 0'ın ötesi;
+  hedefler 5'in ucu, dalga 3 = 1 × ve 1,618 × dalga 1.
+- Backtest'te türler ayrı raporlanır; "Diagonal: nereye kadar gitti?" tablosu hedeflere ulaşma oranlarını verir.
 
 ## Backtest
 

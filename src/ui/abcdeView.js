@@ -77,7 +77,7 @@ export function abcdeDetail(t, { tfId, feePct, eRetr }) {
       <div class="facts">
         ${fact(p.type === 'elimit' ? 'Limit' : 'Giriş', fmtPrice(p.entry, t.price), ` <small class="muted">${esc(how)}</small>`)}
         ${fact('Stop (C ötesi)', fmtPrice(p.stop, t.price), ` <small class="muted">risk %${riskPct(p.entry, p.stop).toFixed(2).replace('.', ',')} · komisyon ≈ ${r2(fr)}R</small>`)}
-        ${fact(`R:R (${esc(p.main.name)})`, fmtX(p.rr, 2))}
+        ${fact(`R:R (${p.main.name})`, fmtX(p.rr, 2))}
       </div>`;
   }).join('');
   const targets = t.levels.targets.map((x) => `<li><span>${esc(x.name)}</span><span class="num">${fmtPrice(x.price, t.price)}</span><span></span></li>`).join('');

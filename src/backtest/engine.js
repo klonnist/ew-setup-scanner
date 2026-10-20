@@ -197,39 +197,42 @@ export function backtestCoin(candles, cfg) {
   }
 
   // ---------------------------------------------------------------- diagonal
+  // Dalga 4 → 5: limit, aday ilk kez "4 oluşuyor" görülünce (3 aşılırsa iptal); 4 onayı bu mumdaysa kapanıştan.
   // Ending: kapanış 2–4 çizgisini bu mumda kırdıysa kapanıştan ters yöne piyasa emri.
   // Leading: diagonal ilk kez tamamlanmış görülünce dalga 2 limiti (5 aşılırsa iptal).
   function diagStep(win, off, bar, t) {
     const last = win.length - 1;
     for (const tr of findDiagonals(win, opts, null)) {
       const P = tr.points;
-      const p = tr.plans[0];
       const abs = (q) => candles[q.i + off].time;
-      const key = `${p.type}|${tr.direction}|${abs(P.p0)}|${abs(P.p2)}|${abs(P.p4)}`;
-      const isLimit = p.type === 'dlead';
-      if (!isLimit && !(p.state === 'triggered' && p.fillIdx === last)) continue; // ending: kırılım bu mumda
-      if (seen.has(key)) continue;
-      seen.add(key);
-      orderCount++;
-      if (isLimit && p.state !== 'lwaiting' && p.state !== 'lapproaching') { cancel({ type: p.type }, 'geç algılandı'); continue; }
-      const entry = isLimit ? p.level : bar.close;
-      if (p.rr < opts.diagMinRR) { cancel({ type: p.type }, 'R:R düşük'); continue; }
-      if (!riskOk(entry, p.stop, opts)) { cancel({ type: p.type }, 'stop çok yakın'); continue; }
-      const o = {
-        type: p.type, d: tr.d, created: t, key,
-        legs: [{ level: entry, w: 1, market: !isLimit }],
-        activeFrom: -Infinity,
-        stop: p.stop, target: p.main.price, t1: p.targets[0].price,
-        cancelBeyond: null, cancelFav: isLimit ? P.p5.price : null,
-        meta: { sensitivity: tr.sensitivity, score: tr.score, pattern: tr.shape, context: tr.type, strength: null, abc: null, retr: null, timeRatio: null },
-      };
-      if (!isLimit) fillLeg(o, o.legs[0], bar.close, t);
-      orders.push(o);
-      const targets = p.targets;
-      trackers.push({ o, d: tr.d, stop: p.stop, start: t, mfe: isLimit ? null : bar.close, done: false, reach: (m) => ({ reach: abcdeReach(targets, tr.d, m) }) });
+      for (const p of tr.plans) {
+        const key = `${p.type}|${tr.direction}|${abs(P.p0)}|${abs(P.p1)}|${abs(P.p2)}`;
+        const isLimit = p.entryKind === 'limit';
+        if (!isLimit && !((p.state === 'triggered' || p.state === 'ready') && p.fillIdx === last)) continue; // piyasa: tetik bu mumda
+        if (isLimit && p.type === 'd4lim' && !tr.forming && !seen.has(key)) { seen.add(key); continue; } // 4 bitmişken ilk görülen limit verilmez
+        if (seen.has(key)) continue;
+        seen.add(key);
+        orderCount++;
+        if (isLimit && p.state !== 'lwaiting' && p.state !== 'lapproaching') { cancel({ type: p.type }, 'geç algılandı'); continue; }
+        const entry = isLimit ? p.level : bar.close;
+        if (p.rr < opts.diagMinRR) { cancel({ type: p.type }, 'R:R düşük'); continue; }
+        if (!riskOk(entry, p.stop, opts)) { cancel({ type: p.type }, 'stop çok yakın'); continue; }
+        const cancelFav = !isLimit ? null : p.type === 'd4lim' ? P.p3.price : P.p5.price;
+        const o = {
+          type: p.type, d: tr.d, created: t, key,
+          legs: [{ level: entry, w: 1, market: !isLimit }],
+          activeFrom: -Infinity,
+          stop: p.stop, target: p.main.price, t1: p.targets[0].price,
+          cancelBeyond: null, cancelFav,
+          meta: { sensitivity: tr.sensitivity, score: tr.score, pattern: tr.shape, context: tr.type, strength: null, abc: null, retr: null, timeRatio: null },
+        };
+        if (!isLimit) fillLeg(o, o.legs[0], bar.close, t);
+        orders.push(o);
+        const targets = p.targets;
+        trackers.push({ o, d: tr.d, stop: p.stop, start: t, mfe: isLimit ? null : bar.close, done: false, reach: (m) => ({ reach: abcdeReach(targets, tr.d, m) }) });
+      }
     }
   }
-
   function track(k, b, t) {
     const d = k.d ?? k.tr.d;
     const stop = k.stop ?? k.tr.levels.stop;
@@ -304,7 +307,7 @@ export function backtestCoin(candles, cfg) {
 
     const nowOpen = o.legs.some((l) => l.filled);
     if (!nowOpen) {
-      if (o.cancelFav != null && d * (fav - o.cancelFav) > 0) return cancel(o, { elimit: 'D aşıldı, E limite gelmedi', dlead: '5 aşıldı, dalga 2 limite gelmedi' }[o.type] || 'B kırıldı, bölgeye gelmedi');
+      if (o.cancelFav != null && d * (fav - o.cancelFav) > 0) return cancel(o, { elimit: 'D aşıldı, E limite gelmedi', dlead: '5 aşıldı, dalga 2 limite gelmedi', d4lim: '3 aşıldı, dalga 4 limite gelmedi' }[o.type] || 'B kırıldı, bölgeye gelmedi');
       if (d * (fav - o.t1) >= 0) return cancel(o, 'hedef 1 dolmadan görüldü');
       if (t - o.created > c.maxPending) return cancel(o, 'süre aşımı');
       return;

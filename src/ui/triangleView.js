@@ -89,7 +89,7 @@ export function triDetail(t, { tfId, feePct }) {
       ${fact('Dokunuş', `${t.touches.flat} düz · ${t.touches.slope} eğik`)}
       ${fact('Bağlam', esc(t.contextLabel))}
       ${fact('Önceki hareket', prior)}
-      ${fact(`R:R (${esc(L.main.name)})`, fmtX(t.rr, 2))}
+      ${fact(`R:R (${L.main.name})`, fmtX(t.rr, 2))}
     </div>
     <h3 class="sec">Hedefler ${t.fibMode === 'retr' ? '· önceki hareketin geri çekilmeleri' : t.fibMode === 'proj' ? '· kırılımdan izdüşüm' : ''}</h3>
     <ul class="levels">${targets}</ul>
