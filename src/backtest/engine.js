@@ -313,11 +313,15 @@ export function backtestCoin(candles, cfg) {
       return;
     }
 
+    // İşlem içi en kötü fiyat (MAE; kaldıraçta tasfiye kontrolü için). Stop mumunda fiyat önce stop'a değer: MAE = çıkış.
+    const worse = (x, y) => (x == null ? y : d === 1 ? Math.min(x, y) : Math.max(x, y));
     // Pozisyon yönetimi: önce stop (muhafazakâr), sonra hedef (dolum mumunda hedef sayılmaz)
     if (d * (adverse - o.stop) <= 0) {
       const px = d === 1 ? Math.min(o.stop, b.open) : Math.max(o.stop, b.open);
+      o.mae = worse(o.mae, px);
       return close(o, px, t, 'stop');
     }
+    o.mae = worse(o.mae, adverse);
     if (open && !fillsNow.length && d * (fav - o.target) >= 0) {
       const px = d === 1 ? Math.max(o.target, b.open) : Math.min(o.target, b.open);
       return close(o, px, t, 'hedef');
@@ -353,6 +357,7 @@ export function backtestCoin(candles, cfg) {
       R,
       outcome,
       bars: t - o.entryT,
+      mae: o.mae ?? null,
       ...o.meta,
       ...(o.reach ? (o.reach.reach ? { reach: o.reach.reach } : { mfeH: o.reach.mfeH, mfeFib: o.reach.mfeFib }) : {}),
     };

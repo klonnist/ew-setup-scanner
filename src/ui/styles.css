@@ -364,3 +364,10 @@ body.mode-diagonal .wave-only:not(.diag-show) { display: none; }
 .state.dg-stopped, .state.dg-failed { color: var(--bad); }
 .state.dg-target { color: var(--good); }
 .state.dg-missed, .state.dg-old { color: var(--muted); }
+
+/* Backtest: sonuç filtresi ve para simülasyonu */
+.bt-filters { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: 4px 0 12px; }
+.money { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 4px; }
+.money-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px 12px; margin-bottom: 12px; }
+.money-form small { display: block; color: var(--muted); font-size: 11px; }
+.tile small { font-size: 11px; font-weight: 500; }

@@ -155,3 +155,13 @@ test('takip kaydı: dalga 4 limiti, kaçış seviyesi 3 ucu', async () => {
   assert.equal(snap.plans[0].cancelFav, t.points.p3.price);
   assert.deepEqual(snap.points.map((p) => p.label), ['0', '1', '2', '3', '4?']);
 });
+
+test('backtest işlemi işlem içi en kötü fiyatı (mae) taşır', async () => {
+  const { backtestCoin } = await import('../src/backtest/engine.js');
+  const c = build([...W4, [80, 114], [96, 127]]);
+  const r = backtestCoin(c, { from: 0, to: c[c.length - 1].time, opts: { mode: 'diagonal', ...OW, diagMinRR: 0 }, window: 600 });
+  const lim = r.trades.find((t) => t.type === 'd4lim');
+  const entryIdx = c.findIndex((x) => x.time === lim.entryTime), exitIdx = c.findIndex((x) => x.time === lim.exitTime);
+  const lowest = Math.min(...c.slice(entryIdx, exitIdx + 1).map((x) => x.low));
+  assert.ok(Math.abs(lim.mae - lowest) < 1e-9, `${lim.mae} vs ${lowest}`);
+});

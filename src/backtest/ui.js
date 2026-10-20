@@ -5,6 +5,7 @@ import { summarize, BT_DEFAULTS, TRI_WINDOW } from './engine.js';
 import { loadRuns, saveRun, deleteRun, importRuns, packTrades, unpackTrades, usedBytes, MAX_BYTES } from './store.js';
 import { loadSettings, saveSettings, renderSettings, toScanOptions, UI_DEFAULTS } from '../ui/settings.js';
 import { fmtPct, fmtX, esc } from '../ui/format.js';
+import { simulate, toCsv, MONEY_DEFAULTS } from './money.js';
 
 const $ = (s) => document.querySelector(s);
 const PKEY = 'ew-setup-scanner:btparams:v1';
@@ -28,6 +29,11 @@ let params = loadParams();
 let running = null; // { ctrl, workers }
 let current = null; // gösterilen çalışma
 let eqChart = null;
+let moneyChart = null;
+let filter = { type: '', dir: '', coin: '' }; // sonuç filtresi (çalışma değişince sıfırlanır)
+let view = { trades: [], p: null }; // süzülmüş işlemler
+const MKEY = 'ew-setup-scanner:money:v1';
+let moneyOpts = (() => { try { return { ...MONEY_DEFAULTS, ...JSON.parse(localStorage.getItem(MKEY) || '{}') }; } catch { return { ...MONEY_DEFAULTS }; } })();
 
 // ------------------------------------------------------------------ parametreler
 function isoDay(ms) { return new Date(ms).toISOString().slice(0, 10); }
@@ -405,12 +411,131 @@ function diagReachTable(list) {
     ${block('Leading (devam)', split(lead), [['p5', '5 ucu'], ['w3a', 'Dalga 3 = 1×'], ['w3b', 'Dalga 3 = 1,618×']])}</div>`;
 }
 
+// ------------------------------------------------------------------ sonuç filtresi
+function renderFilters(all) {
+  const opt = (v, t, sel) => `<option value="${esc(v)}"${sel === v ? ' selected' : ''}>${esc(t)}</option>`;
+  const types = [...new Set(all.map((t) => t.type))];
+  const coins = [...new Set(all.map((t) => t.coin))].sort();
+  $('#btFilters').innerHTML = `
+    <label class="field inline"><span>Plan</span><select id="fType">${opt('', 'Hepsi', filter.type)}${types.map((t) => opt(t, TYPE_NAME[t] || t, filter.type)).join('')}</select></label>
+    <label class="field inline"><span>Yön</span><select id="fDir">${opt('', 'Hepsi', filter.dir)}${opt('long', 'Long ▲', filter.dir)}${opt('short', 'Short ▼', filter.dir)}</select></label>
+    <label class="field inline"><span>Coin</span><select id="fCoin">${opt('', 'Hepsi', filter.coin)}${coins.map((c) => opt(c, c, filter.coin)).join('')}</select></label>
+    <span class="muted small">Rapor, para simülasyonu ve işlem listesi bu filtreyle hesaplanır.</span>`;
+  const on = (id, key) => $(id).addEventListener('change', (e) => { filter = { ...filter, [key]: e.target.value }; show(current); });
+  on('#fType', 'type'); on('#fDir', 'dir'); on('#fCoin', 'coin');
+}
+
+// ------------------------------------------------------------------ para simülasyonu
+const usd = (x, sign = true) => `${sign && x > 0 ? '+' : ''}${x.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $`;
+const MODE_TXT = { fixed: 'Her işleme sabit tutar (bütün sinyaller)', single: 'Tek pozisyon, bakiyenin tamamı (bileşik)', slots: 'Sermayeyi N parçaya böl' };
+
+function moneyForm() {
+  const o = moneyOpts;
+  const num = (id, label, v, step, min, hint = '') => `<label class="field"><span>${esc(label)}</span><input type="number" id="${id}" value="${v}" step="${step}" min="${min}"/>${hint ? `<small>${esc(hint)}</small>` : ''}</label>`;
+  return `<div class="money-form">
+    <label class="field"><span>Sermaye kullanımı</span><select id="mMode">${Object.entries(MODE_TXT).map(([k, t]) => `<option value="${k}"${o.mode === k ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></label>
+    ${num('mCapital', 'Başlangıç sermayesi ($)', o.capital, 10, 1)}
+    ${o.mode === 'fixed' ? num('mMargin', 'İşlem başı teminat ($)', o.margin, 1, 1) : ''}
+    ${o.mode === 'slots' ? num('mSlots', 'Parça sayısı (aynı anda en fazla)', o.slots, 1, 1) : ''}
+    ${num('mLev', 'Kaldıraç (×)', o.leverage, 1, 1, '1 = kaldıraçsız (spot)')}
+    ${num('mFee', 'Komisyon (% / taraf)', o.feePct, 0.01, 0, 'Spot ~%0,1, OKX vadeli taker ~%0,05')}
+    ${o.leverage > 1 ? num('mMmr', 'Bakım teminatı (%)', o.mmr, 0.1, 0, 'Tasfiye fiyatını belirler') : ''}
+  </div>`;
+}
+
+function renderMoney() {
+  const { trades, p } = view;
+  const box = $('#money');
+  const sim = simulate(trades, moneyOpts);
+  const S = sim.summary, o = moneyOpts;
+  const cls = (x) => (x >= 0 ? 'pos' : 'neg');
+  const tiles = `<div class="tile-row">
+    ${tile('Net kâr/zarar', usd(S.net), cls(S.net))}
+    ${o.mode === 'fixed' ? tile('Sabit tutarla toplam getiri', fmtPct(S.net / Math.max(1, S.taken * o.margin), 1), cls(S.net)) : tile('Son bakiye', `${usd(S.final, false)} <small class="muted">${fmtPct(S.returnPct, 1)}</small>`, cls(S.net))}
+    ${tile('Alınan / atlanan sinyal', `${S.taken} / ${S.skipped}`)}
+    ${tile('Kârlı / zararlı', `${S.wins} / ${S.losses}${S.open ? ` <small class="muted">+${S.open} açık</small>` : ''}`)}
+    ${o.leverage > 1 ? tile('Tasfiye', `${S.liquidated}${S.approx ? ' <small class="muted">yaklaşık</small>' : ''}`, S.liquidated ? 'neg' : '') : ''}
+    ${tile('Ort. kazanç / kayıp', `${usd(S.avgWin)} / ${usd(S.avgLoss)}`)}
+    ${tile('En iyi / en kötü işlem', `${usd(S.best)} / ${usd(S.worst)}`)}
+    ${tile('En büyük düşüş', `${usd(-S.maxDD)}${S.lowBalance > 0 ? ` <small class="muted">${fmtPct(S.maxDDPct, 1)}</small>` : ''}`, 'neg')}
+    ${tile('En düşük bakiye', usd(S.lowBalance, false), S.lowBalance < 0 ? 'neg' : '')}
+    ${o.mode === 'single' ? tile('En büyük pozisyon teminatı', usd(S.maxMargin, false)) : tile('Aynı anda gereken teminat', `${usd(S.maxMargin, false)} <small class="muted">${S.maxConcurrent} pozisyon</small>`)}
+    ${S.open ? tile('Açık pozisyonlar (anlık)', usd(S.openPnl), cls(S.openPnl)) : ''}
+  </div>`;
+  const months = S.closed ? `<div class="bd"><h3>Aylık</h3><table class="stat"><thead><tr><th>Ay</th><th>İşlem</th><th>Kârlı</th><th>Kâr/zarar</th><th>Kümülatif</th></tr></thead><tbody>
+    ${sim.months.map((m) => `<tr><td>${m.month}</td><td class="num">${m.n}</td><td class="num">${m.wins}</td><td class="num ${cls(m.pnl)}">${usd(m.pnl)}</td><td class="num ${cls(m.cum)}">${usd(m.cum)}</td></tr>`).join('')}</tbody></table></div>` : '';
+  const coins = S.closed ? `<div class="bd"><h3>Coin</h3><table class="stat"><thead><tr><th>Coin</th><th>İşlem</th><th>Kâr/zarar</th></tr></thead><tbody>
+    ${sim.coins.map((c) => `<tr><td>${esc(c.coin)}</td><td class="num">${c.n}</td><td class="num ${cls(c.pnl)}">${usd(c.pnl)}</td></tr>`).join('')}</tbody></table></div>` : '';
+  box.innerHTML = `
+    <div class="bt-title"><h2>Para simülasyonu</h2><span class="muted">${esc(MODE_TXT[o.mode])}${o.leverage > 1 ? ` · ${o.leverage}× kaldıraç` : ''}</span><span class="spacer"></span>
+      <button type="button" id="csvBtn" class="ghost sm">İşlemleri CSV indir</button></div>
+    ${moneyForm()}
+    ${trades.length ? tiles : '<p class="muted">Bu filtrede işlem yok.</p>'}
+    ${trades.length && (S.lowBalance < 0 || (o.mode === 'fixed' && S.maxMargin > o.capital)) ? `<p class="note">⚠ ${usd(o.capital, false)} sermaye bu ayarla yetmez:
+      ${S.lowBalance < 0 ? `bakiye bir ara ${usd(S.lowBalance, false)}'a düşüyor` : ''}${S.lowBalance < 0 && S.maxMargin > o.capital ? ', ' : ''}${S.maxMargin > o.capital ? `aynı anda ${usd(S.maxMargin, false)} teminat gerekiyor` : ''}.
+      Bu planı kesintisiz uygulamak için yaklaşık (en büyük düşüş + aynı anda gereken teminat) ${usd(Math.ceil((Math.max(0, o.capital - S.lowBalance) + S.maxMargin) / 10) * 10, false)} gerekir; ya da "Sermayeyi N parçaya böl" modunu kullan.</p>` : ''}
+    <div class="chart eq" id="moneyChart"></div>
+    <div class="breakdowns">${months}${coins}</div>
+    <p class="muted small">Kâr/zarar = pozisyon (teminat × kaldıraç) × fiyat değişimi − komisyon (giriş + çıkış). Tasfiye: izole marjin,
+      fiyat girişten ${o.leverage > 1 ? `≈ %${((1 / o.leverage - o.mmr / 100) * 100).toFixed(1).replace('.', ',')}` : '–'} aleyhe gidince teminatın tamamı gider; 4 saatlik (seçilen zaman dilimi) mum uç fiyatlarıyla ölçülür${S.approx ? ', bu çalışma eski olduğu için yaklaşık (yalnızca stop mesafesine bakılır; backtest\'i yeniden çalıştır)' : ''}.
+      Aynı mumda birden çok sinyal varsa puanı yüksek olan önce alınır. Funding ve kayma dahil değil. Yatırım tavsiyesi değildir.</p>`;
+  drawMoney(sim.curve);
+  // Form
+  const bind = (id, key, conv = Number) => { const el = $(id); if (el) el.addEventListener('change', () => { moneyOpts = { ...moneyOpts, [key]: conv(el.value) }; try { localStorage.setItem(MKEY, JSON.stringify(moneyOpts)); } catch { /* yoksay */ } renderMoney(); }); };
+  bind('#mMode', 'mode', String); bind('#mCapital', 'capital'); bind('#mMargin', 'margin'); bind('#mSlots', 'slots', (v) => Math.max(1, Math.round(Number(v)))); bind('#mLev', 'leverage', (v) => Math.max(1, Number(v))); bind('#mFee', 'feePct'); bind('#mMmr', 'mmr');
+  $('#csvBtn').addEventListener('click', () => {
+    const csv = toCsv(sim.rows, { typeName: TYPE_NAME, withMoney: true });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `backtest-${p.tf}-${isoDay(p.from)}-${isoDay(p.to)}${filter.type ? '-' + filter.type : ''}${filter.dir ? '-' + filter.dir : ''}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+  renderTradeTable(sim);
+}
+
+function drawMoney(curve) {
+  const el = $('#moneyChart');
+  if (moneyChart) { moneyChart.remove(); moneyChart = null; }
+  const LW = window.LightweightCharts;
+  if (!LW || curve.length < 2) { el.hidden = true; return; }
+  el.hidden = false;
+  moneyChart = LW.createChart(el, {
+    width: el.clientWidth, height: el.clientHeight,
+    layout: { background: { type: 'solid', color: '#121822' }, textColor: '#8f99aa', fontSize: 11 },
+    grid: { vertLines: { color: '#1c2430' }, horzLines: { color: '#1c2430' } },
+    rightPriceScale: { borderColor: '#1c2430' }, timeScale: { borderColor: '#1c2430', timeVisible: false },
+  });
+  const pts = [];
+  for (const c of curve) { const time = Math.floor(c.time / 1000); if (pts.length && pts[pts.length - 1].time >= time) pts[pts.length - 1].value = c.value; else pts.push({ time, value: c.value }); }
+  moneyChart.addSeries(LW.LineSeries, { color: '#7cc4a8', lineWidth: 2, priceLineVisible: false }).setData(pts);
+  moneyChart.timeScale().fitContent();
+}
+
+function renderTradeTable(sim) {
+  const byT = new Map(sim.rows.map((x) => [x.t, x]));
+  const trades = view.trades;
+  const rows = [...trades].sort((a, b) => b.entryTime - a.entryTime).slice(0, 500);
+  const dt = (ms) => new Date(ms).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+  const m = (t) => byT.get(t);
+  $('#trades').innerHTML = `<thead><tr><th>Giriş</th><th>Coin</th><th>Plan</th><th>Yön</th><th>Sonuç</th><th>R</th><th>Mum</th><th>Giriş fiyatı</th><th>Çıkış</th><th>Alındı</th><th>Kâr/zarar</th><th>Bakiye</th></tr></thead><tbody>
+    ${rows.map((t) => { const x = m(t); return `<tr><td>${dt(t.entryTime)}</td><td>${esc(t.coin)}</td><td>${TYPE_NAME[t.type]}${t.legs > 1 ? ` ${t.filledLegs}/${t.legs}` : ''}</td><td>${t.dir === 'long' ? '▲' : '▼'}</td><td>${esc(t.outcome)}${x?.liquidated ? ' <b class="neg">tasfiye</b>' : ''}</td>
+      <td class="num ${t.R >= 0 ? 'pos' : 'neg'}">${fmtR(t.R)}</td><td class="num">${t.bars}</td><td class="num">${t.entry.toPrecision(5)}</td><td class="num">${t.exit.toPrecision(5)}</td>
+      <td>${x?.taken ? '✓' : `<small class="muted">${esc(x?.reason || '')}</small>`}</td><td class="num ${x?.pnl >= 0 ? 'pos' : 'neg'}">${x?.taken ? usd(x.pnl) : ''}</td><td class="num">${x?.taken && !x.open && x.balance != null ? usd(x.balance, false) : x?.open ? 'açık' : ''}</td></tr>`; }).join('')}</tbody>
+    ${trades.length > 500 ? `<caption class="muted">Son 500 işlem gösteriliyor (toplam ${trades.length}); hepsi için CSV indir.</caption>` : ''}`;
+}
+
 function tile(label, value, cls = '') { return `<div class="tile"><b>${esc(label)}</b><span class="num ${cls}">${value}</span></div>`; }
 
 function show(runObj) {
+  if (runObj !== current) filter = { type: '', dir: '', coin: '' };
   current = runObj;
   const p = runObj.params;
-  const trades = unpackTrades(runObj.trades);
+  const allTrades = unpackTrades(runObj.trades);
+  renderFilters(allTrades);
+  const trades = allTrades.filter((t) => (!filter.type || t.type === filter.type) && (!filter.dir || t.dir === filter.dir) && (!filter.coin || t.coin === filter.coin));
+  view = { trades, p };
   $('#results').hidden = false;
   $('#resTitle').textContent = `${p.tf} · ${isoDay(p.from)} → ${isoDay(p.to)} · ${p.coins.length} coin${p.note ? ' · ' + p.note : ''}`;
   $('#resMeta').textContent = settingsText(p);
@@ -433,7 +558,8 @@ function show(runObj) {
   }).join('');
   const canc = Object.entries(runObj.cancelled || {}).sort((a, b) => b[1] - a[1])
     .map(([k, v]) => { const [t, r] = k.split(':'); return `<span class="chip">${esc(TYPE_NAME[t] || t)}: ${esc(r)} ${v}</span>`; }).join('');
-  $('#tiles').innerHTML = `${blocks}<p class="muted small">${runObj.orders} emir oluştu, ${trades.length} tanesi doldu.</p>${canc ? `<div class="chips"><span class="chip muted">Dolmayan emirler →</span>${canc}</div>` : ''}`;
+  const filtered = trades.length !== allTrades.length;
+  $('#tiles').innerHTML = `${blocks}<p class="muted small">${runObj.orders} emir oluştu, ${allTrades.length} tanesi doldu${filtered ? ` · filtre: ${trades.length} işlem gösteriliyor` : ''}.</p>${canc ? `<div class="chips"><span class="chip muted">Dolmayan emirler →</span>${canc}</div>` : ''}`;
 
   drawEquity(trades, types);
   $('#reach').innerHTML = reachTable(trades.filter((t) => t.type === 'triangle' && t.mfeH != null)) + abcdeReachTable(trades.filter((t) => t.reach && isAbcdeT(t))) + diagReachTable(trades.filter((t) => t.reach && isDiagT(t)));
@@ -461,12 +587,7 @@ function show(runObj) {
     groupTable('Coin (en iyi / en kötü)', closed, (t) => t.coin, { limit: 5, sort: 'R' }),
   ].join('');
 
-  const rows = [...trades].sort((a, b) => b.entryTime - a.entryTime).slice(0, 500);
-  const dt = (ms) => new Date(ms).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
-  $('#trades').innerHTML = `<thead><tr><th>Giriş</th><th>Coin</th><th>Plan</th><th>Yön</th><th>Sonuç</th><th>R</th><th>Mum</th><th>Giriş fiyatı</th><th>Çıkış</th></tr></thead><tbody>
-    ${rows.map((t) => `<tr><td>${dt(t.entryTime)}</td><td>${esc(t.coin)}</td><td>${TYPE_NAME[t.type]}${t.legs > 1 ? ` ${t.filledLegs}/${t.legs}` : ''}</td><td>${t.dir === 'long' ? '▲' : '▼'}</td><td>${esc(t.outcome)}</td>
-      <td class="num ${t.R >= 0 ? 'pos' : 'neg'}">${fmtR(t.R)}</td><td class="num">${t.bars}</td><td class="num">${t.entry.toPrecision(5)}</td><td class="num">${t.exit.toPrecision(5)}</td></tr>`).join('')}</tbody>
-    ${trades.length > 500 ? `<caption class="muted">Son 500 işlem gösteriliyor (toplam ${trades.length}).</caption>` : ''}`;
+  renderMoney();
   renderRuns();
 }
 

@@ -114,6 +114,17 @@ OKX geçmiş mumlarıyla her mum kapanışında canlı tarayıcının göreceği
 - Rapor: işlem sayısı, kazanma oranı, ortalama / toplam R, kâr faktörü, maks. düşüş, kümülatif R grafiği ve
   plan tipi, yön, bölge gücü, çakışma, dalga 2 tipi, derece, coin kırılımları.
 - Çalışmalar tarayıcıda (localStorage, ~3,5 MB sınır, tipik çalışma 10–100 KB) saklanır; JSON olarak dışa/içe aktarılabilir.
+- **Filtre:** sonuçlar plan tipi, yön (long / short) ve coine göre süzülür; rapor, para simülasyonu ve işlem listesi buna göre hesaplanır
+  (ör. "Ending dönüşü + Long").
+- **Para simülasyonu** (backtest yeniden çalışmadan, kayıtlı işlemlerle):
+  - *Her işleme sabit tutar*: her sinyale aynı teminat (ör. 25 $); aynı anda gereken teminat ve sermaye yeterli mi gösterilir.
+  - *Tek pozisyon, bakiyenin tamamı*: bileşik; pozisyon açıkken gelen sinyaller atlanır.
+  - *Sermayeyi N parçaya böl*: parçalar doluyken gelen sinyal atlanır.
+  - Kaldıraç ve izole marjin tasfiyesi: tasfiye fiyatı = giriş × (1 ∓ 1/kaldıraç ± bakım teminatı); işlem içi en kötü fiyat
+    (backtest'in kaydettiği MAE) bu seviyeye ulaşırsa teminatın tamamı gider. Eski kayıtlarda yalnızca stop mesafesine bakılır.
+  - Çıktılar: net $, kârlı/zararlı, tasfiye, ortalama kazanç/kayıp, en büyük düşüş, en düşük bakiye, bakiye eğrisi, aylık ve coin tablosu.
+  - Aynı mumda birden çok sinyal varsa puanı yüksek olan önce alınır (çıkış zamanına bakılmaz). Funding ve kayma dahil değil.
+- **İşlemleri CSV indir:** süzülmüş işlemler, para simülasyonu sütunlarıyla (noktalı virgül, Excel'de açılır).
 
 ## Kural motoru
 
