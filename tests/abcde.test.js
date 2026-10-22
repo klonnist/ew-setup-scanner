@@ -146,3 +146,18 @@ test('önceki hareket: 5 dalgalı itki bulunur; düz harekette itki yok, zorunlu
   assert.ok(f.rules.some((r) => r.id === 'W3' && !r.ok));
   assert.equal(findAbcde(flat, { ...O, w3Check: 'require' }).filter((x) => x.direction === 'long').length, 0);
 });
+
+test('backtest: her hedef için ayrı çıkış (alts) kaydedilir', async () => {
+  const { backtestCoin } = await import('../src/backtest/engine.js');
+  const c = build(path(TRI(95), { lead: W3, tail: [[12, 98], [20, 130]] }));
+  const r = backtestCoin(c, { from: 0, to: c[c.length - 1].time, opts: { mode: 'abcde', ...O, abcdeMinRR: 0 }, window: 600 });
+  const lim = r.trades.find((t) => t.type === 'elimit');
+  assert.ok(lim.alts && lim.alts.length >= 2, JSON.stringify(lim.alts));
+  // Hedefler yakından uzağa; yakın hedef görüldü ve çıkış hedef fiyatında (ya da boşlukta daha iyi)
+  assert.ok(lim.alts[0].p < lim.alts[1].p);
+  assert.equal(lim.alts[0].o, 'hedef');
+  assert.ok(lim.alts[0].x >= lim.alts[0].p);
+  // Ana çıkış (thrust) da alternatiflerden biriyle aynı sonuçta
+  const same = lim.alts.find((a) => Math.abs(a.p - lim.target) < 1e-9);
+  assert.ok(same && Math.abs(same.x - lim.exit) < 1e-9 && same.o === lim.outcome);
+});

@@ -371,3 +371,16 @@ body.mode-diagonal .wave-only:not(.diag-show) { display: none; }
 .money-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 8px 12px; margin-bottom: 12px; }
 .money-form small { display: block; color: var(--muted); font-size: 11px; }
 .tile small { font-size: 11px; font-weight: 500; }
+
+/* Ayarlar: konu başlıkları */
+.settings { display: block; }
+.set-group { border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2); margin-bottom: 10px; }
+.set-group > summary { cursor: pointer; padding: 10px 14px; font-weight: 600; font-size: 14px; list-style: none; display: flex; align-items: center; gap: 8px; }
+.set-group > summary::-webkit-details-marker { display: none; }
+.set-group > summary::before { content: '▸'; color: var(--muted); transition: transform 0.15s; }
+.set-group[open] > summary::before { transform: rotate(90deg); }
+.set-group.current { border-color: var(--accent); }
+.set-group h4 { margin: 6px 14px 6px; font-size: 13px; font-weight: 600; color: var(--text-2); border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+.set-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px 16px; padding: 4px 14px 14px; }
+.settings .actions { display: flex; justify-content: flex-end; }
+@media (max-width: 600px) { .set-grid { grid-template-columns: 1fr; } }

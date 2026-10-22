@@ -36,7 +36,7 @@ Araç çubuğundaki **Giriş tipi** ile seçilir; "İkisi birden" seçilince kar
   - **Ön pay:** limit emir seviyenin 0,2 ATR önüne konur (fiyat seviyeye birkaç tik kala dönse de dolsun; 0 = tam seviye).
   - **Seviyeye yaklaştı:** fiyat emre 0,5 ATR'den yakınsa kart işaretlenir; otomatik yenilemede bildirim gelir.
 
-Tüm eşikler sayfadaki **Ayarlar** bölmesinden değiştirilebilir. Ağ gerektirmeyen ayarlar önbellekteki mumlarla anında yeniden hesaplanır.
+Tüm eşikler sayfadaki **Ayarlar** bölmesinden değiştirilebilir; ayarlar konu başlıklarına ayrılmıştır (Genel, Dalga-3, Üçgen, ABCDE, Diagonal) ve seçili modun başlığı açık gelir. Ağ gerektirmeyen ayarlar önbellekteki mumlarla anında yeniden hesaplanır.
 
 ## ★ Takip listem
 
@@ -116,6 +116,9 @@ OKX geçmiş mumlarıyla her mum kapanışında canlı tarayıcının göreceği
 - Çalışmalar tarayıcıda (localStorage, ~3,5 MB sınır, tipik çalışma 10–100 KB) saklanır; JSON olarak dışa/içe aktarılabilir.
 - **Filtre:** sonuçlar plan tipi, yön (long / short) ve coine göre süzülür; rapor, para simülasyonu ve işlem listesi buna göre hesaplanır
   (ör. "Ending dönüşü + Long").
+- **Çıkış hedefi:** backtest her işlem için planın bütün hedeflerinde ayrı çıkışı da kaydeder (aynı giriş ve stop). Sonuçta
+  "Hedef 1 / Hedef 2 / …" seçilince bütün rapor ve para simülasyonu o hedefte çıkılmış gibi yeniden hesaplanır; kazançları
+  karşılaştırmak için backtest'i yeniden çalıştırmak gerekmez. Bu özellik bu sürümden sonra çalıştırılan backtestlerde vardır.
 - **Para simülasyonu** (backtest yeniden çalışmadan, kayıtlı işlemlerle):
   - *Her işleme sabit tutar*: her sinyale aynı teminat (ör. 25 $); aynı anda gereken teminat ve sermaye yeterli mi gösterilir.
   - *Tek pozisyon, bakiyenin tamamı*: bileşik; pozisyon açıkken gelen sinyaller atlanır.

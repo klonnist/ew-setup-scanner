@@ -65,6 +65,7 @@ function updateSettings(patch) {
   syncToolbar();
   if (patch === null) renderSettings($('#settings'), state.settings, updateSettings);
   if ('autoRefresh' in (patch || {})) setupAutoRefresh();
+  if (patch && 'mode' in patch && patch.mode !== prev.mode) renderSettings($('#settings'), state.settings, updateSettings); // seçili modun bölümü açılsın
   const netChanged = patch === null || NET_KEYS.some((k) => k in patch && String(patch[k]) !== String(prev[k]));
   if (!state.scan) { if (state.busy) scan(); return; } // ilk tarama sürerken değişiklik: yeniden başlat
   if (netChanged) { markStale(); scan(); }

@@ -52,6 +52,7 @@ export function backtestCoin(candles, cfg) {
 
     // 1) Önceki mumlarda oluşan emir / pozisyonları bu mumla ilerlet
     for (const o of orders) if (!o.done && o.created < t) step(o, bar, t);
+    for (const o of orders) if (o.done && o.altOpen && o.created < t) stepAlts(o, bar, t, false);
     for (const k of trackers) if (!k.done && k.start < t) track(k, bar, t);
 
     if (!inRange) {
@@ -90,6 +91,7 @@ export function backtestCoin(candles, cfg) {
             type: 'break', d: s.d, created: t, key,
             legs: [{ level: s.state === 'triggered' ? bar.close : L.trigger, w: 1, market: s.state === 'triggered' }],
             stop: L.stop, target: L.targets[Math.min(c.exitTarget, L.targets.length - 1)].price,
+            alts: altsOf(L.targets.map((x, i) => ({ name: `Hedef ${i + 1} (${x.k}× W1)`, price: x.price })), s.d, s.state === 'triggered' ? bar.close : L.trigger),
             t1: L.targets[0].price, cancelBeyond: s.points.p2.price, cancelFav: null,
             meta: meta(s),
           };
@@ -110,6 +112,7 @@ export function backtestCoin(candles, cfg) {
           legs: z.legs.map((level) => ({ level, w, market: false })),
           activeFrom: z.activeFrom != null ? z.activeFrom + off : -Infinity,
           stop: z.stop, target: z.targets[Math.min(c.exitTarget, z.targets.length - 1)].price,
+          alts: altsOf(z.targets.map((x, i) => ({ name: `Hedef ${i + 1} (${x.k}× W1)`, price: x.price })), s.d, z.entry),
           t1: z.targets[0].price, cancelBeyond: null, cancelFav: s.abc.B.price,
           meta: { ...meta(s), strength: z.strength, inside: z.inside },
         });
@@ -122,8 +125,10 @@ export function backtestCoin(candles, cfg) {
   for (const o of orders) {
     if (o.done) continue;
     if (o.legs.some((l) => l.filled)) close(o, last.close, n - 1, 'open');
+    if (o.altOpen) finishAlts(o, last.close, n - 1);
     else cancel(o, 'veri bitti');
   }
+  for (const o of orders) if (o.altOpen) finishAlts(o, last.close, n - 1);
   for (const k of trackers) if (!k.done) finishTrack(k, true);
   return { trades, stats: { orders: orderCount, cancelled } };
 
@@ -144,6 +149,7 @@ export function backtestCoin(candles, cfg) {
         type: 'triangle', d: tr.d, created: t, key,
         legs: [{ level: bar.close, w: 1, market: true }],
         stop: L.stop, target: L.main.price, t1: L.main.price, cancelBeyond: null, cancelFav: null,
+        alts: altsOf(L.targets, tr.d, bar.close),
         meta: {
           sensitivity: tr.sensitivity, score: tr.score, pattern: tr.type, context: tr.context,
           // Kırılım seviyesinin kendisi önceki hareketin hangi Fib oranında (bundan gerideki seviyeler 'zaten geçilmiş' sayılır)
@@ -186,6 +192,7 @@ export function backtestCoin(candles, cfg) {
           legs: [{ level: entry, w: 1, market: !isLimit }],
           activeFrom: -Infinity,
           stop: p.stop, target: p.main.price, t1: targets[0].price,
+          alts: altsOf(targets, tr.d, entry),
           cancelBeyond: null, cancelFav: isLimit ? P.D.price : null,
           meta,
         };
@@ -223,6 +230,7 @@ export function backtestCoin(candles, cfg) {
           legs: [{ level: entry, w: 1, market: !isLimit }],
           activeFrom: -Infinity,
           stop: p.stop, target: p.main.price, t1: p.targets[0].price,
+          alts: altsOf(p.targets, tr.d, entry),
           cancelBeyond: null, cancelFav,
           meta: { sensitivity: tr.sensitivity, score: tr.score, pattern: tr.shape, context: tr.type, strength: null, abc: null, retr: null, timeRatio: null },
         };
@@ -265,6 +273,41 @@ export function backtestCoin(candles, cfg) {
       sensitivity: s.sensitivity, score: s.score, retr: s.retr, timeRatio: s.timeRatio, abc: s.abc?.kind || null,
       widthAtr: s.zone ? s.zone.widthAtr : null, perfect: s.zone ? s.zone.perfect : null,
     };
+  }
+
+  /** Hedef listesinden girişin ötesindekiler, yakından uzağa: { name, price }. */
+  function altsOf(list, d, entry) {
+    return (list || []).filter((x) => d * (x.price - entry) > 0).sort((a, b) => d * (a.price - b.price)).map((x) => ({ name: x.name, price: x.price }));
+  }
+
+  /**
+   * Her hedef için ayrı çıkış (aynı stop, aynı kurallar): stop mumu önce, dolum mumunda hedef sayılmaz, maxHold dolunca kapanış.
+   * Ana işlem kapansa da tüm hedefler bitene kadar izlenir; sonuç işleme 'alts' olarak yazılır.
+   */
+  function stepAlts(o, b, t, fillBar) {
+    const d = o.d;
+    const { adverse, fav } = sideExt(b, d);
+    const worse = (x, y) => (x == null ? y : d === 1 ? Math.min(x, y) : Math.max(x, y));
+    for (const a of o.altState) {
+      if (a.done) continue;
+      if (d * (adverse - o.stop) <= 0) { a.done = true; a.exit = d === 1 ? Math.min(o.stop, b.open) : Math.max(o.stop, b.open); a.mae = worse(a.mae, a.exit); a.outcome = 'stop'; a.t = t; continue; }
+      a.mae = worse(a.mae, adverse);
+      if (!fillBar && d * (fav - a.price) >= 0) { a.done = true; a.exit = d === 1 ? Math.max(a.price, b.open) : Math.min(a.price, b.open); a.outcome = 'hedef'; a.t = t; continue; }
+      if (t - o.entryT >= c.maxHold) { a.done = true; a.exit = b.close; a.outcome = 'süre'; a.t = t; }
+    }
+    if (o.altState.every((a) => a.done)) { o.altOpen = false; writeAlts(o); }
+  }
+
+  function finishAlts(o, price, t) {
+    for (const a of o.altState) if (!a.done) { a.done = true; a.exit = price; a.outcome = 'open'; a.t = t; }
+    o.altOpen = false;
+    writeAlts(o);
+  }
+
+  function writeAlts(o) {
+    const alts = o.altState.map((a) => ({ n: a.name, p: a.price, x: a.exit, o: a.outcome, e: candles[a.t].time, m: a.mae ?? null }));
+    if (o.trade) o.trade.alts = alts;
+    else o.altsResult = alts; // pozisyon henüz kapanmadı: close() işleme yazar
   }
 
   function fillLeg(o, leg, price, t) {
@@ -313,6 +356,8 @@ export function backtestCoin(candles, cfg) {
       return;
     }
 
+    if (!o.altState && o.alts) { o.altState = o.alts.map((a) => ({ ...a })); o.altOpen = o.altState.length > 0; }
+    if (o.altOpen) stepAlts(o, b, t, fillsNow.length > 0);
     // İşlem içi en kötü fiyat (MAE; kaldıraçta tasfiye kontrolü için). Stop mumunda fiyat önce stop'a değer: MAE = çıkış.
     const worse = (x, y) => (x == null ? y : d === 1 ? Math.min(x, y) : Math.max(x, y));
     // Pozisyon yönetimi: önce stop (muhafazakâr), sonra hedef (dolum mumunda hedef sayılmaz)
@@ -358,6 +403,7 @@ export function backtestCoin(candles, cfg) {
       outcome,
       bars: t - o.entryT,
       mae: o.mae ?? null,
+      ...(o.altsResult ? { alts: o.altsResult } : {}),
       ...o.meta,
       ...(o.reach ? (o.reach.reach ? { reach: o.reach.reach } : { mfeH: o.reach.mfeH, mfeFib: o.reach.mfeFib }) : {}),
     };

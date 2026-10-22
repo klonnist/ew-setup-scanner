@@ -30,7 +30,7 @@ let running = null; // { ctrl, workers }
 let current = null; // gösterilen çalışma
 let eqChart = null;
 let moneyChart = null;
-let filter = { type: '', dir: '', coin: '' }; // sonuç filtresi (çalışma değişince sıfırlanır)
+let filter = { type: '', dir: '', coin: '', exit: '' }; // sonuç filtresi (çalışma değişince sıfırlanır); exit: '' ana hedef | '1'..'n'
 let view = { trades: [], p: null }; // süzülmüş işlemler
 const MKEY = 'ew-setup-scanner:money:v1';
 let moneyOpts = (() => { try { return { ...MONEY_DEFAULTS, ...JSON.parse(localStorage.getItem(MKEY) || '{}') }; } catch { return { ...MONEY_DEFAULTS }; } })();
@@ -420,9 +420,43 @@ function renderFilters(all) {
     <label class="field inline"><span>Plan</span><select id="fType">${opt('', 'Hepsi', filter.type)}${types.map((t) => opt(t, TYPE_NAME[t] || t, filter.type)).join('')}</select></label>
     <label class="field inline"><span>Yön</span><select id="fDir">${opt('', 'Hepsi', filter.dir)}${opt('long', 'Long ▲', filter.dir)}${opt('short', 'Short ▼', filter.dir)}</select></label>
     <label class="field inline"><span>Coin</span><select id="fCoin">${opt('', 'Hepsi', filter.coin)}${coins.map((c) => opt(c, c, filter.coin)).join('')}</select></label>
+    ${exitSelect(all)}
     <span class="muted small">Rapor, para simülasyonu ve işlem listesi bu filtreyle hesaplanır.</span>`;
   const on = (id, key) => $(id).addEventListener('change', (e) => { filter = { ...filter, [key]: e.target.value }; show(current); });
   on('#fType', 'type'); on('#fDir', 'dir'); on('#fCoin', 'coin');
+  if ($('#fExit')) on('#fExit', 'exit');
+}
+
+/**
+ * Çıkış hedefi seçimi: backtest her hedef için ayrı çıkışı (alts) kaydettiyse "Hedef 1 / 2 / …" ile karşılaştırılır.
+ * Eski çalışmalarda alts yok: seçim pasif ve açıklamalı.
+ */
+function exitSelect(all) {
+  const list = all.filter((t) => !filter.type || t.type === filter.type);
+  const withAlts = list.filter((t) => Array.isArray(t.alts) && t.alts.length);
+  if (!withAlts.length) {
+    return `<label class="field inline"><span>Çıkış hedefi</span><select id="fExit" disabled title="Bu çalışma eski: her hedef için çıkış kaydı yok. Backtest'i yeniden çalıştır."><option>Ana hedef (backtest)</option></select></label>`;
+  }
+  const max = Math.max(...withAlts.map((t) => t.alts.length));
+  // Aynı plan tipinde hedef adları ortaksa adı göster
+  const nameAt = (k) => {
+    const names = new Set(withAlts.filter((t) => t.alts[k]).map((t) => t.alts[k].n));
+    return names.size === 1 ? `Hedef ${k + 1}: ${[...names][0]}` : `Hedef ${k + 1}`;
+  };
+  const opt = (v, t) => `<option value="${v}"${filter.exit === String(v) ? ' selected' : ''}>${esc(t)}</option>`;
+  return `<label class="field inline"><span>Çıkış hedefi</span><select id="fExit">${opt('', 'Ana hedef (backtest)')}${Array.from({ length: max }, (_, k) => opt(k + 1, nameAt(k))).join('')}</select></label>`;
+}
+
+/** İşlemi k. hedefte çıkmış gibi yeniden yazar (aynı giriş ve stop). Hedefi daha az olan işlemde son hedef kullanılır. */
+function withExit(t, k, feePct) {
+  if (!Array.isArray(t.alts) || !t.alts.length) return t;
+  const a = t.alts[Math.min(k, t.alts.length) - 1];
+  const d = t.dir === 'short' ? -1 : 1;
+  const risk = d * (t.entry - t.stop);
+  const fee = (feePct / 100) * (t.entry + a.x);
+  const R = risk > 0 ? (d * (a.x - t.entry) - fee) / risk : t.R;
+  const bars = t.bars + Math.round((a.e - t.exitTime) / Math.max(1, (t.exitTime - t.entryTime) / Math.max(1, t.bars)));
+  return { ...t, exit: a.x, outcome: a.o, exitTime: a.e, target: a.p, R, bars: Number.isFinite(bars) ? bars : t.bars, exitName: a.n, mae: a.m ?? t.mae };
 }
 
 // ------------------------------------------------------------------ para simülasyonu
@@ -529,12 +563,13 @@ function renderTradeTable(sim) {
 function tile(label, value, cls = '') { return `<div class="tile"><b>${esc(label)}</b><span class="num ${cls}">${value}</span></div>`; }
 
 function show(runObj) {
-  if (runObj !== current) filter = { type: '', dir: '', coin: '' };
+  if (runObj !== current) filter = { type: '', dir: '', coin: '', exit: '' };
   current = runObj;
   const p = runObj.params;
   const allTrades = unpackTrades(runObj.trades);
   renderFilters(allTrades);
-  const trades = allTrades.filter((t) => (!filter.type || t.type === filter.type) && (!filter.dir || t.dir === filter.dir) && (!filter.coin || t.coin === filter.coin));
+  const picked = allTrades.filter((t) => (!filter.type || t.type === filter.type) && (!filter.dir || t.dir === filter.dir) && (!filter.coin || t.coin === filter.coin));
+  const trades = filter.exit ? picked.map((t) => withExit(t, Number(filter.exit), p.feePct)) : picked;
   view = { trades, p };
   $('#results').hidden = false;
   $('#resTitle').textContent = `${p.tf} · ${isoDay(p.from)} → ${isoDay(p.to)} · ${p.coins.length} coin${p.note ? ' · ' + p.note : ''}`;
@@ -678,10 +713,10 @@ function init() {
   const onSettings = (patch) => {
     settings = patch === null ? { ...UI_DEFAULTS } : { ...settings, ...patch };
     saveSettings(settings);
-    if (patch === null) renderSettings($('#settings'), settings, onSettings);
+    if (patch === null) renderSettings($('#settings'), settings, onSettings, { mode: params.mode });
     updateEstimate();
   };
-  renderSettings($('#settings'), settings, onSettings);
+  renderSettings($('#settings'), settings, onSettings, { mode: params.mode });
   for (const b of document.querySelectorAll('#tf button')) {
     b.addEventListener('click', () => { params = { ...params, tf: b.dataset.tf, ...defaultsFor(b.dataset.tf) }; saveParams(); syncForm(); });
   }
@@ -693,7 +728,7 @@ function init() {
     el.hidden = !el.hidden;
     $('#settingsBtn').setAttribute('aria-expanded', String(!el.hidden));
   });
-  $('#mode').addEventListener('change', () => { document.body.classList.toggle('mode-triangle', params.mode === 'triangle'); document.body.classList.toggle('mode-abcde', params.mode === 'abcde'); document.body.classList.toggle('mode-diagonal', params.mode === 'diagonal'); });
+  $('#mode').addEventListener('change', () => { renderSettings($('#settings'), settings, onSettings, { mode: params.mode }); document.body.classList.toggle('mode-triangle', params.mode === 'triangle'); document.body.classList.toggle('mode-abcde', params.mode === 'abcde'); document.body.classList.toggle('mode-diagonal', params.mode === 'diagonal'); });
   $('#runBtn').addEventListener('click', run);
   $('#stopBtn').addEventListener('click', () => { running?.ctrl.abort(); running?.pool.terminate(); });
   $('#exportBtn').addEventListener('click', exportRuns);
