@@ -114,8 +114,7 @@ OKX geçmiş mumlarıyla her mum kapanışında canlı tarayıcının göreceği
 - Rapor: işlem sayısı, kazanma oranı, ortalama / toplam R, kâr faktörü, maks. düşüş, kümülatif R grafiği ve
   plan tipi, yön, bölge gücü, çakışma, dalga 2 tipi, derece, coin kırılımları.
 - Çalışmalar tarayıcıda (localStorage, ~3,5 MB sınır, tipik çalışma 10–100 KB) saklanır; JSON olarak dışa/içe aktarılabilir.
-- **Filtre:** sonuçlar plan tipi, yön (long / short) ve coine göre süzülür; rapor, para simülasyonu ve işlem listesi buna göre hesaplanır
-  (ör. "Ending dönüşü + Long").
+- **Para simülasyonu paneli** "Tarama ayarları"nın hemen altındadır. Üstündeki düğmelerle süzülür: **Tür** (modun alt türleri: Diagonal için Dalga 4 → 5 / Dalga 4 limiti / 4 onayı / Ending / Leading, ABCDE için E limiti / E onayı, Dalga-3 için B kırılımı / Limit bölge, Üçgen için Yükselen / Alçalan), **Yön** (Long / Short), **Çıkış hedefi** ve **Coin**. Rapor, R özeti ve işlem listesi de aynı seçimle hesaplanır.
 - **Çıkış hedefi:** backtest her işlem için planın bütün hedeflerinde ayrı çıkışı da kaydeder (aynı giriş ve stop). Sonuçta
   "Hedef 1 / Hedef 2 / …" seçilince bütün rapor ve para simülasyonu o hedefte çıkılmış gibi yeniden hesaplanır; kazançları
   karşılaştırmak için backtest'i yeniden çalıştırmak gerekmez. Bu özellik bu sürümden sonra çalıştırılan backtestlerde vardır.

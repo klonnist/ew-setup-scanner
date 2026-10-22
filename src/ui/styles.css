@@ -384,3 +384,17 @@ body.mode-diagonal .wave-only:not(.diag-show) { display: none; }
 .set-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px 16px; padding: 4px 14px 14px; }
 .settings .actions { display: flex; justify-content: flex-end; }
 @media (max-width: 600px) { .set-grid { grid-template-columns: 1fr; } }
+
+/* Backtest: para simülasyonu paneli (tarama ayarlarının altında) */
+.money-panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 16px 14px; margin: 8px 0 6px; }
+.money-panel .bt-title { margin-top: 10px; }
+.filterbar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: flex-end; margin: 4px 0 14px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.fgroup { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.flabel { font-size: 12px; color: var(--muted); }
+.seg.wrap { flex-wrap: wrap; max-width: 100%; }
+.seg button:disabled { opacity: 0.4; cursor: default; }
+.money-panel .chart.eq { height: 240px; }
+@media (max-width: 600px) { .money-panel { padding: 4px 10px 12px; } .seg.wrap button { padding: 6px 10px; } }
+.fnote { font-size: 12px; color: var(--text-2); margin-top: 4px; max-width: 640px; }
+.fnote .on { color: var(--accent); font-weight: 600; }
+.chips .chip { max-width: 100%; white-space: normal; }

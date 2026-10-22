@@ -30,6 +30,7 @@ let running = null; // { ctrl, workers }
 let current = null; // gösterilen çalışma
 let eqChart = null;
 let moneyChart = null;
+let filterMode = null;
 let filter = { type: '', dir: '', coin: '', exit: '' }; // sonuç filtresi (çalışma değişince sıfırlanır); exit: '' ana hedef | '1'..'n'
 let view = { trades: [], p: null }; // süzülmüş işlemler
 const MKEY = 'ew-setup-scanner:money:v1';
@@ -411,41 +412,79 @@ function diagReachTable(list) {
     ${block('Leading (devam)', split(lead), [['p5', '5 ucu'], ['w3a', 'Dalga 3 = 1×'], ['w3b', 'Dalga 3 = 1,618×']])}</div>`;
 }
 
-// ------------------------------------------------------------------ sonuç filtresi
-function renderFilters(all) {
-  const opt = (v, t, sel) => `<option value="${esc(v)}"${sel === v ? ' selected' : ''}>${esc(t)}</option>`;
-  const types = [...new Set(all.map((t) => t.type))];
-  const coins = [...new Set(all.map((t) => t.coin))].sort();
-  $('#btFilters').innerHTML = `
-    <label class="field inline"><span>Plan</span><select id="fType">${opt('', 'Hepsi', filter.type)}${types.map((t) => opt(t, TYPE_NAME[t] || t, filter.type)).join('')}</select></label>
-    <label class="field inline"><span>Yön</span><select id="fDir">${opt('', 'Hepsi', filter.dir)}${opt('long', 'Long ▲', filter.dir)}${opt('short', 'Short ▼', filter.dir)}</select></label>
-    <label class="field inline"><span>Coin</span><select id="fCoin">${opt('', 'Hepsi', filter.coin)}${coins.map((c) => opt(c, c, filter.coin)).join('')}</select></label>
-    ${exitSelect(all)}
-    <span class="muted small">Rapor, para simülasyonu ve işlem listesi bu filtreyle hesaplanır.</span>`;
-  const on = (id, key) => $(id).addEventListener('change', (e) => { filter = { ...filter, [key]: e.target.value }; show(current); });
-  on('#fType', 'type'); on('#fDir', 'dir'); on('#fCoin', 'coin');
-  if ($('#fExit')) on('#fExit', 'exit');
+// ------------------------------------------------------------------ filtreler (para panelinde, düğmeler)
+// Modun alt türleri: anahtar → işlem eşleşmesi
+const SUBTYPES = {
+  diagonal: [['', 'Hepsi'], ['w4', 'Dalga 4 → 5', (t) => t.type === 'd4lim' || t.type === 'd4conf'], ['d4lim', 'Dalga 4 limiti'], ['d4conf', '4 onayı'], ['dend', 'Ending'], ['dlead', 'Leading']],
+  abcde: [['', 'Hepsi'], ['elimit', 'E limiti'], ['econfirm', 'E onayı']],
+  wave3: [['', 'Hepsi'], ['break', 'B kırılımı'], ['zone', 'Limit bölge']],
+  triangle: [['', 'Hepsi'], ['asc', 'Yükselen', (t) => t.pattern === 'asc'], ['desc', 'Alçalan', (t) => t.pattern === 'desc']],
+};
+const subtypesOf = (mode) => SUBTYPES[mode] || SUBTYPES.wave3;
+function matchType(t, mode, key) {
+  if (!key) return true;
+  const st = subtypesOf(mode).find(([k]) => k === key);
+  if (!st) return true;
+  return st[2] ? st[2](t) : t.type === key;
 }
 
 /**
- * Çıkış hedefi seçimi: backtest her hedef için ayrı çıkışı (alts) kaydettiyse "Hedef 1 / 2 / …" ile karşılaştırılır.
- * Eski çalışmalarda alts yok: seçim pasif ve açıklamalı.
+ * Hedef düğmeleri için: kaç hedef var ve her sıradaki en sık hedef adı (oranıyla).
+ * Hedefler girişten yakından uzağa sıralı; girişin gerisinde kalan hedef atlandığı için sıra işlemden işleme kayabilir.
  */
-function exitSelect(all) {
-  const list = all.filter((t) => !filter.type || t.type === filter.type);
+function exitTargets(list) {
   const withAlts = list.filter((t) => Array.isArray(t.alts) && t.alts.length);
-  if (!withAlts.length) {
-    return `<label class="field inline"><span>Çıkış hedefi</span><select id="fExit" disabled title="Bu çalışma eski: her hedef için çıkış kaydı yok. Backtest'i yeniden çalıştır."><option>Ana hedef (backtest)</option></select></label>`;
-  }
+  if (!withAlts.length) return null;
   const max = Math.max(...withAlts.map((t) => t.alts.length));
-  // Aynı plan tipinde hedef adları ortaksa adı göster
-  const nameAt = (k) => {
-    const names = new Set(withAlts.filter((t) => t.alts[k]).map((t) => t.alts[k].n));
-    return names.size === 1 ? `Hedef ${k + 1}: ${[...names][0]}` : `Hedef ${k + 1}`;
-  };
-  const opt = (v, t) => `<option value="${v}"${filter.exit === String(v) ? ' selected' : ''}>${esc(t)}</option>`;
-  return `<label class="field inline"><span>Çıkış hedefi</span><select id="fExit">${opt('', 'Ana hedef (backtest)')}${Array.from({ length: max }, (_, k) => opt(k + 1, nameAt(k))).join('')}</select></label>`;
+  return Array.from({ length: max }, (_, k) => {
+    const cnt = new Map();
+    for (const t of withAlts) { const a = t.alts[Math.min(k, t.alts.length - 1)]; cnt.set(a.n, (cnt.get(a.n) || 0) + 1); }
+    const [name, n] = [...cnt].sort((x, y) => y[1] - x[1])[0];
+    return { name, share: n / withAlts.length };
+  });
 }
+
+function filterBar(all, p) {
+  const seg = (key, items, cur, label) => `<div class="fgroup"><span class="flabel">${esc(label)}</span><div class="seg wrap" role="group" aria-label="${esc(label)}">
+    ${items.map(([v, t, title = '', disabled = false]) => `<button type="button" data-f="${key}" data-v="${esc(v)}" aria-pressed="${String(cur === v)}"${disabled ? ' disabled' : ''}${title ? ` title="${esc(title)}"` : ''}>${esc(t)}</button>`).join('')}
+  </div></div>`;
+  const types = subtypesOf(p.mode).map(([k, t, test]) => [k, t, '', k !== '' && !all.some((x) => (test ? test(x) : x.type === k))]);
+  const dirs = [['', 'Hepsi'], ['long', 'Long ▲', '', !all.some((x) => x.dir === 'long')], ['short', 'Short ▼', '', !all.some((x) => x.dir === 'short')]];
+  const inType = all.filter((t) => matchType(t, p.mode, filter.type));
+  const tg = exitTargets(inType);
+  const exits = tg
+    ? [['', 'Ana hedef', 'Backtest\'in kullandığı ana hedef'], ...tg.map((x, k) => [String(k + 1), `Hedef ${k + 1}`, `Hedef ${k + 1}: ${x.name}${x.share < 1 ? ` (işlemlerin %${Math.round(x.share * 100)}'ünde)` : ''}`])]
+    : [['', 'Ana hedef'], ['1', 'Hedef 1', 'Bu çalışma eski: her hedef için çıkış kaydı yok. Backtest\'i yeniden çalıştır.', true], ['2', 'Hedef 2', '', true], ['3', 'Hedef 3', '', true]];
+  const coins = [...new Set(all.map((t) => t.coin))].sort();
+  const pct = (x) => (x.share < 0.995 ? ` <span class="muted">(%${Math.round(x.share * 100)})</span>` : '');
+  const exitNames = tg ? `<div class="fnote">${tg.map((x, k) => `<span${filter.exit === String(k + 1) ? ' class="on"' : ''}>Hedef ${k + 1} = ${esc(x.name)}${pct(x)}</span>`).join(' · ')}</div>` : '<div class="fnote muted">Bu çalışma eski: hedef karşılaştırması için backtest\'i yeniden çalıştır.</div>';
+  return `<div class="filterbar">
+    ${seg('type', types, filter.type, 'Tür')}
+    ${seg('dir', dirs, filter.dir, 'Yön')}
+    <div class="fgroup">${seg('exit', exits, filter.exit, 'Çıkış hedefi')}${exitNames}</div>
+    <div class="fgroup"><span class="flabel">Coin</span><select id="fCoin"><option value="">Hepsi</option>${coins.map((c) => `<option value="${esc(c)}"${filter.coin === c ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
+  </div>`;
+}
+
+function bindFilterBar() {
+  for (const btn of document.querySelectorAll('#money [data-f]')) {
+    btn.addEventListener('click', () => { filter = { ...filter, [btn.dataset.f]: btn.dataset.v }; show(current); });
+  }
+  const c = $('#fCoin');
+  if (c) c.addEventListener('change', () => { filter = { ...filter, coin: c.value }; show(current); });
+}
+
+/** Panel başlığındaki tek satır: hangi çalışma ve hangi filtre. */
+function filterLine(p) {
+  const parts = [p.tf, `${isoDay(p.from)} → ${isoDay(p.to)}`, `${p.coins.length} coin`, MODE_NAME[p.mode] || p.mode];
+  const st = subtypesOf(p.mode).find(([k]) => k === filter.type);
+  if (filter.type && st) parts.push(st[1]);
+  if (filter.dir) parts.push(filter.dir === 'long' ? 'Long' : 'Short');
+  parts.push(filter.exit ? `Hedef ${filter.exit}` : 'Ana hedef');
+  if (filter.coin) parts.push(filter.coin);
+  return parts.join(' · ');
+}
+const MODE_NAME = { wave3: 'Dalga-3', triangle: 'Üçgen kırılımı', abcde: 'Running üçgen (ABCDE)', diagonal: 'Diagonal' };
 
 /** İşlemi k. hedefte çıkmış gibi yeniden yazar (aynı giriş ve stop). Hedefi daha az olan işlemde son hedef kullanılır. */
 function withExit(t, k, feePct) {
@@ -480,6 +519,13 @@ function moneyForm() {
 function renderMoney() {
   const { trades, p } = view;
   const box = $('#money');
+  if (!p) {
+    box.innerHTML = `<div class="bt-title"><h2>Para simülasyonu</h2><span class="muted">${esc(MODE_TXT[moneyOpts.mode])}${moneyOpts.leverage > 1 ? ` · ${moneyOpts.leverage}× kaldıraç` : ''}</span></div>
+      ${moneyForm()}
+      <p class="muted">Backtest'i çalıştırınca ya da aşağıdaki kayıtlı çalışmalardan birini açınca sonuç burada görünür; tür, yön ve hedefe göre süzebilirsin.</p>`;
+    bindMoneyForm();
+    return;
+  }
   const sim = simulate(trades, moneyOpts);
   const S = sim.summary, o = moneyOpts;
   const cls = (x) => (x >= 0 ? 'pos' : 'neg');
@@ -501,8 +547,9 @@ function renderMoney() {
   const coins = S.closed ? `<div class="bd"><h3>Coin</h3><table class="stat"><thead><tr><th>Coin</th><th>İşlem</th><th>Kâr/zarar</th></tr></thead><tbody>
     ${sim.coins.map((c) => `<tr><td>${esc(c.coin)}</td><td class="num">${c.n}</td><td class="num ${cls(c.pnl)}">${usd(c.pnl)}</td></tr>`).join('')}</tbody></table></div>` : '';
   box.innerHTML = `
-    <div class="bt-title"><h2>Para simülasyonu</h2><span class="muted">${esc(MODE_TXT[o.mode])}${o.leverage > 1 ? ` · ${o.leverage}× kaldıraç` : ''}</span><span class="spacer"></span>
+    <div class="bt-title"><h2>Para simülasyonu</h2><span class="muted">${esc(filterLine(p))}</span><span class="spacer"></span>
       <button type="button" id="csvBtn" class="ghost sm">İşlemleri CSV indir</button></div>
+    ${filterBar(view.all, p)}
     ${moneyForm()}
     ${trades.length ? tiles : '<p class="muted">Bu filtrede işlem yok.</p>'}
     ${trades.length && (S.lowBalance < 0 || (o.mode === 'fixed' && S.maxMargin > o.capital)) ? `<p class="note">⚠ ${usd(o.capital, false)} sermaye bu ayarla yetmez:
@@ -514,9 +561,8 @@ function renderMoney() {
       fiyat girişten ${o.leverage > 1 ? `≈ %${((1 / o.leverage - o.mmr / 100) * 100).toFixed(1).replace('.', ',')}` : '–'} aleyhe gidince teminatın tamamı gider; 4 saatlik (seçilen zaman dilimi) mum uç fiyatlarıyla ölçülür${S.approx ? ', bu çalışma eski olduğu için yaklaşık (yalnızca stop mesafesine bakılır; backtest\'i yeniden çalıştır)' : ''}.
       Aynı mumda birden çok sinyal varsa puanı yüksek olan önce alınır. Funding ve kayma dahil değil. Yatırım tavsiyesi değildir.</p>`;
   drawMoney(sim.curve);
-  // Form
-  const bind = (id, key, conv = Number) => { const el = $(id); if (el) el.addEventListener('change', () => { moneyOpts = { ...moneyOpts, [key]: conv(el.value) }; try { localStorage.setItem(MKEY, JSON.stringify(moneyOpts)); } catch { /* yoksay */ } renderMoney(); }); };
-  bind('#mMode', 'mode', String); bind('#mCapital', 'capital'); bind('#mMargin', 'margin'); bind('#mSlots', 'slots', (v) => Math.max(1, Math.round(Number(v)))); bind('#mLev', 'leverage', (v) => Math.max(1, Number(v))); bind('#mFee', 'feePct'); bind('#mMmr', 'mmr');
+  bindFilterBar();
+  bindMoneyForm();
   $('#csvBtn').addEventListener('click', () => {
     const csv = toCsv(sim.rows, { typeName: TYPE_NAME, withMoney: true });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
@@ -527,6 +573,11 @@ function renderMoney() {
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   });
   renderTradeTable(sim);
+}
+
+function bindMoneyForm() {
+  const bind = (id, key, conv = Number) => { const el = $(id); if (el) el.addEventListener('change', () => { moneyOpts = { ...moneyOpts, [key]: conv(el.value) }; try { localStorage.setItem(MKEY, JSON.stringify(moneyOpts)); } catch { /* yoksay */ } renderMoney(); }); };
+  bind('#mMode', 'mode', String); bind('#mCapital', 'capital'); bind('#mMargin', 'margin'); bind('#mSlots', 'slots', (v) => Math.max(1, Math.round(Number(v)))); bind('#mLev', 'leverage', (v) => Math.max(1, Number(v))); bind('#mFee', 'feePct'); bind('#mMmr', 'mmr');
 }
 
 function drawMoney(curve) {
@@ -563,14 +614,15 @@ function renderTradeTable(sim) {
 function tile(label, value, cls = '') { return `<div class="tile"><b>${esc(label)}</b><span class="num ${cls}">${value}</span></div>`; }
 
 function show(runObj) {
-  if (runObj !== current) filter = { type: '', dir: '', coin: '', exit: '' };
-  current = runObj;
   const p = runObj.params;
+  // Aynı moddaki çalışmalar arasında filtre korunur; farklı moda geçince sıfırlanır
+  if (runObj !== current && p.mode !== filterMode) { filter = { type: '', dir: '', coin: '', exit: '' }; filterMode = p.mode; }
+  current = runObj;
   const allTrades = unpackTrades(runObj.trades);
-  renderFilters(allTrades);
-  const picked = allTrades.filter((t) => (!filter.type || t.type === filter.type) && (!filter.dir || t.dir === filter.dir) && (!filter.coin || t.coin === filter.coin));
+  if (filter.coin && !allTrades.some((t) => t.coin === filter.coin)) filter = { ...filter, coin: '' };
+  const picked = allTrades.filter((t) => matchType(t, p.mode, filter.type) && (!filter.dir || t.dir === filter.dir) && (!filter.coin || t.coin === filter.coin));
   const trades = filter.exit ? picked.map((t) => withExit(t, Number(filter.exit), p.feePct)) : picked;
-  view = { trades, p };
+  view = { trades, p, all: allTrades };
   $('#results').hidden = false;
   $('#resTitle').textContent = `${p.tf} · ${isoDay(p.from)} → ${isoDay(p.to)} · ${p.coins.length} coin${p.note ? ' · ' + p.note : ''}`;
   $('#resMeta').textContent = settingsText(p);
@@ -736,6 +788,7 @@ function init() {
   renderRuns();
   const last = loadRuns()[0];
   if (last) show(last);
+  else renderMoney(); // sonuç yokken para paneli ayarlarıyla görünür
 }
 
 init();
