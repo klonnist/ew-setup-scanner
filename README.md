@@ -126,6 +126,7 @@ OKX geçmiş mumlarıyla her mum kapanışında canlı tarayıcının göreceği
     (backtest'in kaydettiği MAE) bu seviyeye ulaşırsa teminatın tamamı gider. Eski kayıtlarda yalnızca stop mesafesine bakılır.
   - Çıktılar: net $, kârlı/zararlı, tasfiye, ortalama kazanç/kayıp, en büyük düşüş, en düşük bakiye, bakiye eğrisi, aylık ve coin tablosu.
   - Aynı mumda birden çok sinyal varsa puanı yüksek olan önce alınır (çıkış zamanına bakılmaz). Funding ve kayma dahil değil.
+- **İşlem grafiği:** işlem listesinde 📈 düğmesine basınca, işlemin açıldığı mumda backtest'in gördüğü kalıp aynı ayarlarla yeniden bulunur ve tarama ekranındaki grafikle çizilir; gerçekleşen giriş ve çıkış işaretlenir, sonrasındaki mumlar fiyatın ne yaptığını gösterir.
 - **İşlemleri CSV indir:** süzülmüş işlemler, para simülasyonu sütunlarıyla (noktalı virgül, Excel'de açılır).
 
 ## Kural motoru

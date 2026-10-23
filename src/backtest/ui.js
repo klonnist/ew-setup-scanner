@@ -6,6 +6,11 @@ import { loadRuns, saveRun, deleteRun, importRuns, packTrades, unpackTrades, use
 import { loadSettings, saveSettings, renderSettings, toScanOptions, UI_DEFAULTS } from '../ui/settings.js';
 import { fmtPct, fmtX, esc } from '../ui/format.js';
 import { simulate, toCsv, MONEY_DEFAULTS } from './money.js';
+import { findWave3Setups } from '../scan/wave3.js';
+import { findTriangles, TRI_DEFAULTS } from '../scan/triangle.js';
+import { findAbcde, ABCDE_DEFAULTS } from '../scan/abcde.js';
+import { findDiagonals, DIAG_DEFAULTS } from '../scan/diagonal.js';
+import { drawSetup, drawTriangle, drawAbcde, drawDiagonal, drawTradeOnly, markTrade, destroyChart, LEGEND, TRI_LEGEND, ABCDE_LEGEND, DIAG_LEGEND } from '../ui/chart.js';
 
 const $ = (s) => document.querySelector(s);
 const PKEY = 'ew-setup-scanner:btparams:v1';
@@ -604,11 +609,75 @@ function renderTradeTable(sim) {
   const rows = [...trades].sort((a, b) => b.entryTime - a.entryTime).slice(0, 500);
   const dt = (ms) => new Date(ms).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
   const m = (t) => byT.get(t);
-  $('#trades').innerHTML = `<thead><tr><th>Giriş</th><th>Coin</th><th>Plan</th><th>Yön</th><th>Sonuç</th><th>R</th><th>Mum</th><th>Giriş fiyatı</th><th>Çıkış</th><th>Alındı</th><th>Kâr/zarar</th><th>Bakiye</th></tr></thead><tbody>
-    ${rows.map((t) => { const x = m(t); return `<tr><td>${dt(t.entryTime)}</td><td>${esc(t.coin)}</td><td>${TYPE_NAME[t.type]}${t.legs > 1 ? ` ${t.filledLegs}/${t.legs}` : ''}</td><td>${t.dir === 'long' ? '▲' : '▼'}</td><td>${esc(t.outcome)}${x?.liquidated ? ' <b class="neg">tasfiye</b>' : ''}</td>
+  $('#trades').innerHTML = `<thead><tr><th></th><th>Giriş</th><th>Coin</th><th>Plan</th><th>Yön</th><th>Sonuç</th><th>R</th><th>Mum</th><th>Giriş fiyatı</th><th>Çıkış</th><th>Alındı</th><th>Kâr/zarar</th><th>Bakiye</th></tr></thead><tbody>
+    ${rows.map((t, i) => { const x = m(t); return `<tr><td><button type="button" class="ghost sm" data-chart="${i}" title="Grafikte göster">📈</button></td><td>${dt(t.entryTime)}</td><td>${esc(t.coin)}</td><td>${TYPE_NAME[t.type]}${t.legs > 1 ? ` ${t.filledLegs}/${t.legs}` : ''}</td><td>${t.dir === 'long' ? '▲' : '▼'}</td><td>${esc(t.outcome)}${x?.liquidated ? ' <b class="neg">tasfiye</b>' : ''}</td>
       <td class="num ${t.R >= 0 ? 'pos' : 'neg'}">${fmtR(t.R)}</td><td class="num">${t.bars}</td><td class="num">${t.entry.toPrecision(5)}</td><td class="num">${t.exit.toPrecision(5)}</td>
       <td>${x?.taken ? '✓' : `<small class="muted">${esc(x?.reason || '')}</small>`}</td><td class="num ${x?.pnl >= 0 ? 'pos' : 'neg'}">${x?.taken ? usd(x.pnl) : ''}</td><td class="num">${x?.taken && !x.open && x.balance != null ? usd(x.balance, false) : x?.open ? 'açık' : ''}</td></tr>`; }).join('')}</tbody>
     ${trades.length > 500 ? `<caption class="muted">Son 500 işlem gösteriliyor (toplam ${trades.length}); hepsi için CSV indir.</caption>` : ''}`;
+  for (const b of document.querySelectorAll('#trades [data-chart]')) b.addEventListener('click', () => showTradeChart(rows[Number(b.dataset.chart)]));
+}
+
+// ------------------------------------------------------------------ işlem grafiği
+let chartReq = 0;
+// Kayıtlı işlemlerde fiyatlar 6 anlamlı haneye yuvarlanır (store.js): eşleştirme buna göre toleranslı
+const near = (a, b) => Math.abs(a - b) <= Math.abs(b) * 1e-5;
+
+/**
+ * İşlemin açıldığı mumda tarayıcının gördüğü kalıbı yeniden bulur (aynı ayarlar, aynı mum penceresi) ve tarama
+ * ekranındaki grafikle çizer; gerçekleşen giriş ve çıkış işaretlenir. Kalıp bulunamazsa mumlar + seviyeler çizilir.
+ */
+async function showTradeChart(t) {
+  const p = view.p;
+  const box = $('#tradeView');
+  const req = ++chartReq;
+  box.hidden = false;
+  const dirTxt = t.dir === 'short' ? 'SHORT ▼' : 'LONG ▲';
+  const dt = (ms) => new Date(ms).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+  box.innerHTML = `<div class="bt-title"><h2>${esc(t.coin)}/USDT</h2><span class="dir ${t.dir === 'short' ? 'short' : 'long'}">${dirTxt}</span>
+      <span class="chip">${esc(TYPE_NAME[t.type] || t.type)}</span><span class="chip">${esc(p.tf)}</span>
+      <span class="muted">${dt(t.entryTime)} → ${t.outcome === 'open' ? 'açık' : dt(t.exitTime)} · ${esc(t.outcome)} · <b class="${t.R >= 0 ? 'pos' : 'neg'}">${fmtR(t.R)}</b></span>
+      <span class="spacer"></span><button type="button" id="tvClose" class="ghost sm">Kapat</button></div>
+    <div class="chart" id="tvChart"><p class="muted" style="padding:16px">Mumlar indiriliyor…</p></div>
+    <div class="legend" id="tvLegend"></div><p class="muted small" id="tvNote"></p>`;
+  $('#tvClose').addEventListener('click', () => { destroyChart(); box.hidden = true; });
+  box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  try {
+    const tf = TIMEFRAMES[p.tf];
+    const win = windowFor(p.mode);
+    const end = (t.outcome === 'open' ? Date.now() : t.exitTime) + 40 * tf.ms;
+    const candles = await getHistory(`${t.coin}-USDT`, tf, t.created - (win + 5) * tf.ms, Math.min(end, Date.now()));
+    if (req !== chartReq) return;
+    const ci = candles.findIndex((c) => c.time === t.created);
+    const off = Math.max(0, ci + 1 - win);
+    const view2 = candles.slice(off); // indeksler pencereyle aynı başlangıçta: kalıp noktaları doğru yere düşer
+    const opts = { ...TRI_DEFAULTS, ...ABCDE_DEFAULTS, ...DIAG_DEFAULTS, ...UI_DEFAULTS, ...(p.settings || {}), mode: p.mode, entryType: p.entryType };
+    const s = ci >= 0 ? findPattern(candles.slice(off, ci + 1), t, opts) : null;
+    const el = $('#tvChart');
+    el.innerHTML = '';
+    let legend;
+    if (s?.kind === 'diagonal') { drawDiagonal(el, view2, null, s); legend = DIAG_LEGEND; }
+    else if (s?.kind === 'abcde') { drawAbcde(el, view2, null, s); legend = ABCDE_LEGEND; }
+    else if (s?.kind === 'triangle') { drawTriangle(el, view2, null, s); legend = TRI_LEGEND; }
+    else if (s) { drawSetup(el, view2, null, s, { showBreak: t.type === 'break', showZone: t.type === 'zone' }); legend = LEGEND; }
+    else drawTradeOnly(el, view2, t);
+    markTrade(t);
+    $('#tvLegend').innerHTML = (legend || []).map(([n, c, cls]) => `<span><i class="${cls}" style="border-top-color:${c}"></i>${esc(n)}</span>`).join('')
+      + '<span><i style="border-top-color:#3987e5"></i>Gerçek giriş</span><span><i class="dash" style="border-top-color:#e8ebf1"></i>Çıkış</span>';
+    $('#tvNote').textContent = s
+      ? 'Kalıp, işlemin açıldığı mumda backtest\'in gördüğü haliyle (aynı ayarlar ve mum penceresi) yeniden bulundu; sonrasındaki mumlar fiyatın ne yaptığını gösterir. Seviye çizgileri o anki plana aittir; "Gerçek giriş" ve "Çıkış" işlemin gerçekleşen fiyatlarıdır.'
+      : 'Kalıp bu ayarlarla yeniden bulunamadı (ayarlar backtest\'ten sonra değişmiş ya da veri farklı olabilir); yalnızca giriş, stop, hedef ve çıkış gösteriliyor.';
+  } catch (err) {
+    if (req === chartReq) $('#tvChart').innerHTML = `<p class="error" style="padding:16px">Mumlar alınamadı: ${esc(err.message)}</p>`;
+  }
+}
+
+/** İşlemle aynı plan (tip, yön, stop) — tarayıcının o mumda bulduğu kalıp. */
+function findPattern(win, t, opts) {
+  const dirOk = (x) => x.direction === t.dir;
+  if (opts.mode === 'diagonal') return findDiagonals(win, opts, null).find((x) => dirOk(x) && x.plans.some((q) => q.type === t.type && near(q.stop, t.stop))) || null;
+  if (opts.mode === 'abcde') return findAbcde(win, opts, null).find((x) => dirOk(x) && x.plans.some((q) => q.type === t.type && near(q.stop, t.stop))) || null;
+  if (opts.mode === 'triangle') return findTriangles(win, opts, null).find((x) => dirOk(x) && near(x.levels.stop, t.stop)) || null;
+  return findWave3Setups(win, opts, null).find((x) => dirOk(x) && (t.type === 'zone' ? x.zone && near(x.zone.stop, t.stop) : x.levels && near(x.levels.stop, t.stop))) || null;
 }
 
 function tile(label, value, cls = '') { return `<div class="tile"><b>${esc(label)}</b><span class="num ${cls}">${value}</span></div>`; }

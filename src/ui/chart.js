@@ -109,7 +109,7 @@ export function drawSetup(el, candles, live, s, show = { showBreak: true, showZo
     if (r.width > 0 && r.height > 0) chart.resize(Math.floor(r.width), Math.floor(r.height));
   });
   ro.observe(el);
-  current = { chart, ro };
+  current = { chart, ro, series };
 }
 
 // [etiket, renk, çizgi sınıfı, plan ('' = her zaman)]
@@ -202,7 +202,7 @@ export function drawTriangle(el, candles, live, t) {
     if (r.width > 0 && r.height > 0) chart.resize(Math.floor(r.width), Math.floor(r.height));
   });
   ro.observe(el);
-  current = { chart, ro };
+  current = { chart, ro, series };
 }
 
 export const TRI_LEGEND = [
@@ -285,7 +285,7 @@ export function drawAbcde(el, candles, live, t, { plans = t.plans } = {}) {
     if (r.width > 0 && r.height > 0) chart.resize(Math.floor(r.width), Math.floor(r.height));
   });
   ro.observe(el);
-  current = { chart, ro };
+  current = { chart, ro, series };
 }
 
 export const ABCDE_LEGEND = [
@@ -371,7 +371,7 @@ export function drawDiagonal(el, candles, live, t) {
     if (r.width > 0 && r.height > 0) chart.resize(Math.floor(r.width), Math.floor(r.height));
   });
   ro.observe(el);
-  current = { chart, ro };
+  current = { chart, ro, series };
 }
 
 export const DIAG_LEGEND = [
@@ -383,6 +383,64 @@ export const DIAG_LEGEND = [
   ['Stop', DG.stop, 'dash'],
   ['Hedefler', DG.target, 'dash'],
 ];
+
+// ---------------------------------------------------------------- backtest işlemi
+const OUT_TXT = { hedef: 'hedef', stop: 'stop', 'süre': 'süre', open: 'açık' };
+
+/**
+ * Son çizilen grafiğe backtest işleminin gerçekleşen giriş ve çıkışını işaretler.
+ * @param t  işlem { entryTime, exitTime, entry, exit, outcome, dir }
+ */
+export function markTrade(t) {
+  const LW = window.LightweightCharts;
+  if (!LW || !current?.series) return;
+  const s = current.series;
+  const long = t.dir !== 'short';
+  const marks = [{ time: sec(t.entryTime), position: long ? 'belowBar' : 'aboveBar', shape: long ? 'arrowUp' : 'arrowDown', color: '#3987e5', text: 'GİRİŞ' }];
+  if (t.outcome !== 'open') {
+    const win = (long ? 1 : -1) * (t.exit - t.entry) > 0;
+    marks.push({ time: sec(t.exitTime), position: long ? 'aboveBar' : 'belowBar', shape: 'circle', color: win ? '#26a69a' : '#ef5350', text: `ÇIKIŞ (${OUT_TXT[t.outcome] || t.outcome})` });
+  }
+  LW.createSeriesMarkers(s, marks.sort((a, b) => a.time - b.time));
+  s.createPriceLine({ price: t.entry, color: '#3987e5', lineWidth: 2, lineStyle: LW.LineStyle.Solid, axisLabelVisible: true, title: 'Gerçek giriş' });
+  if (t.outcome !== 'open') s.createPriceLine({ price: t.exit, color: '#e8ebf1', lineWidth: 1, lineStyle: LW.LineStyle.Dashed, axisLabelVisible: true, title: 'Çıkış' });
+}
+
+/** Kalıp yeniden bulunamazsa: mumlar + giriş / stop / hedef / çıkış çizgileri. */
+export function drawTradeOnly(el, candles, t) {
+  destroyChart();
+  const LW = window.LightweightCharts;
+  if (!LW) {
+    el.innerHTML = '<p class="error">Grafik kütüphanesi yüklenemedi.</p>';
+    return;
+  }
+  const prec = decimals(t.entry);
+  const chart = LW.createChart(el, {
+    width: el.clientWidth,
+    height: el.clientHeight,
+    layout: { background: { type: 'solid', color: C.bg }, textColor: C.text, fontSize: 11, fontFamily: getComputedStyle(document.body).fontFamily },
+    grid: { vertLines: { color: C.grid }, horzLines: { color: C.grid } },
+    rightPriceScale: { borderColor: C.grid },
+    timeScale: { borderColor: C.grid, timeVisible: true, secondsVisible: false, rightOffset: 6 },
+    crosshair: { mode: LW.CrosshairMode.Normal },
+    localization: { locale: 'tr-TR' },
+  });
+  const series = chart.addSeries(LW.CandlestickSeries, {
+    upColor: C.up, downColor: C.down, borderUpColor: C.up, borderDownColor: C.down, wickUpColor: C.up, wickDownColor: C.down,
+    priceFormat: { type: 'price', precision: prec, minMove: 10 ** -prec },
+  });
+  series.setData(candles.map((c) => ({ time: sec(c.time), open: c.open, high: c.high, low: c.low, close: c.close })));
+  series.createPriceLine({ price: t.stop, color: C.stop, lineWidth: 1, lineStyle: LW.LineStyle.Dashed, axisLabelVisible: true, title: 'Stop' });
+  if (t.target) series.createPriceLine({ price: t.target, color: C.target, lineWidth: 1, lineStyle: LW.LineStyle.Dashed, axisLabelVisible: true, title: 'Hedef' });
+  const ei = candles.findIndex((c) => c.time >= t.entryTime);
+  chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, ei - 80), to: candles.length + 4 });
+  const ro = new ResizeObserver(([e]) => {
+    const r = e.contentRect;
+    if (r.width > 0 && r.height > 0) chart.resize(Math.floor(r.width), Math.floor(r.height));
+  });
+  ro.observe(el);
+  current = { chart, ro, series };
+}
 
 // ---------------------------------------------------------------- takip listesi
 const PLAN_TAG = { zone: ' (bölge)', break: ' (B)', elimit: ' (E limiti)', econfirm: ' (E onayı)', dend: ' (2–4)', dlead: ' (dalga 2)', d4lim: ' (4 limiti)', d4conf: ' (4 onayı)' };
@@ -486,5 +544,5 @@ export function drawWatch(el, candles, live, item, evals) {
     if (r.width > 0 && r.height > 0) chart.resize(Math.floor(r.width), Math.floor(r.height));
   });
   ro.observe(el);
-  current = { chart, ro };
+  current = { chart, ro, series };
 }
