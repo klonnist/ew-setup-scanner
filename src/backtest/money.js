@@ -149,18 +149,19 @@ export function simulate(trades, opts = {}) {
 }
 
 /** İşlem listesini CSV metni olarak (UTF-8 BOM, noktalı virgül; Excel'de açılır). */
+const SMT_TXT = { smt: 'SMT var', both: 'SMT yok', ref: 'Ters SMT', none: 'Süpürme yok' };
 export function toCsv(rows, { typeName = {}, withMoney = false } = {}) {
   const d = (ms) => (ms ? new Date(ms).toISOString().slice(0, 16).replace('T', ' ') : '');
   const num = (x, p = 6) => (x == null || !Number.isFinite(x) ? '' : String(+x.toPrecision(p)).replace('.', ','));
   const money = (x) => (x == null ? '' : x.toFixed(2).replace('.', ','));
   const OUT = { hedef: 'Hedef', stop: 'Stop', 'süre': 'Süre doldu', open: 'Açık (anlık)' };
-  const head = ['#', 'Giriş (UTC)', 'Çıkış (UTC)', 'Coin', 'Plan', 'Yön', 'Giriş fiyatı', 'Stop', 'Çıkış fiyatı', 'Sonuç', 'R', 'Fiyat değişimi %'];
+  const head = ['#', 'Giriş (UTC)', 'Çıkış (UTC)', 'Coin', 'Plan', 'Yön', 'Giriş fiyatı', 'Stop', 'Çıkış fiyatı', 'Sonuç', 'R', 'Fiyat değişimi %', 'SMT'];
   if (withMoney) head.push('Alındı mı', 'Teminat $', 'Pozisyon $', 'Tasfiye fiyatı', 'Tasfiye', 'Kâr/zarar $', 'Bakiye $');
   const lines = [head];
   rows.forEach((x, i) => {
     const t = x.t;
     const line = [i + 1, d(t.entryTime), t.outcome === 'open' ? '' : d(t.exitTime), t.coin, typeName[t.type] || t.type, t.dir === 'short' ? 'SHORT' : 'LONG',
-      num(t.entry), num(t.stop), num(t.exit), OUT[t.outcome] || t.outcome, num(t.R, 3), money((dirOf(t) * (t.exit / t.entry - 1)) * 100)];
+      num(t.entry), num(t.stop), num(t.exit), OUT[t.outcome] || t.outcome, num(t.R, 3), money((dirOf(t) * (t.exit / t.entry - 1)) * 100), SMT_TXT[t.smt] || ''];
     if (withMoney) {
       line.push(x.taken ? 'evet' : `hayır (${x.reason})`, x.taken ? money(x.margin) : '', x.taken ? money(x.size) : '', x.taken ? num(x.liq) : '',
         x.taken ? (x.liquidated ? 'evet' : 'hayır') : '', x.taken ? money(x.pnl) : '', x.taken && !x.open ? money(x.balance) : x.open ? '(açık)' : '');

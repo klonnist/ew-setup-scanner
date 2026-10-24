@@ -102,6 +102,31 @@ oluşturur. Kurs kuralları en katısıdır; daha fazla aday için kural setini 
   hedefler 5'in ucu, dalga 3 = 1 × ve 1,618 × dalga 1.
 - Backtest'te türler ayrı raporlanır; "Diagonal: nereye kadar gitti?" tablosu hedeflere ulaşma oranlarını verir.
 
+## SMT etiketi (BTC / ETH onayı)
+
+Kalıbın son ucu bir önceki ucu süpürdü mü, aynı anda referans grafik (BTC; BTC için ETH) de süpürdü mü?
+Önce sayım, sonra SMT: karşılaştırılan uçlar kalıptan gelir, referans grafik yalnızca onaydır.
+
+| Mod | Son uç ↔ önceki uç |
+|---|---|
+| Dalga 3 | dalga 2'nin C'si ↔ A'sı |
+| ABCDE | E ↔ C |
+| Ending diagonal | 5 ↔ 3 |
+| Diagonal dalga 4 | 4 ↔ 2 |
+
+- **SMT ✓:** kalıp süpürdü, referans süpüremedi (stop avı → dönüş onayı).
+- **SMT yok:** ikisi birlikte geçti (gerçek hareket olabilir).
+- **Ters SMT:** referans geçti, kalıp geçmedi.
+- **Süpürme yok:** ikisi de gerisinde kaldı.
+- Üçgen kırılımı ve leading diagonalde karşılaştırılacak uç yok, etiket gösterilmez.
+
+Referans grafikte uç noktanın ±N mumuna bakılır (ayar: SMT penceresi). Backtest'te yalnızca kalıbın görüldüğü
+mumun kapanışına kadarki referans mumları kullanılır.
+
+SMT **yalnızca etikettir**: kalıp, giriş, stop, hedef ve sıralama değişmez. "Sadece SMT'li kurulumlar" ayarı
+(varsayılan kapalı) açılırsa SMT'siz kurulumlar gösterilmez ve backtest'te bunlara emir verilmez. Backtest raporunda
+SMT filtresi ve "SMT" ile "Plan tipi × SMT" kırılımları vardır.
+
 ## Backtest
 
 [`backtest.html`](https://klonnist.github.io/ew-setup-scanner/backtest.html): zaman dilimi (1m / 5m / 15m / 4H / 1D) ve tarih aralığı seçilir (1m en fazla 14 gün, 5m en fazla 60 gün);

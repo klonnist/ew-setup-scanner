@@ -1,4 +1,5 @@
 // Biçimlendirme yardımcıları.
+import { SMT_LABEL, SMT_HELP } from '../scan/smt.js';
 
 /** Fiyatın büyüklüğüne göre ondalık hane sayısı (PEPE gibi küçük fiyatlar için daha fazla). */
 export function decimals(p) {
@@ -19,6 +20,13 @@ export const fmtX = (r, d = 2) => `${r.toLocaleString('tr-TR', { minimumFraction
 
 export function fmtTime(ms) {
   return new Date(ms).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+/** SMT etiketi (yalnızca bilgi): kalıbın son ucu, referans grafikle (BTC/ETH) karşılaştırıldı. */
+export function smtChip(s) {
+  if (!s.smt) return '';
+  const ref = s.smtRef ? ` · ${s.smtRef}` : '';
+  return `<span class="chip smt-${s.smt}" title="${esc(SMT_HELP[s.smt] + (s.smtRef ? ` Referans: ${s.smtRef}.` : ''))}">${esc(SMT_LABEL[s.smt] + ref)}</span>`;
 }
 
 export const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

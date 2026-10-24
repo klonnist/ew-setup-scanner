@@ -398,6 +398,9 @@ body.mode-diagonal .wave-only:not(.diag-show) { display: none; }
 .fnote { font-size: 12px; color: var(--text-2); margin-top: 4px; max-width: 640px; }
 .fnote .on { color: var(--accent); font-weight: 600; }
 .chips .chip { max-width: 100%; white-space: normal; }
+.chip.smt-smt { color: var(--good); border-color: currentColor; }
+.chip.smt-both { color: var(--warn); }
+.chip.smt-ref, .chip.smt-none { color: var(--muted); }
 .trade-view { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 14px 12px; margin: 14px 0; scroll-margin-top: 8px; }
 .trade-view .chart { height: 460px; }
 @media (max-width: 600px) { .trade-view .chart { height: 360px; } }

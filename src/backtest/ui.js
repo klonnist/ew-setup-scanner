@@ -10,6 +10,7 @@ import { findWave3Setups } from '../scan/wave3.js';
 import { findTriangles, TRI_DEFAULTS } from '../scan/triangle.js';
 import { findAbcde, ABCDE_DEFAULTS } from '../scan/abcde.js';
 import { findDiagonals, DIAG_DEFAULTS } from '../scan/diagonal.js';
+import { refCoinFor, SMT_LABEL, SMT_HELP } from '../scan/smt.js';
 import { drawSetup, drawTriangle, drawAbcde, drawDiagonal, drawTradeOnly, markTrade, destroyChart, LEGEND, TRI_LEGEND, ABCDE_LEGEND, DIAG_LEGEND } from '../ui/chart.js';
 
 const $ = (s) => document.querySelector(s);
@@ -36,7 +37,7 @@ let current = null; // gösterilen çalışma
 let eqChart = null;
 let moneyChart = null;
 let filterMode = null;
-let filter = { type: '', dir: '', coin: '', exit: '' }; // sonuç filtresi (çalışma değişince sıfırlanır); exit: '' ana hedef | '1'..'n'
+let filter = { type: '', dir: '', coin: '', exit: '', smt: '' }; // sonuç filtresi (çalışma değişince sıfırlanır); exit: '' ana hedef | '1'..'n'
 let view = { trades: [], p: null }; // süzülmüş işlemler
 const MKEY = 'ew-setup-scanner:money:v1';
 let moneyOpts = (() => { try { return { ...MONEY_DEFAULTS, ...JSON.parse(localStorage.getItem(MKEY) || '{}') }; } catch { return { ...MONEY_DEFAULTS }; } })();
@@ -180,6 +181,14 @@ async function run() {
       : (scan.manualCoins || []).map((c) => ({ coin: c, instId: `${c}-USDT` }));
     if (!coins.length) throw new Error('Coin listesi boş (elle liste seçiliyse tarama ayarlarından coin gir).');
 
+    const refs = {};
+    if (opts.smtRef !== 'off') {
+      setStatus('<p>SMT referansı (BTC, ETH) indiriliyor…</p>');
+      for (const rc of ['BTC', 'ETH']) {
+        try { refs[rc] = await getHistory(`${rc}-USDT`, tf, from - cfg.window * tf.ms, to + cfg.maxHold * tf.ms, { signal: ctrl.signal }); } catch (err) { if (err.name === 'AbortError') throw err; }
+      }
+    }
+
     const trades = [];
     const cancelled = {};
     const errors = [];
@@ -199,7 +208,7 @@ async function run() {
           });
           fetched++;
           progress(`· ${esc(c.coin)}`);
-          jobs.push(pool.run(candles, cfg).then((r) => {
+          jobs.push(pool.run(candles, { ...cfg, ref: refs[refCoinFor(c.coin, opts.smtRef)] || null }).then((r) => {
             for (const t of r.trades) trades.push({ ...t, coin: c.coin });
             for (const [k, v] of Object.entries(r.stats.cancelled)) cancelled[k] = (cancelled[k] || 0) + v;
             orders += r.stats.orders;
@@ -250,7 +259,7 @@ const SETTING_KEYS = ['ruleSet', 'sensitivities', 'w1Extend', 'retrMin', 'retrMa
   'perfectAtr', 'zoneFrontAtr', 'approachAtr', 'onlyPerfect', 'minRiskPct',
   'triType', 'triContext', 'flatAtr', 'minTops', 'minBottoms', 'minWidthBars', 'triTarget', 'triMinRR',
   'abcdeEntry', 'eRetr', 'innerAbc', 'w3Check', 'abcdeVariant', 'abcdeSens', 'abcdeStopAtr', 'abcdeTarget', 'abcdeMinRR',
-  'diagType', 'diagShape', 'diagSens', 'diagW4Entry', 'diagW2Min', 'diagExpMax', 'diagRetr', 'diagStopAtr', 'diagEndTarget', 'diagLeadTarget', 'diagMinRR'];
+  'diagType', 'diagShape', 'diagSens', 'diagW4Entry', 'diagW2Min', 'diagExpMax', 'diagRetr', 'diagStopAtr', 'diagEndTarget', 'diagLeadTarget', 'diagMinRR', 'smtRef', 'smtWin', 'smtOnly'];
 const TRI_TARGET_TXT = { mm: 'ölçülü hareket', f382: '%38,2', f50: '%50', f618: '%61,8', f786: '%78,6', f100: '%100' };
 function pickSettings(o) { return Object.fromEntries(SETTING_KEYS.map((k) => [k, o[k]])); }
 
@@ -461,12 +470,15 @@ function filterBar(all, p) {
     ? [['', 'Ana hedef', 'Backtest\'in kullandığı ana hedef'], ...tg.map((x, k) => [String(k + 1), `Hedef ${k + 1}`, `Hedef ${k + 1}: ${x.name}${x.share < 1 ? ` (işlemlerin %${Math.round(x.share * 100)}'ünde)` : ''}`])]
     : [['', 'Ana hedef'], ['1', 'Hedef 1', 'Bu çalışma eski: her hedef için çıkış kaydı yok. Backtest\'i yeniden çalıştır.', true], ['2', 'Hedef 2', '', true], ['3', 'Hedef 3', '', true]];
   const coins = [...new Set(all.map((t) => t.coin))].sort();
+  const hasSmt = all.some((t) => t.smt);
+  const smtSeg = hasSmt ? seg('smt', [['', 'Hepsi'], ...Object.keys(SMT_LABEL).map((k) => [k, SMT_LABEL[k], SMT_HELP[k], !all.some((t) => t.smt === k)])], filter.smt, 'SMT') : '';
   const pct = (x) => (x.share < 0.995 ? ` <span class="muted">(%${Math.round(x.share * 100)})</span>` : '');
   const exitNames = tg ? `<div class="fnote">${tg.map((x, k) => `<span${filter.exit === String(k + 1) ? ' class="on"' : ''}>Hedef ${k + 1} = ${esc(x.name)}${pct(x)}</span>`).join(' · ')}</div>` : '<div class="fnote muted">Bu çalışma eski: hedef karşılaştırması için backtest\'i yeniden çalıştır.</div>';
   return `<div class="filterbar">
     ${seg('type', types, filter.type, 'Tür')}
     ${seg('dir', dirs, filter.dir, 'Yön')}
     <div class="fgroup">${seg('exit', exits, filter.exit, 'Çıkış hedefi')}${exitNames}</div>
+    ${smtSeg}
     <div class="fgroup"><span class="flabel">Coin</span><select id="fCoin"><option value="">Hepsi</option>${coins.map((c) => `<option value="${esc(c)}"${filter.coin === c ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></div>
   </div>`;
 }
@@ -486,6 +498,7 @@ function filterLine(p) {
   if (filter.type && st) parts.push(st[1]);
   if (filter.dir) parts.push(filter.dir === 'long' ? 'Long' : 'Short');
   parts.push(filter.exit ? `Hedef ${filter.exit}` : 'Ana hedef');
+  if (filter.smt) parts.push(SMT_LABEL[filter.smt]);
   if (filter.coin) parts.push(filter.coin);
   return parts.join(' · ');
 }
@@ -634,7 +647,7 @@ async function showTradeChart(t) {
   const dirTxt = t.dir === 'short' ? 'SHORT ▼' : 'LONG ▲';
   const dt = (ms) => new Date(ms).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
   box.innerHTML = `<div class="bt-title"><h2>${esc(t.coin)}/USDT</h2><span class="dir ${t.dir === 'short' ? 'short' : 'long'}">${dirTxt}</span>
-      <span class="chip">${esc(TYPE_NAME[t.type] || t.type)}</span><span class="chip">${esc(p.tf)}</span>
+      <span class="chip">${esc(TYPE_NAME[t.type] || t.type)}</span><span class="chip">${esc(p.tf)}</span>${t.smt ? `<span class="chip smt-${t.smt}" title="${esc(SMT_HELP[t.smt])}">${esc(SMT_LABEL[t.smt])}</span>` : ''}
       <span class="muted">${dt(t.entryTime)} → ${t.outcome === 'open' ? 'açık' : dt(t.exitTime)} · ${esc(t.outcome)} · <b class="${t.R >= 0 ? 'pos' : 'neg'}">${fmtR(t.R)}</b></span>
       <span class="spacer"></span><button type="button" id="tvClose" class="ghost sm">Kapat</button></div>
     <div class="chart" id="tvChart"><p class="muted" style="padding:16px">Mumlar indiriliyor…</p></div>
@@ -685,16 +698,16 @@ function tile(label, value, cls = '') { return `<div class="tile"><b>${esc(label
 function show(runObj) {
   const p = runObj.params;
   // Aynı moddaki çalışmalar arasında filtre korunur; farklı moda geçince sıfırlanır
-  if (runObj !== current && p.mode !== filterMode) { filter = { type: '', dir: '', coin: '', exit: '' }; filterMode = p.mode; }
+  if (runObj !== current && p.mode !== filterMode) { filter = { type: '', dir: '', coin: '', exit: '', smt: '' }; filterMode = p.mode; }
   current = runObj;
   const allTrades = unpackTrades(runObj.trades);
   if (filter.coin && !allTrades.some((t) => t.coin === filter.coin)) filter = { ...filter, coin: '' };
-  const picked = allTrades.filter((t) => matchType(t, p.mode, filter.type) && (!filter.dir || t.dir === filter.dir) && (!filter.coin || t.coin === filter.coin));
+  const picked = allTrades.filter((t) => matchType(t, p.mode, filter.type) && (!filter.dir || t.dir === filter.dir) && (!filter.coin || t.coin === filter.coin) && (!filter.smt || t.smt === filter.smt));
   const trades = filter.exit ? picked.map((t) => withExit(t, Number(filter.exit), p.feePct)) : picked;
   view = { trades, p, all: allTrades };
   $('#results').hidden = false;
   $('#resTitle').textContent = `${p.tf} · ${isoDay(p.from)} → ${isoDay(p.to)} · ${p.coins.length} coin${p.note ? ' · ' + p.note : ''}`;
-  $('#resMeta').textContent = settingsText(p);
+  $('#resMeta').textContent = settingsText(p) + (p.settings?.smtOnly ? " · sadece SMT'li" : '');
 
   const types = [...new Set(trades.map((t) => t.type))];
   const blocks = (types.length ? types : [p.entryType === 'zone' ? 'zone' : 'break']).map((type) => {
@@ -724,6 +737,8 @@ function show(runObj) {
   $('#breakdowns').innerHTML = [
     groupTable('Plan tipi', closed, (t) => TYPE_NAME[t.type]),
     groupTable('Yön', closed, (t) => (t.dir === 'long' ? 'LONG ▲' : 'SHORT ▼')),
+    groupTable('SMT (kalıbın son ucu, referans BTC / BTC için ETH)', closed, (t) => (t.smt ? SMT_LABEL[t.smt] : null)),
+    groupTable('Plan tipi × SMT', closed, (t) => (t.smt ? `${TYPE_NAME[t.type]} · ${t.dir === 'long' ? 'L' : 'S'} · ${SMT_LABEL[t.smt]}` : null)),
     groupTable('Stop mesafesi (giriş → stop)', closed, (t) => riskBucket(tradeRiskPct(t)), { order: RISK_BUCKETS }),
     groupTable(`Komisyon maliyeti (%${p.feePct} → R)`, closed, (t) => feeBucket(tradeFeeR(t, p.feePct)), { order: FEE_BUCKETS }),
     groupTable('Üçgen tipi', closed.filter((t) => t.type === 'triangle'), (t) => (t.pattern === 'asc' ? 'Yükselen (yukarı kırılım)' : t.pattern === 'desc' ? 'Alçalan (aşağı kırılım)' : null)),

@@ -1,5 +1,5 @@
 // Diagonal modu: kart, özet ve ayrıntı HTML'i (app.js çağırır; grafik chart.js drawDiagonal).
-import { fmtPrice, fmtPct, fmtX, esc } from './format.js';
+import { fmtPrice, fmtPct, fmtX, esc, smtChip } from './format.js';
 import { riskPct, feeR } from '../scan/wave3.js';
 import { DIAG_PLAN, isOpenDiag } from '../scan/diagonal.js';
 
@@ -44,6 +44,7 @@ export function diagCard(t, { selected }) {
       <span class="coin">${esc(t.coin)}</span>
       <span class="dir ${t.direction}">${dirTxt(t)}</span>
       <span class="chip">${KIND_ICON[t.type]} ${esc(t.typeLabel)} · ${esc(t.shapeLabel)}</span>
+      ${smtChip(t)}
       <span class="score">Skor <b class="num">${t.score}</b></span>
     </div>
     <div class="meta">
@@ -100,6 +101,7 @@ export function diagDetail(t, { tfId, feePct, ruleSet }) {
       <span class="chip">${KIND_ICON[t.type]} ${esc(t.typeLabel)} · ${esc(t.shapeLabel)}</span>
       <span class="state dg-${p.state}">${esc(p.stateLabel)}</span>
       <span class="chip">${esc(tfId)} · derece ${t.sensitivity}×ATR</span>
+      ${smtChip(t)}
       <a class="ext" href="${tv}" target="_blank" rel="noopener">TradingView'de aç ↗</a>
     </div>
     <div class="chart" id="chart"></div>

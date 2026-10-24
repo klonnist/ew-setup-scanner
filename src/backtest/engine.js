@@ -6,6 +6,7 @@ import { findWave3Setups, DEFAULTS, riskOk } from '../scan/wave3.js';
 import { findTriangles, TRI_DEFAULTS, reachOf } from '../scan/triangle.js';
 import { findAbcde, ABCDE_DEFAULTS, abcdeReach } from '../scan/abcde.js';
 import { findDiagonals, DIAG_DEFAULTS } from '../scan/diagonal.js';
+import { smtCheck, smtPoints, timeIndex, SMT_DEFAULTS } from '../scan/smt.js';
 
 // Üçgen modunda canlı tarayıcıyla aynı uzun pencere (bkz. scanner.js LONG_BARS)
 export const TRI_WINDOW = 600;
@@ -22,12 +23,20 @@ const sideExt = (c, d) => ({ adverse: d === 1 ? c.low : c.high, fav: d === 1 ? c
 
 /**
  * @param candles  kapanmış mumlar (eskiden yeniye), [from, to] aralığı + öncesinde ısınma
- * @param cfg      { from, to (ms), opts: tarayıcı ayarları, ...BT_DEFAULTS }
+ * @param cfg      { from, to (ms), opts: tarayıcı ayarları, ref: SMT referans mumları (BTC/ETH, isteğe bağlı), ...BT_DEFAULTS }
  * @returns {{ trades: object[], stats: { orders, cancelled: {reason: n} } }}
  */
 export function backtestCoin(candles, cfg) {
   const c = { ...BT_DEFAULTS, ...cfg };
-  const opts = { ...TRI_DEFAULTS, ...ABCDE_DEFAULTS, ...DIAG_DEFAULTS, ...DEFAULTS, ...c.opts, diagnostics: undefined };
+  const opts = { ...TRI_DEFAULTS, ...ABCDE_DEFAULTS, ...DIAG_DEFAULTS, ...SMT_DEFAULTS, ...DEFAULTS, ...c.opts, diagnostics: undefined };
+  // SMT: kalıbın görüldüğü mumda, o ana kadarki referans mumlarıyla (etiket; smtOnly açıksa SMT'siz emir verilmez)
+  const ref = c.ref?.length && opts.smtRef !== 'off' ? { candles: c.ref, index: timeIndex(c.ref) } : null;
+  const smtOf = (s, win) => (ref ? smtCheck(win, ref, smtPoints(s), s.d, opts.smtWin) : null);
+  const smtSkip = (type, smt) => {
+    if (!opts.smtOnly || smt == null || smt === 'smt') return false;
+    cancel({ type }, 'SMT yok');
+    return true;
+  };
   const triMode = opts.mode === 'triangle';
   const abcMode = opts.mode === 'abcde';
   const diagMode = opts.mode === 'diagonal';
@@ -78,6 +87,7 @@ export function backtestCoin(candles, cfg) {
     const setups = findWave3Setups(win, opts, null);
     for (const s of setups) {
       if (opts.onlyPerfect && !s.zone?.perfect) continue;
+      const smt = smtOf(s, win);
       const abs = (p) => candles[p.i + off].time;
       const base = `${s.direction}|${abs(s.points.p0)}|${abs(s.points.p1)}`;
       if (useBreak && s.phase === 'complete' && (s.state === 'ready' || s.state === 'triggered') && s.rr >= opts.minRR
@@ -86,6 +96,7 @@ export function backtestCoin(candles, cfg) {
         if (!seen.has(key)) {
           seen.add(key);
           orderCount++;
+          if (!smtSkip('break', smt)) {
           const L = s.levels;
           const o = {
             type: 'break', d: s.d, created: t, key,
@@ -93,10 +104,11 @@ export function backtestCoin(candles, cfg) {
             stop: L.stop, target: L.targets[Math.min(c.exitTarget, L.targets.length - 1)].price,
             alts: altsOf(L.targets.map((x, i) => ({ name: `Hedef ${i + 1} (${x.k}× W1)`, price: x.price })), s.d, s.state === 'triggered' ? bar.close : L.trigger),
             t1: L.targets[0].price, cancelBeyond: s.points.p2.price, cancelFav: null,
-            meta: meta(s),
+            meta: { ...meta(s), smt },
           };
           if (o.legs[0].market) fillLeg(o, o.legs[0], bar.close, t);
           orders.push(o);
+          }
         }
       }
       if (useZone && s.phase === 'forming' && s.zone && s.zone.rr >= opts.minRR && riskOk(s.zone.entry, s.zone.stop, opts)) {
@@ -105,6 +117,7 @@ export function backtestCoin(candles, cfg) {
         seen.add(key);
         if (s.zone.state !== 'waiting' && s.zone.state !== 'approaching') { cancel({ type: 'zone' }, 'geç algılandı'); orderCount++; continue; }
         orderCount++;
+        if (smtSkip('zone', smt)) continue;
         const z = s.zone;
         const w = 1 / z.legs.length;
         orders.push({
@@ -114,7 +127,7 @@ export function backtestCoin(candles, cfg) {
           stop: z.stop, target: z.targets[Math.min(c.exitTarget, z.targets.length - 1)].price,
           alts: altsOf(z.targets.map((x, i) => ({ name: `Hedef ${i + 1} (${x.k}× W1)`, price: x.price })), s.d, z.entry),
           t1: z.targets[0].price, cancelBeyond: null, cancelFav: s.abc.B.price,
-          meta: { ...meta(s), strength: z.strength, inside: z.inside },
+          meta: { ...meta(s), smt, strength: z.strength, inside: z.inside },
         });
       }
     }
@@ -173,7 +186,7 @@ export function backtestCoin(candles, cfg) {
       const P = tr.points;
       const abs = (p) => candles[p.i + off].time;
       const base = `${tr.direction}|${abs(P.p0)}|${abs(P.A)}|${abs(P.B)}|${abs(P.C)}|${abs(P.D)}`;
-      const meta = { sensitivity: tr.sensitivity, score: tr.score, pattern: tr.variant, context: tr.innerOk ? 'inner' : 'loose', strength: null, abc: tr.w3Impulse.ok ? 'impulse' : 'no-impulse', retr: null, timeRatio: null };
+      const meta = { sensitivity: tr.sensitivity, score: tr.score, pattern: tr.variant, context: tr.innerOk ? 'inner' : 'loose', strength: null, abc: tr.w3Impulse.ok ? 'impulse' : 'no-impulse', retr: null, timeRatio: null, smt: smtOf(tr, win) };
       for (const p of tr.plans) {
         const isLimit = p.type === 'elimit';
         if (isLimit && !tr.forming) continue; // limit yalnızca E oluşurken verilir
@@ -183,6 +196,7 @@ export function backtestCoin(candles, cfg) {
         seen.add(key);
         orderCount++;
         if (isLimit && p.state !== 'waiting' && p.state !== 'approaching') { cancel({ type: p.type }, 'geç algılandı'); continue; }
+        if (smtSkip(p.type, meta.smt)) continue;
         const entry = isLimit ? p.level : bar.close;
         if (p.rr < opts.abcdeMinRR) { cancel({ type: p.type }, 'R:R düşük'); continue; }
         if (!riskOk(entry, p.stop, opts)) { cancel({ type: p.type }, 'stop çok yakın'); continue; }
@@ -211,6 +225,7 @@ export function backtestCoin(candles, cfg) {
     const last = win.length - 1;
     for (const tr of findDiagonals(win, opts, null)) {
       const P = tr.points;
+      const smt = smtOf(tr, win);
       const abs = (q) => candles[q.i + off].time;
       for (const p of tr.plans) {
         const key = `${p.type}|${tr.direction}|${abs(P.p0)}|${abs(P.p1)}|${abs(P.p2)}`;
@@ -221,6 +236,7 @@ export function backtestCoin(candles, cfg) {
         seen.add(key);
         orderCount++;
         if (isLimit && p.state !== 'lwaiting' && p.state !== 'lapproaching') { cancel({ type: p.type }, 'geç algılandı'); continue; }
+        if (smtSkip(p.type, smt)) continue;
         const entry = isLimit ? p.level : bar.close;
         if (p.rr < opts.diagMinRR) { cancel({ type: p.type }, 'R:R düşük'); continue; }
         if (!riskOk(entry, p.stop, opts)) { cancel({ type: p.type }, 'stop çok yakın'); continue; }
@@ -232,7 +248,7 @@ export function backtestCoin(candles, cfg) {
           stop: p.stop, target: p.main.price, t1: p.targets[0].price,
           alts: altsOf(p.targets, tr.d, entry),
           cancelBeyond: null, cancelFav,
-          meta: { sensitivity: tr.sensitivity, score: tr.score, pattern: tr.shape, context: tr.type, strength: null, abc: null, retr: null, timeRatio: null },
+          meta: { sensitivity: tr.sensitivity, score: tr.score, pattern: tr.shape, context: tr.type, strength: null, abc: null, retr: null, timeRatio: null, smt },
         };
         if (!isLimit) fillLeg(o, o.legs[0], bar.close, t);
         orders.push(o);

@@ -15,7 +15,7 @@ import { snapshot, evaluatePlan, isOpen, triangleShape } from '../watch/track.js
 import { loadWatch, addWatch, removeWatch, updateWatch, saveAll, findByKey, exportWatch, importWatch } from '../watch/store.js';
 import { getCandles, TIMEFRAMES } from '../data/okx.js';
 import { LONG_BARS } from '../scan/scanner.js';
-import { fmtPrice, fmtPct, fmtX, fmtTime, esc } from './format.js';
+import { fmtPrice, fmtPct, fmtX, fmtTime, esc, smtChip } from './format.js';
 
 const $ = (sel) => document.querySelector(sel);
 const NET_KEYS = ['timeframe', 'topN', 'manualCoins'];
@@ -118,7 +118,7 @@ function recompute() {
   const setups = [];
   for (const r of state.scan.results) {
     if (!r.candles.length) continue;
-    r.setups = detect(r, { ...opts, diagnostics });
+    r.setups = detect(r, { ...opts, diagnostics }, state.scan.refs);
     for (const s of r.setups) setups.push({ ...s, coin: r.coin, instId: r.instId });
   }
   sortSetups(setups, opts);
@@ -373,6 +373,7 @@ function card(s) {
       <span class="coin">${esc(s.coin)}</span>
       <span class="dir ${s.direction}">${dirTxt(s)}</span>
       <span class="chip">${phase}</span>
+      ${smtChip(s)}
       <span class="score">Skor <b class="num">${s.score}</b></span>
     </div>
     <div class="meta">
@@ -725,6 +726,7 @@ function renderDetail() {
       <span class="dir ${s.direction}">${dirTxt(s)}</span>
       <span class="chip">${s.phase === 'forming' ? 'Dalga 2 sürüyor' : 'Dalga 2 tamam'}</span>
       <span class="chip">${esc(state.scan.tf.id)} · derece ${s.sensitivity}×ATR</span>
+      ${smtChip(s)}
       <a class="ext" href="${tv}" target="_blank" rel="noopener">TradingView'de aç ↗</a>
     </div>
     <div class="chart" id="chart"></div>
