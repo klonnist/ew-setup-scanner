@@ -47,6 +47,14 @@ export function smtPoints(s) {
   return s.abc?.A && last ? { prev: s.abc.A, last } : null;
 }
 
+/**
+ * Etiket yalnızca dalga-3 limit bölge LONG kurulumunda gösterilir (dalga 2 sürerken, C oluşuyor).
+ * 1 yıllık 4H backtestte yalnızca burada tutarlı fark çıktı; short, B kırılımı, ABCDE ve diagonalde çıkmadı.
+ */
+export function smtApplies(s) {
+  return !s.kind && s.phase === 'forming' && !!s.zone && s.d === 1;
+}
+
 /** time → indeks haritası (referans mumlar için bir kez kurulur). */
 export function timeIndex(candles) {
   const m = new Map();
@@ -92,7 +100,7 @@ function refExtreme(subject, ref, i, d, win, asOf) {
 /** Setup listesine smt alanı yazar (yerinde). ref null ise alan null olur. */
 export function tagSmt(setups, subject, ref, opts = {}) {
   for (const s of setups) {
-    const pts = smtPoints(s);
+    const pts = smtApplies(s) ? smtPoints(s) : null;
     s.smt = pts ? smtCheck(subject, ref, pts, s.d, opts.smtWin ?? SMT_DEFAULTS.smtWin) : null;
   }
   return setups;

@@ -59,9 +59,9 @@ const FIELDS = [
   ['direction', 'Yön', 'select', { group: 'general', options: [['both', 'Long + Short'], ['long', 'Sadece long'], ['short', 'Sadece short']] }],
   ['minRiskPct', 'Min. stop mesafesi (%)', 'number', { group: 'general', step: 0.1, min: 0, hint: "Giriş ile stop arası bundan darsa plan gösterilmez. 0 = kapalı; dar stopta komisyon R'yi yer." }],
   ['feePct', 'Komisyon (% / işlem tarafı)', 'number', { group: 'general', step: 0.01, min: 0, hint: 'Kartta dar stop uyarısındaki komisyon tahmini için.' }],
-  ['smtRef', 'SMT referansı', 'select', { group: 'general', options: [['BTC', 'BTC (BTC için ETH)'], ['ETH', 'ETH (ETH için BTC)'], ['off', 'Kapalı']], hint: "Kalıbın son ucu (dalga 2'nin C'si, E, 5 ya da 4) önceki ucu süpürdü mü, referans grafik aynı anda süpürdü mü? Yalnızca etiket; kalıp, giriş, stop ve hedef değişmez." }],
+  ['smtRef', 'SMT referansı', 'select', { group: 'general', options: [['BTC', 'BTC (BTC için ETH)'], ['ETH', 'ETH (ETH için BTC)'], ['off', 'Kapalı']], hint: "Yalnızca dalga-3 limit bölge LONG: dalga 2'nin C'si A dibini süpürdü mü, referans grafik aynı anda süpürdü mü? Yalnızca etiket; kalıp, giriş, stop ve hedef değişmez." }],
   ['smtWin', 'SMT penceresi (± mum)', 'number', { group: 'general', step: 1, min: 0, hint: 'Referans grafikte uç noktanın çevresinde kaç muma bakılır.' }],
-  ['smtOnly', "Sadece SMT'li kurulumlar (üçgen ve leading etkilenmez)", 'bool', { group: 'general' }],
+  ['smtOnly', "Sadece SMT'li limit bölge long'ları (diğer kurulumlar etkilenmez)", 'bool', { group: 'general' }],
   ['autoRefresh', 'Otomatik yenileme', 'select', { group: 'general', options: [[0, 'Kapalı'], [5, '5 dakikada bir'], [15, '15 dakikada bir']], num: true, hint: 'Sekme açıkken çalışır; yeni setup çıkınca bildirim gösterir.' }],
 
   // Dalga-3

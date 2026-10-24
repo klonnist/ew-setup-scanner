@@ -6,7 +6,7 @@ import { findWave3Setups, DEFAULTS, riskOk } from '../scan/wave3.js';
 import { findTriangles, TRI_DEFAULTS, reachOf } from '../scan/triangle.js';
 import { findAbcde, ABCDE_DEFAULTS, abcdeReach } from '../scan/abcde.js';
 import { findDiagonals, DIAG_DEFAULTS } from '../scan/diagonal.js';
-import { smtCheck, smtPoints, timeIndex, SMT_DEFAULTS } from '../scan/smt.js';
+import { smtCheck, smtPoints, smtApplies, timeIndex, SMT_DEFAULTS } from '../scan/smt.js';
 
 // Üçgen modunda canlı tarayıcıyla aynı uzun pencere (bkz. scanner.js LONG_BARS)
 export const TRI_WINDOW = 600;
@@ -31,7 +31,7 @@ export function backtestCoin(candles, cfg) {
   const opts = { ...TRI_DEFAULTS, ...ABCDE_DEFAULTS, ...DIAG_DEFAULTS, ...SMT_DEFAULTS, ...DEFAULTS, ...c.opts, diagnostics: undefined };
   // SMT: kalıbın görüldüğü mumda, o ana kadarki referans mumlarıyla (etiket; smtOnly açıksa SMT'siz emir verilmez)
   const ref = c.ref?.length && opts.smtRef !== 'off' ? { candles: c.ref, index: timeIndex(c.ref) } : null;
-  const smtOf = (s, win) => (ref ? smtCheck(win, ref, smtPoints(s), s.d, opts.smtWin) : null);
+  const smtOf = (s, win) => (ref && smtApplies(s) ? smtCheck(win, ref, smtPoints(s), s.d, opts.smtWin) : null);
   const smtSkip = (type, smt) => {
     if (!opts.smtOnly || smt == null || smt === 'smt') return false;
     cancel({ type }, 'SMT yok');

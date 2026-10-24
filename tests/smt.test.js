@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { build, mirror } from './helpers.js';
-import { smtCheck, smtPoints, timeIndex, refCoinFor, tagSmt } from '../src/scan/smt.js';
+import { smtCheck, smtPoints, smtApplies, timeIndex, refCoinFor, tagSmt } from '../src/scan/smt.js';
 
 // Dalga 2 benzeri düşüş: A dibi (bar 20), B tepkisi (bar 30), C dibi (bar 40), sonra yükseliş.
 const subj = build([[0, 120], [20, 100], [30, 110], [40, 96], [50, 108]]); // C (96) A'yı (100) süpürdü
@@ -61,17 +61,26 @@ test('refCoinFor: BTC için ETH, kapalıysa null; tagSmt alanı yazar', () => {
   assert.equal(refCoinFor('BTC'), 'ETH');
   assert.equal(refCoinFor('ETH', 'ETH'), 'BTC');
   assert.equal(refCoinFor('SOL', 'off'), null);
-  const s = [{ kind: 'abcde', d: 1, points: { C: pts.prev, E: pts.last } }];
-  tagSmt(s, subj, ref([[0, 60], [20, 50], [30, 56], [40, 52], [50, 58]]));
-  assert.equal(s[0].smt, 'smt');
+  const r = ref([[0, 60], [20, 50], [30, 56], [40, 52], [50, 58]]);
+  const zone = { phase: 'forming', zone: {}, d: 1, abc: { A: pts.prev }, points: { p2: null, cNow: pts.last } };
+  const s = [zone, { ...zone, d: -1 }, { ...zone, phase: 'complete', zone: null }, { kind: 'abcde', d: 1, points: { C: pts.prev, E: pts.last } }];
+  tagSmt(s, subj, r);
+  assert.deepEqual(s.map((x) => x.smt), ['smt', null, null, null]); // yalnızca limit bölge long
+});
+
+test('smtApplies: yalnızca dalga-3 limit bölge long', () => {
+  assert.equal(smtApplies({ phase: 'forming', zone: {}, d: 1 }), true);
+  assert.equal(smtApplies({ phase: 'forming', zone: {}, d: -1 }), false);
+  assert.equal(smtApplies({ phase: 'complete', zone: {}, d: 1 }), false);
+  assert.equal(smtApplies({ kind: 'diagonal', type: 'ending', d: 1 }), false);
 });
 
 test('backtest: SMT yalnızca etiket — referanslı ve referanssız sonuçlar (smt alanı dışında) aynı; smtOnly SMT\'sizleri eler', async () => {
   const { backtestCoin } = await import('../src/backtest/engine.js');
-  // backtest.test.js'teki B kırılımı senaryosu (dalga 3 hedefe gider)
+  // backtest.test.js'teki senaryo: dalga 2 sürerken limit bölge (long) + B kırılımı
   const path = [[0, 120], [20, 100], [40, 130], [52, 115], [60, 122], [70, 110], [76, 119], [110, 165]];
   const candles = build(path);
-  const cfg = { from: candles[0].time, to: candles[candles.length - 1].time, feePct: 0, exitTarget: 0, opts: { sensitivities: [4.5], subDivisors: [2], minRR: 0, entryType: 'break' } };
+  const cfg = { from: candles[0].time, to: candles[candles.length - 1].time, feePct: 0, exitTarget: 0, opts: { sensitivities: [4.5], subDivisors: [2], minRR: 0, entryType: 'both' } };
   const base = backtestCoin(candles, cfg);
   // Referans: kalıpla aynı yol ama C dibi A'nın çok üstünde (süpürme yok)
   const refC = build([[0, 60], [20, 50], [40, 65], [52, 57], [60, 61], [70, 59], [76, 60], [110, 80]]);
@@ -81,7 +90,9 @@ test('backtest: SMT yalnızca etiket — referanslı ve referanssız sonuçlar (
   const strip = (t) => { const { smt, ...x } = t; return x; };
   assert.deepEqual(withRef.trades.map(strip), base.trades.map(strip));
   assert.ok(base.trades.every((t) => t.smt == null));
-  assert.ok(withRef.trades.every((t) => ['smt', 'both', 'ref', 'none'].includes(t.smt)));
+  // Etiket yalnızca limit bölge long'unda; B kırılımında yok
+  assert.ok(withRef.trades.some((t) => t.type === 'zone'));
+  assert.ok(withRef.trades.every((t) => (t.type === 'zone' && t.dir === 'long' ? ['smt', 'both', 'ref', 'none'].includes(t.smt) : t.smt == null)));
   const only = backtestCoin(candles, { ...cfg, ref: refC, opts: { ...cfg.opts, smtOnly: true } });
-  assert.equal(only.trades.length, withRef.trades.filter((t) => t.smt === 'smt').length);
+  assert.equal(only.trades.length, withRef.trades.filter((t) => t.smt == null || t.smt === 'smt').length);
 });

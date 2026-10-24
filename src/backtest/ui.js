@@ -737,7 +737,7 @@ function show(runObj) {
   $('#breakdowns').innerHTML = [
     groupTable('Plan tipi', closed, (t) => TYPE_NAME[t.type]),
     groupTable('Yön', closed, (t) => (t.dir === 'long' ? 'LONG ▲' : 'SHORT ▼')),
-    groupTable('SMT (kalıbın son ucu, referans BTC / BTC için ETH)', closed, (t) => (t.smt ? SMT_LABEL[t.smt] : null)),
+    groupTable('SMT (limit bölge long; referans BTC / BTC için ETH)', closed, (t) => (t.smt ? SMT_LABEL[t.smt] : null)),
     groupTable('Plan tipi × SMT', closed, (t) => (t.smt ? `${TYPE_NAME[t.type]} · ${t.dir === 'long' ? 'L' : 'S'} · ${SMT_LABEL[t.smt]}` : null)),
     groupTable('Stop mesafesi (giriş → stop)', closed, (t) => riskBucket(tradeRiskPct(t)), { order: RISK_BUCKETS }),
     groupTable(`Komisyon maliyeti (%${p.feePct} → R)`, closed, (t) => feeBucket(tradeFeeR(t, p.feePct)), { order: FEE_BUCKETS }),
