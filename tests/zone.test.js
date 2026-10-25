@@ -160,3 +160,18 @@ test('min. stop mesafesi: eşiğin altındaki plan aktif değil, backtest emir a
   assert.equal(bt(0), 1);
   assert.equal(bt(50), 0);
 });
+
+test('C alt derecede bitip fiyat dönünce kurulum listede kalır (cDone), C ve bölge aynı', async () => {
+  const { findWave3Setups } = await import('../src/scan/wave3.js');
+  const { build } = await import('./helpers.js');
+  const HEAD = [[0, 120], [20, 100], [40, 130], [52, 115], [60, 122], [70, 110]];
+  const o = { sensitivities: [4.5], subDivisors: [2], minRR: 0, entryType: 'both' };
+  const before = findWave3Setups(build(HEAD), o).find((x) => x.phase === 'forming');
+  const after = findWave3Setups(build([...HEAD, [74, 115]]), o).find((x) => x.phase === 'forming');
+  assert.ok(before && !before.cDone);
+  assert.ok(after, 'C\'den dönüşte kurulum kaybolmamalı');
+  assert.equal(after.cDone, true);
+  assert.equal(after.points.cNow.price, before.points.cNow.price);
+  assert.ok(Math.abs(after.zone.entry - before.zone.entry) < 0.01, 'bölge aynı (yalnızca güncel ATR payı kayabilir)');
+  assert.ok(Math.abs(after.zone.stop - before.zone.stop) < 0.01);
+});

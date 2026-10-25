@@ -360,10 +360,16 @@ function zoneBlock(s, active) {
   </div>`;
 }
 
+/** Dalga-3 aşaması: C alt derecede bittiyse (fiyat C'den döndü) kurulum listede kalır, etiketi değişir. */
+function phaseLabel(s) {
+  if (s.phase !== 'forming') return 'Dalga 2 tamam';
+  return s.cDone ? 'C tamam · dalga 3 başlıyor' : 'Dalga 2 sürüyor';
+}
+
 function card(s) {
   const act = activePlans(s, toScanOptions(state.settings)).map((p) => p.type);
   const sel = state.selected && setupKey(state.selected) === setupKey(s);
-  const phase = s.phase === 'forming' ? 'Dalga 2 sürüyor' : 'Dalga 2 tamam';
+  const phase = phaseLabel(s);
   const time = s.phase === 'forming'
     ? `Süre 2/1 şu an ${fmtX(s.timeRatio, 2)}${s.timeOk ? ' ✓' : ''}`
     : `Süre 2/1 = ${fmtX(s.timeRatio, 2)}`;
@@ -724,7 +730,7 @@ function renderDetail() {
     <div class="detail-head">
       <h2>${esc(s.coin)}/USDT</h2>
       <span class="dir ${s.direction}">${dirTxt(s)}</span>
-      <span class="chip">${s.phase === 'forming' ? 'Dalga 2 sürüyor' : 'Dalga 2 tamam'}</span>
+      <span class="chip">${phaseLabel(s)}</span>
       <span class="chip">${esc(state.scan.tf.id)} · derece ${s.sensitivity}×ATR</span>
       ${smtChip(s)}
       <a class="ext" href="${tv}" target="_blank" rel="noopener">TradingView'de aç ↗</a>
@@ -736,7 +742,7 @@ function renderDetail() {
       ${fact('Geçersizlik (0)', fmtPrice(s.points.p0.price, s.price))}
       ${fact(s.phase === 'forming' ? 'Dalga 2 geri çekilme (şu an)' : 'Dalga 2 geri çekilme', fmtPct(s.retr))}
       ${fact('Süre: dalga 1 / dalga 2', `${s.durations.D1} / ${s.durations.D2} mum (${fmtX(s.timeRatio)})${s.phase === 'forming' ? (s.timeOk ? ' ✓' : ' – henüz sağlanmadı') : ''}`)}
-      ${fact('Dalga 2 yapısı', s.abc ? esc(s.abc.label) + (s.phase === 'forming' ? ' (C oluşuyor)' : '') : 'ABC bulunamadı')}
+      ${fact('Dalga 2 yapısı', s.abc ? esc(s.abc.label) + (s.phase === 'forming' ? (s.cDone ? ' (C tamam, dönüş başladı)' : ' (C oluşuyor)') : '') : 'ABC bulunamadı')}
       ${s.phase === 'complete' ? fact('RSI', esc(rsi.join(' · ') || '–')) : ''}
       ${s.volume ? fact('Hacim W1 / W2', s.volume.ok ? 'W1 > W2 ✓' : 'W1 ≤ W2') : ''}
       ${fact('Skor', `${s.score}/100`)}
@@ -745,7 +751,7 @@ function renderDetail() {
     ${useZone() ? zoneFacts(s) : ''}
     <div class="rules">
       ${ruleList(`İtki başlangıcı 0-1-2 (${state.settings.ruleSet})${s.phase === 'forming' ? ' — 2 = şimdiye kadarki uç' : ''}`, s.impulse.results)}
-      ${s.abc ? ruleList(`Dalga 2 iç yapısı: ${s.abc.label}${s.phase === 'forming' ? ' (0-A-B, C oluşuyor)' : ''}`, s.abc.results) : ''}
+      ${s.abc ? ruleList(`Dalga 2 iç yapısı: ${s.abc.label}${s.phase === 'forming' ? (s.cDone ? ' (0-A-B, C tamam)' : ' (0-A-B, C oluşuyor)') : ''}`, s.abc.results) : ''}
     </div>`;
   drawSetup($('#chart'), r.candles, r.live, s, { showBreak: useBreak(), showZone: useZone() });
 }

@@ -165,16 +165,21 @@ function evaluateForming({ candles, atrArr, P0, P1, tentative, k, opts, live, pr
   if (hardFails.length) reject.push('İtki kuralı ihlali');
 
   // İç yapı: P1'den bugüne alt derecede tam iki onaylı pivot (A, B), C oluşuyor.
+  // Fiyat C'den dönünce C alt derecede onaylanır (üç pivot: A, B, C) ama büyük derecede henüz onaylı değildir:
+  // kurulum listeden düşmesin diye bu da kabul edilir (cDone: C tamam, dalga 3 başlıyor).
   const kinds = opts.abcKinds === 'both' ? ['zigzag', 'flat'] : [opts.abcKinds];
   let ab = null;
   for (const div of opts.subDivisors) {
     const { pivots: inner, tentative: t } = zigzag(candles, atrArr, k / div, { from: P1.i, to: last, start: { i: P1.i, type: P1.type } });
     const ins = inner.filter((p) => p.i > P1.i);
-    if (ins.length !== 2 || ins[0].type === P1.type || !t || t.type !== ins[0].type) continue;
+    if (!ins.length || ins[0].type === P1.type) continue;
+    const forming = ins.length === 2 && t && t.type === ins[0].type;
+    const cDone = ins.length === 3 && ins[2].type === ins[0].type && ins[2].i === tentative.i && (!t || t.type !== ins[2].type);
+    if (!forming && !cDone) continue;
     const [A, B] = ins;
     const pts = [{ t: P1.i, p: P1.price }, { t: A.i, p: A.price }, { t: B.i, p: B.price }];
     const ev = kinds.map((id) => evaluate(id, pts, { ruleSet: opts.ruleSet, logScale: true })).filter((e) => e.valid).sort((a, b) => b.score - a.score);
-    if (ev.length) { ab = { A, B, C: t, eval: ev[0] }; break; }
+    if (ev.length) { ab = { A, B, C: cDone ? ins[2] : t, eval: ev[0], cDone }; break; }
   }
   if (!ab) reject.push('Dalga 2 ABC değil');
 
@@ -201,6 +206,7 @@ function evaluateForming({ candles, atrArr, P0, P1, tentative, k, opts, live, pr
 
   return {
     phase: 'forming',
+    cDone: !!ab.cDone,
     direction: dirName,
     d,
     sensitivity: k,

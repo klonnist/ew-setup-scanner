@@ -160,7 +160,7 @@ export function snapshot(s, candles, ctx) {
     ...base,
     kind: 'wave3',
     key: `${s.coin}|${ctx.tf.id}|w3|${s.direction}|${tAt(s.points.p0.i)}|${tAt(s.points.p1.i)}`,
-    title: `${s.phase === 'forming' ? 'Dalga 2 sürüyor' : 'Dalga 2 tamam'}${z?.perfect ? ' · ★ mükemmel' : ''}`,
+    title: `${s.phase === 'forming' ? (s.cDone ? 'C tamam · dalga 3 başlıyor' : 'Dalga 2 sürüyor') : 'Dalga 2 tamam'}${z?.perfect ? ' · ★ mükemmel' : ''}`,
     points: [
       pt(s.points.p0, '0'), pt(s.points.p1, '1'),
       ...(s.abc ? [pt(s.abc.A, 'A'), pt(s.abc.B, 'B')] : []),
