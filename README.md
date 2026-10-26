@@ -128,7 +128,8 @@ etkilenmez. Backtest raporunda SMT filtresi ve "SMT" ile "Plan tipi × SMT" kır
 Modlar birbirinden bağımsız sayar; aynı yükseliş bir modda dalga 1, diğerinde dalga 4 olabilir. Tarama sırasında
 her coin için diğer modlar da arka planda çalıştırılır (yön ayarı ve SMT filtresi uygulanmadan). Başka bir modda
 **açık** bir kurulum ters yönü gösteriyorsa kartta ve ayrıntıda **⚠ Çelişen sayım · Diagonal SHORT** gibi bir chip
-çıkar. Aynı moddaki zıt yönler (ör. simetrik üçgenin iki kırılım yönü) sayılmaz. Yalnızca etikettir: algılama,
+çıkar. Aynı modun başka derecesindeki zıt kurulum da sayılır (ör. dalga-3'te 4,5×ATR long, 2×ATR short); yalnızca
+üçgen modunda kendi zıt kırılım yönü (simetrik üçgen) sayılmaz. Yalnızca etikettir: algılama,
 sıralama, filtreler ve backtest değişmez.
 
 ## Backtest

@@ -11,10 +11,17 @@ const views = [
   { mode: 'triangle', label: 'Üçgen', direction: 'long' },
 ];
 
-test('Çelişki: başka moddaki ters yön etiketlenir; aynı yön ve aynı mod etiketlenmez', () => {
+test('Çelişki: ters yön etiketlenir (aynı modun başka derecesi dahil), aynı yön etiketlenmez', () => {
   const [l, s] = tagConflicts([{ direction: 'long' }, { direction: 'short' }], views, 'wave3');
-  assert.deepEqual(l.conflicts.map((v) => v.mode), ['diagonal']);
+  assert.deepEqual(l.conflicts.map((v) => v.mode), ['diagonal', 'wave3']);
   assert.deepEqual(s.conflicts.map((v) => v.mode), ['triangle']);
+});
+
+test('Çelişki: üçgen modu kendi zıt kırılım yönünü saymaz, başka modları sayar', () => {
+  const [s] = tagConflicts([{ direction: 'short' }], views, 'triangle');
+  assert.deepEqual(s.conflicts, []);
+  const [l] = tagConflicts([{ direction: 'long' }], views, 'triangle');
+  assert.deepEqual(l.conflicts.map((v) => v.mode), ['diagonal', 'wave3']);
 });
 
 test('Çelişki: görünümler önbelleklenir, yalnızca mod değişince yeniden hesaplanmaz', () => {

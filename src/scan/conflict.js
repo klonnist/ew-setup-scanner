@@ -1,5 +1,6 @@
-// Çelişen sayım: modlar birbirinden habersiz çalışır; aynı coinde başka bir modun sayımı açık bir kurulumla
-// ters yönü gösteriyorsa kurulum etiketlenir. Aynı moddaki zıt yönler sayılmaz (ör. simetrik üçgenin iki kırılım yönü).
+// Çelişen sayım: modlar ve dereceler birbirinden habersiz çalışır; aynı coinde başka bir sayım (başka mod ya da aynı
+// modun başka derecesi) açık bir kurulumla ters yönü gösteriyorsa kurulum etiketlenir. Üçgen modunda aynı moddaki zıt
+// yönler sayılmaz (simetrik üçgenin iki kırılım yönü çelişki değildir).
 // Yalnızca bilgi: algılama, sıralama ve filtreler değişmez.
 import { findWave3Setups, pickSetups } from './wave3.js';
 import { findTriangles, pickTriangles } from './triangle.js';
@@ -38,8 +39,8 @@ export function openViews(r, opts) {
   return list;
 }
 
-/** Her kuruluma başka modlardaki ters yönlü açık sayımları yazar (s.conflicts; yoksa boş dizi). */
+/** Her kuruluma ters yönlü açık sayımları yazar (s.conflicts; yoksa boş dizi). Üçgen modu kendi zıt yönünü saymaz. */
 export function tagConflicts(setups, views, mode) {
-  for (const s of setups) s.conflicts = views.filter((v) => v.mode !== mode && v.direction !== s.direction);
+  for (const s of setups) s.conflicts = views.filter((v) => v.direction !== s.direction && !(mode === 'triangle' && v.mode === 'triangle'));
   return setups;
 }
