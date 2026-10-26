@@ -123,6 +123,14 @@ SMT **yalnızca etikettir**: kalıp, giriş, stop, hedef ve sıralama değişmez
 (varsayılan kapalı) açılırsa SMT'siz limit bölge long'ları gösterilmez ve backtest'te bunlara emir verilmez; diğer kurulumlar
 etkilenmez. Backtest raporunda SMT filtresi ve "SMT" ile "Plan tipi × SMT" kırılımları vardır.
 
+## Çelişen sayım uyarısı
+
+Modlar birbirinden bağımsız sayar; aynı yükseliş bir modda dalga 1, diğerinde dalga 4 olabilir. Tarama sırasında
+her coin için diğer modlar da arka planda çalıştırılır (yön ayarı ve SMT filtresi uygulanmadan). Başka bir modda
+**açık** bir kurulum ters yönü gösteriyorsa kartta ve ayrıntıda **⚠ Çelişen sayım · Diagonal SHORT** gibi bir chip
+çıkar. Aynı moddaki zıt yönler (ör. simetrik üçgenin iki kırılım yönü) sayılmaz. Yalnızca etikettir: algılama,
+sıralama, filtreler ve backtest değişmez.
+
 ## Backtest
 
 [`backtest.html`](https://klonnist.github.io/ew-setup-scanner/backtest.html): zaman dilimi (1m / 5m / 15m / 4H / 1D) ve tarih aralığı seçilir (1m en fazla 14 gün, 5m en fazla 60 gün);

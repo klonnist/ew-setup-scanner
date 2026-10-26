@@ -29,4 +29,11 @@ export function smtChip(s) {
   return `<span class="chip smt-${s.smt}" title="${esc(SMT_HELP[s.smt] + (s.smtRef ? ` Referans: ${s.smtRef}.` : ''))}">${esc(SMT_LABEL[s.smt] + ref)}</span>`;
 }
 
+/** Aynı coinde ters yönlü açık başka bir sayım varsa uyarı chip'i. */
+export function conflictChip(s) {
+  if (!s.conflicts?.length) return '';
+  const txt = s.conflicts.map((v) => `${v.label} ${v.direction === 'long' ? 'LONG' : 'SHORT'}`).join(', ');
+  return `<span class="chip conflict" title="${esc('Aynı coinde başka bir sayım açık bir kurulumla ters yönü gösteriyor: ' + txt + '. Sayımlardan biri yanlış; teyit seviyelerini bekle ya da pozisyonu küçült.')}">⚠ Çelişen sayım · ${esc(txt)}</span>`;
+}
+
 export const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

@@ -5,6 +5,7 @@ import { findTriangles, compareTriangles } from './triangle.js';
 import { findAbcde, compareAbcde } from './abcde.js';
 import { findDiagonals, compareDiagonals } from './diagonal.js';
 import { tagSmt, refCoinFor, timeIndex, SMT_DEFAULTS } from './smt.js';
+import { openViews, tagConflicts } from './conflict.js';
 
 const CONCURRENCY = 6;
 // Dalga-3 son 300 mumla (canlı ve backtest aynı pencere); üçgenler aylarca sürebildiği için 600 mum indirilir.
@@ -13,7 +14,7 @@ export const LONG_BARS = 600;
 
 /**
  * Bir coinin önbellekteki mumlarında seçilen moda göre setup'ları bulur.
- * refs verilirse her setup'a SMT etiketi yazılır (yalnızca bilgi; algılama ve sıralama değişmez).
+ * refs verilirse her setup'a SMT etiketi yazılır; ayrıca diğer sayımlar ters yönü gösteriyorsa s.conflicts (yalnızca bilgi; algılama ve sıralama değişmez).
  */
 export function detect(r, opts, refs = null) {
   const long = opts.mode === 'triangle' || opts.mode === 'abcde' || opts.mode === 'diagonal';
@@ -25,6 +26,7 @@ export function detect(r, opts, refs = null) {
   const rc = refCoinFor(r.coin, opts.smtRef ?? SMT_DEFAULTS.smtRef);
   tagSmt(setups, subject, rc ? refs?.[rc] || null : null, opts);
   for (const s of setups) s.smtRef = s.smt ? rc : null;
+  tagConflicts(setups, openViews(r, opts), opts.mode || 'wave3');
   // Sadece SMT'li: karşılaştırılacak ucu olmayan kalıplar (üçgen, leading) ve referans verisi olmayanlar etkilenmez
   return opts.smtOnly ? setups.filter((s) => !s.smt || s.smt === 'smt') : setups;
 }

@@ -1,5 +1,5 @@
 // Running / daralan ABCDE üçgeni modu: kart, özet ve ayrıntı HTML'i (app.js çağırır; grafik chart.js drawAbcde).
-import { fmtPrice, fmtPct, fmtX, esc, smtChip } from './format.js';
+import { fmtPrice, fmtPct, fmtX, esc, smtChip, conflictChip } from './format.js';
 import { riskPct, feeR } from '../scan/wave3.js';
 import { PLAN_NAME_ABCDE, isOpenPlan } from '../scan/abcde.js';
 
@@ -32,7 +32,7 @@ export function abcdeCard(t, { selected }) {
       <span class="dir ${t.direction}">${dirTxt(t)}</span>
       <span class="chip">${esc(t.variantLabel)}</span>
       <span class="chip">${esc(t.stateLabel)}</span>
-      ${smtChip(t)}
+      ${smtChip(t)}${conflictChip(t)}
       <span class="score">Skor <b class="num">${t.score}</b></span>
     </div>
     <div class="meta">
@@ -89,7 +89,7 @@ export function abcdeDetail(t, { tfId, feePct, eRetr }) {
       <span class="chip">${esc(t.variantLabel)}</span>
       <span class="chip">${esc(t.stateLabel)}</span>
       <span class="chip">${esc(tfId)} · derece ${t.sensitivity}×ATR</span>
-      ${smtChip(t)}
+      ${smtChip(t)}${conflictChip(t)}
       <a class="ext" href="${tv}" target="_blank" rel="noopener">TradingView'de aç ↗</a>
     </div>
     <div class="chart" id="chart"></div>

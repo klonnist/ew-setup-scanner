@@ -15,7 +15,7 @@ import { snapshot, evaluatePlan, isOpen, triangleShape } from '../watch/track.js
 import { loadWatch, addWatch, removeWatch, updateWatch, saveAll, findByKey, exportWatch, importWatch } from '../watch/store.js';
 import { getCandles, TIMEFRAMES } from '../data/okx.js';
 import { LONG_BARS } from '../scan/scanner.js';
-import { fmtPrice, fmtPct, fmtX, fmtTime, esc, smtChip } from './format.js';
+import { fmtPrice, fmtPct, fmtX, fmtTime, esc, smtChip, conflictChip } from './format.js';
 
 const $ = (sel) => document.querySelector(sel);
 const NET_KEYS = ['timeframe', 'topN', 'manualCoins'];
@@ -379,7 +379,7 @@ function card(s) {
       <span class="coin">${esc(s.coin)}</span>
       <span class="dir ${s.direction}">${dirTxt(s)}</span>
       <span class="chip">${phase}</span>
-      ${smtChip(s)}
+      ${smtChip(s)}${conflictChip(s)}
       <span class="score">Skor <b class="num">${s.score}</b></span>
     </div>
     <div class="meta">
@@ -732,7 +732,7 @@ function renderDetail() {
       <span class="dir ${s.direction}">${dirTxt(s)}</span>
       <span class="chip">${phaseLabel(s)}</span>
       <span class="chip">${esc(state.scan.tf.id)} · derece ${s.sensitivity}×ATR</span>
-      ${smtChip(s)}
+      ${smtChip(s)}${conflictChip(s)}
       <a class="ext" href="${tv}" target="_blank" rel="noopener">TradingView'de aç ↗</a>
     </div>
     <div class="chart" id="chart"></div>

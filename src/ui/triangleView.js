@@ -1,5 +1,5 @@
 // Üçgen kırılımı modu: kart, özet ve ayrıntı HTML'i (app.js çağırır; grafik chart.js drawTriangle).
-import { fmtPrice, fmtPct, fmtX, esc } from './format.js';
+import { fmtPrice, fmtPct, fmtX, esc, conflictChip } from './format.js';
 import { riskPct, feeR } from '../scan/wave3.js';
 
 const dirTxt = (t) => (t.d === 1 ? 'Yukarı kırılım ▲' : 'Aşağı kırılım ▼');
@@ -30,6 +30,7 @@ export function triCard(t, { selected, active }) {
       <span>${t.touches.flat} dokunuş düz kenar · ${t.touches.slope} eğik kenar</span>
       <span>${t.widthBars} mum</span>
       <span>derece ${t.sensitivity}×ATR</span>
+      ${conflictChip(t)}
     </div>
     <div class="lv">
       ${lv(t.state === 'broken' ? 'Fiyat' : 'Kırılım', fmtPrice(L.entry, t.price))}
@@ -73,6 +74,7 @@ export function triDetail(t, { tfId, feePct }) {
       <span class="dir ${t.direction}">${TYPE_ICON[t.type]} ${esc(t.typeLabel)}</span>
       <span class="state tri-${t.state}">${esc(t.stateLabel)}</span>
       <span class="chip">${esc(tfId)} · derece ${t.sensitivity}×ATR</span>
+      ${conflictChip(t)}
       <a class="ext" href="${tv}" target="_blank" rel="noopener">TradingView'de aç ↗</a>
     </div>
     <div class="chart" id="chart"></div>
