@@ -739,6 +739,8 @@ function show(runObj) {
     groupTable('Yön', closed, (t) => (t.dir === 'long' ? 'LONG ▲' : 'SHORT ▼')),
     groupTable('SMT (limit bölge long; referans BTC / BTC için ETH)', closed, (t) => (t.smt ? SMT_LABEL[t.smt] : null)),
     groupTable('Plan tipi × SMT', closed, (t) => (t.smt ? `${TYPE_NAME[t.type]} · ${t.dir === 'long' ? 'L' : 'S'} · ${SMT_LABEL[t.smt]}` : null)),
+    groupTable('C uzadı mı (limit bölge; dolduğu anda C dip → tepki → daha derin dip yapmış mıydı)', closed, (t) => (t.cExt == null ? null : `${t.dir === 'long' ? 'Long' : 'Short'} · ${t.cExt ? 'C uzadı' : 'C tek parça'}`)),
+    groupTable('C uzadı × SMT (limit bölge long)', closed, (t) => (t.cExt == null || !t.smt ? null : `${t.cExt ? 'C uzadı' : 'C tek parça'} · ${SMT_LABEL[t.smt]}`)),
     groupTable('Stop mesafesi (giriş → stop)', closed, (t) => riskBucket(tradeRiskPct(t)), { order: RISK_BUCKETS }),
     groupTable(`Komisyon maliyeti (%${p.feePct} → R)`, closed, (t) => feeBucket(tradeFeeR(t, p.feePct)), { order: FEE_BUCKETS }),
     groupTable('Üçgen tipi', closed.filter((t) => t.type === 'triangle'), (t) => (t.pattern === 'asc' ? 'Yükselen (yukarı kırılım)' : t.pattern === 'desc' ? 'Alçalan (aşağı kırılım)' : null)),

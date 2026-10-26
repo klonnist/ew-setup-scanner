@@ -192,3 +192,14 @@ test('C uzayınca (dip → B\'yi geçmeyen tepki → daha derin dip) kurulum lis
   // C'den önceki tepki B'yi geçerse ABC değil
   assert.equal(forming([[0, 120], [20, 100], [40, 130], [52, 115], [60, 122], [70, 110], [76, 124], [82, 106]]), undefined);
 });
+
+test('cExt: uzayan C\'de true, tek parça C\'de false (yalnızca etiket)', async () => {
+  const { findWave3Setups } = await import('../src/scan/wave3.js');
+  const { build } = await import('./helpers.js');
+  const HEAD = [[0, 120], [20, 100], [40, 130], [52, 115], [60, 122], [70, 110], [74, 115]];
+  const o = { sensitivities: [4.5], subDivisors: [2], minRR: 0, entryType: 'both' };
+  const forming = (path) => findWave3Setups(build(path), o).find((x) => x.phase === 'forming');
+  assert.equal(forming(HEAD).cExt, false);
+  assert.equal(forming([...HEAD, [80, 106]]).cExt, true);
+  assert.equal(forming([...HEAD, [80, 106], [83, 110]]).cExt, true);
+});

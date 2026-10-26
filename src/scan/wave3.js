@@ -183,7 +183,9 @@ function evaluateForming({ candles, atrArr, P0, P1, tentative, k, opts, live, pr
     const cDone = C !== t;
     const pts = [{ t: P1.i, p: P1.price }, { t: A.i, p: A.price }, { t: B.i, p: B.price }];
     const ev = kinds.map((id) => evaluate(id, pts, { ruleSet: opts.ruleSet, logScale: true })).filter((e) => e.valid).sort((a, b) => b.score - a.score);
-    if (ev.length) { ab = { A, B, C, eval: ev[0], cDone }; break; }
+    // cExt: C uzadı (B'den sonra C'den önce daha sığ bir dip var) — yalnızca etiket (backtest kırılımı)
+    const cExt = rest.some((p) => p.type === A.type && p.i < C.i);
+    if (ev.length) { ab = { A, B, C, eval: ev[0], cDone, cExt }; break; }
   }
   if (!ab) reject.push('Dalga 2 ABC değil');
 
@@ -211,6 +213,7 @@ function evaluateForming({ candles, atrArr, P0, P1, tentative, k, opts, live, pr
   return {
     phase: 'forming',
     cDone: !!ab.cDone,
+    cExt: !!ab.cExt,
     direction: dirName,
     d,
     sensitivity: k,

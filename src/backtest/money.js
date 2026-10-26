@@ -155,13 +155,13 @@ export function toCsv(rows, { typeName = {}, withMoney = false } = {}) {
   const num = (x, p = 6) => (x == null || !Number.isFinite(x) ? '' : String(+x.toPrecision(p)).replace('.', ','));
   const money = (x) => (x == null ? '' : x.toFixed(2).replace('.', ','));
   const OUT = { hedef: 'Hedef', stop: 'Stop', 'süre': 'Süre doldu', open: 'Açık (anlık)' };
-  const head = ['#', 'Giriş (UTC)', 'Çıkış (UTC)', 'Coin', 'Plan', 'Yön', 'Giriş fiyatı', 'Stop', 'Çıkış fiyatı', 'Sonuç', 'R', 'Fiyat değişimi %', 'SMT'];
+  const head = ['#', 'Giriş (UTC)', 'Çıkış (UTC)', 'Coin', 'Plan', 'Yön', 'Giriş fiyatı', 'Stop', 'Çıkış fiyatı', 'Sonuç', 'R', 'Fiyat değişimi %', 'SMT', 'C uzadı'];
   if (withMoney) head.push('Alındı mı', 'Teminat $', 'Pozisyon $', 'Tasfiye fiyatı', 'Tasfiye', 'Kâr/zarar $', 'Bakiye $');
   const lines = [head];
   rows.forEach((x, i) => {
     const t = x.t;
     const line = [i + 1, d(t.entryTime), t.outcome === 'open' ? '' : d(t.exitTime), t.coin, typeName[t.type] || t.type, t.dir === 'short' ? 'SHORT' : 'LONG',
-      num(t.entry), num(t.stop), num(t.exit), OUT[t.outcome] || t.outcome, num(t.R, 3), money((dirOf(t) * (t.exit / t.entry - 1)) * 100), SMT_TXT[t.smt] || ''];
+      num(t.entry), num(t.stop), num(t.exit), OUT[t.outcome] || t.outcome, num(t.R, 3), money((dirOf(t) * (t.exit / t.entry - 1)) * 100), SMT_TXT[t.smt] || '', t.cExt == null ? '' : t.cExt ? 'evet' : 'hayır'];
     if (withMoney) {
       line.push(x.taken ? 'evet' : `hayır (${x.reason})`, x.taken ? money(x.margin) : '', x.taken ? money(x.size) : '', x.taken ? num(x.liq) : '',
         x.taken ? (x.liquidated ? 'evet' : 'hayır') : '', x.taken ? money(x.pnl) : '', x.taken && !x.open ? money(x.balance) : x.open ? '(açık)' : '');

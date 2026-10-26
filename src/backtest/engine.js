@@ -49,6 +49,7 @@ export function backtestCoin(candles, cfg) {
   if (startT < 0 || startT >= n) return { trades: [], stats: { orders: 0, cancelled: {} } };
 
   const seen = new Set();
+  const zoneOrders = new Map(); // anahtar → limit bölge emri (C uzadı mı: dolduğu muma kadar güncellenir)
   const orders = []; // bekleyen emirler + açık pozisyonlar
   const trades = [];
   const cancelled = {};
@@ -113,22 +114,28 @@ export function backtestCoin(candles, cfg) {
       }
       if (useZone && s.phase === 'forming' && s.zone && s.zone.rr >= opts.minRR && riskOk(s.zone.entry, s.zone.stop, opts)) {
         const key = `Z|${base}|${abs(s.abc.A)}|${abs(s.abc.B)}`;
-        if (seen.has(key)) continue;
+        if (seen.has(key)) {
+          const o = zoneOrders.get(key);
+          if (o && (o.entryT == null || o.entryT === t)) o.meta.cExt ||= !!s.cExt;
+          continue;
+        }
         seen.add(key);
         if (s.zone.state !== 'waiting' && s.zone.state !== 'approaching') { cancel({ type: 'zone' }, 'geç algılandı'); orderCount++; continue; }
         orderCount++;
         if (smtSkip('zone', smt)) continue;
         const z = s.zone;
         const w = 1 / z.legs.length;
-        orders.push({
+        const zo = {
           type: 'zone', d: s.d, created: t, key,
           legs: z.legs.map((level) => ({ level, w, market: false })),
           activeFrom: z.activeFrom != null ? z.activeFrom + off : -Infinity,
           stop: z.stop, target: z.targets[Math.min(c.exitTarget, z.targets.length - 1)].price,
           alts: altsOf(z.targets.map((x, i) => ({ name: `Hedef ${i + 1} (${x.k}× W1)`, price: x.price })), s.d, z.entry),
           t1: z.targets[0].price, cancelBeyond: null, cancelFav: s.abc.B.price,
-          meta: { ...meta(s), smt, strength: z.strength, inside: z.inside },
-        });
+          meta: { ...meta(s), smt, strength: z.strength, inside: z.inside, cExt: !!s.cExt },
+        };
+        zoneOrders.set(key, zo);
+        orders.push(zo);
       }
     }
   }
