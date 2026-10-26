@@ -164,22 +164,26 @@ function evaluateForming({ candles, atrArr, P0, P1, tentative, k, opts, live, pr
   const hardFails = imp.results.filter((r) => r.status === 'fail' && !PARTIAL_OK.has(r.rule.id));
   if (hardFails.length) reject.push('İtki kuralı ihlali');
 
-  // İç yapı: P1'den bugüne alt derecede tam iki onaylı pivot (A, B), C oluşuyor.
-  // Fiyat C'den dönünce C alt derecede onaylanır (üç pivot: A, B, C) ama büyük derecede henüz onaylı değildir:
-  // kurulum listeden düşmesin diye bu da kabul edilir (cDone: C tamam, dalga 3 başlıyor).
+  // İç yapı: P1'den bugüne alt derecede iki onaylı pivot (A, B), ardından C.
+  // C, B'den sonraki en uç dip (long): C uzayabilir (dip → B'yi geçmeyen tepki → daha derin dip, C'nin alt dalgaları).
+  // C'den önceki tepkiler B'yi geçerse ABC sayılmaz. Fiyat C'den dönünce C alt derecede onaylanır ama büyük derecede
+  // henüz onaylı değildir: kurulum listeden düşmesin diye bu da kabul edilir (cDone: C tamam, dalga 3 başlıyor).
   const kinds = opts.abcKinds === 'both' ? ['zigzag', 'flat'] : [opts.abcKinds];
   let ab = null;
   for (const div of opts.subDivisors) {
     const { pivots: inner, tentative: t } = zigzag(candles, atrArr, k / div, { from: P1.i, to: last, start: { i: P1.i, type: P1.type } });
     const ins = inner.filter((p) => p.i > P1.i);
-    if (!ins.length || ins[0].type === P1.type) continue;
-    const forming = ins.length === 2 && t && t.type === ins[0].type;
-    const cDone = ins.length === 3 && ins[2].type === ins[0].type && ins[2].i === tentative.i && (!t || t.type !== ins[2].type);
-    if (!forming && !cDone) continue;
+    if (ins.length < 2 || ins[0].type === P1.type) continue;
     const [A, B] = ins;
+    const rest = t ? [...ins.slice(2), t] : ins.slice(2);
+    if (!rest.length || rest[0].type !== A.type) continue;
+    const C = rest.filter((p) => p.type === A.type).reduce((a, p) => (d * (p.price - a.price) < 0 ? p : a));
+    if (rest.some((p) => p.type !== A.type && p.i < C.i && d * (p.price - B.price) >= 0)) continue;
+    if (ins.length > 2 && C.i !== tentative.i) continue;
+    const cDone = C !== t;
     const pts = [{ t: P1.i, p: P1.price }, { t: A.i, p: A.price }, { t: B.i, p: B.price }];
     const ev = kinds.map((id) => evaluate(id, pts, { ruleSet: opts.ruleSet, logScale: true })).filter((e) => e.valid).sort((a, b) => b.score - a.score);
-    if (ev.length) { ab = { A, B, C: cDone ? ins[2] : t, eval: ev[0], cDone }; break; }
+    if (ev.length) { ab = { A, B, C, eval: ev[0], cDone }; break; }
   }
   if (!ab) reject.push('Dalga 2 ABC değil');
 

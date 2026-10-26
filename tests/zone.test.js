@@ -175,3 +175,20 @@ test('C alt derecede bitip fiyat dönünce kurulum listede kalır (cDone), C ve 
   assert.ok(Math.abs(after.zone.entry - before.zone.entry) < 0.01, 'bölge aynı (yalnızca güncel ATR payı kayabilir)');
   assert.ok(Math.abs(after.zone.stop - before.zone.stop) < 0.01);
 });
+
+test('C uzayınca (dip → B\'yi geçmeyen tepki → daha derin dip) kurulum listede kalır, C en derin dip', async () => {
+  const { findWave3Setups } = await import('../src/scan/wave3.js');
+  const { build } = await import('./helpers.js');
+  const HEAD = [[0, 120], [20, 100], [40, 130], [52, 115], [60, 122], [70, 110], [74, 115]];
+  const o = { sensitivities: [4.5], subDivisors: [2], minRR: 0, entryType: 'both' };
+  const forming = (path) => findWave3Setups(build(path), o).find((x) => x.phase === 'forming');
+  const before = forming(HEAD);
+  const ext = forming([...HEAD, [80, 106]]);
+  assert.ok(ext, 'uzayan C\'de kurulum kaybolmamalı');
+  assert.equal(ext.cDone, false);
+  assert.ok(ext.points.cNow.price < 107);
+  assert.ok(Math.abs(ext.zone.entry - before.zone.entry) < 0.05, 'bölge aynı (0, 1, A, B\'den)');
+  assert.equal(forming([...HEAD, [80, 106], [83, 110]]).cDone, true);
+  // C'den önceki tepki B'yi geçerse ABC değil
+  assert.equal(forming([[0, 120], [20, 100], [40, 130], [52, 115], [60, 122], [70, 110], [76, 124], [82, 106]]), undefined);
+});
