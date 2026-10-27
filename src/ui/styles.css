@@ -401,6 +401,8 @@ body.mode-diagonal .wave-only:not(.diag-show) { display: none; }
 .chip.smt-smt { color: var(--good); border-color: currentColor; }
 .chip.smt-both { color: var(--warn); }
 .chip.smt-ref, .chip.smt-none { color: var(--muted); }
+.chip.tb-full { color: var(--good); border-color: currentColor; }
+.chip.tb-part { color: var(--muted); }
 .chip.conflict { color: var(--warn); border-color: currentColor; }
 .trade-view { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 14px 12px; margin: 14px 0; scroll-margin-top: 8px; }
 .trade-view .chart { height: 460px; }

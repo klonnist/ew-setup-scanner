@@ -1,6 +1,6 @@
 // Panel: araç çubuğu, tarama, özet, setup kartları ve ayrıntı (grafik + kural kontrolleri).
 import { runScan, detect, sortSetups } from '../scan/scanner.js';
-import { pickSetups, activePlans, riskPct, feeR } from '../scan/wave3.js';
+import { pickSetups, activePlans, riskPct, feeR, tbMissing } from '../scan/wave3.js';
 import { pickTriangles, findTriangles } from '../scan/triangle.js';
 import { pickAbcde } from '../scan/abcde.js';
 import { pickDiagonals } from '../scan/diagonal.js';
@@ -259,12 +259,12 @@ function planSummary(s) {
 }
 
 const REASONS = [
+  [/Ders kitabı/, 'Ders kitabı şekli değil'],
   [/ABC/, 'Dalga 2 ABC değil'],
   [/Süre/, "Dalga 2 dalga 1'den kısa"],
   [/geri çekilme/, 'Geri çekilme bant dışı'],
   [/İtki/, 'İtki kuralı ihlali'],
   [/Dalga 1 küçük/, 'Dalga 1 küçük'],
-  [/net itki değil/, 'Dalga 1 net itki değil'],
   [/stop/i, "Bölge stop'un ötesinde"],
 ];
 
@@ -361,6 +361,14 @@ function zoneBlock(s, active) {
   </div>`;
 }
 
+/** Ders kitabı şablon uyumu chip'i: 4/4 vurgulu, eksik şartlar yazılır. */
+function tbChip(s) {
+  const tb = s.textbook;
+  if (!tb) return '';
+  const miss = tbMissing(tb);
+  return `<span class="chip ${tb.n === 4 ? 'tb-full' : 'tb-part'}" title="Ders kitabı şablonu: net dalga 1, orantılı ABC, ★ çakışma, süre dengesi">📐 ${tb.n === 4 ? 'Ders kitabı 4/4' : `${tb.n}/4 · ${esc(miss.join(', '))}`}</span>`;
+}
+
 /** Dalga-3 aşaması: C alt derecede bittiyse (fiyat C'den döndü) kurulum listede kalır, etiketi değişir. */
 function phaseLabel(s) {
   if (s.phase !== 'forming') return 'Dalga 2 tamam';
@@ -380,7 +388,7 @@ function card(s) {
       <span class="coin">${esc(s.coin)}</span>
       <span class="dir ${s.direction}">${dirTxt(s)}</span>
       <span class="chip">${phase}</span>
-      ${smtChip(s)}${conflictChip(s)}
+      ${smtChip(s)}${tbChip(s)}${conflictChip(s)}
       <span class="score">Skor <b class="num">${s.score}</b></span>
     </div>
     <div class="meta">
@@ -733,7 +741,7 @@ function renderDetail() {
       <span class="dir ${s.direction}">${dirTxt(s)}</span>
       <span class="chip">${phaseLabel(s)}</span>
       <span class="chip">${esc(state.scan.tf.id)} · derece ${s.sensitivity}×ATR</span>
-      ${smtChip(s)}${conflictChip(s)}
+      ${smtChip(s)}${tbChip(s)}${conflictChip(s)}
       <a class="ext" href="${tv}" target="_blank" rel="noopener">TradingView'de aç ↗</a>
     </div>
     <div class="chart" id="chart"></div>
@@ -742,7 +750,8 @@ function renderDetail() {
       ${fact('Güncel fiyat', fmtPrice(s.price))}
       ${fact('Geçersizlik (0)', fmtPrice(s.points.p0.price, s.price))}
       ${fact(s.phase === 'forming' ? 'Dalga 2 geri çekilme (şu an)' : 'Dalga 2 geri çekilme', fmtPct(s.retr))}
-      ${s.w1q ? fact('Dalga 1: verim · hız', `${fmtX(s.w1q.er, 2).replace('×', '')} · ${fmtX(s.w1q.speed, 2).replace('×', '')} ATR/mum${s.w1q.er >= state.settings.cleanW1Er && s.w1q.speed >= state.settings.cleanW1Speed ? ' ✓ net itki' : ' – testere / yavaş'}`) : ''}
+      ${s.w1q ? fact('Dalga 1: verim · hız', `${fmtX(s.w1q.er, 2).replace('×', '')} · ${fmtX(s.w1q.speed, 2).replace('×', '')} ATR/mum${s.textbook?.checks.w1 ? ' ✓ net itki' : ' – testere / yavaş'}`) : ''}
+      ${s.textbook ? fact('Ders kitabı şablonu', `${s.textbook.n}/4${s.textbook.ratios ? ` · a %${Math.round(s.textbook.ratios.a * 100)} · b %${Math.round(s.textbook.ratios.b * 100)} · c ${fmtX(s.textbook.ratios.c, 2)}` : ''}${tbMissing(s.textbook).length ? ' – eksik: ' + tbMissing(s.textbook).join(', ') : ' ✓'}`) : ''}
       ${fact('Süre: dalga 1 / dalga 2', `${s.durations.D1} / ${s.durations.D2} mum (${fmtX(s.timeRatio)})${s.phase === 'forming' ? (s.timeOk ? ' ✓' : ' – henüz sağlanmadı') : ''}`)}
       ${fact('Dalga 2 yapısı', s.abc ? esc(s.abc.label) + (s.phase === 'forming' ? (s.cDone ? ' (C tamam, dönüş başladı)' : ' (C oluşuyor)') : '') : 'ABC bulunamadı')}
       ${s.phase === 'complete' ? fact('RSI', esc(rsi.join(' · ') || '–')) : ''}

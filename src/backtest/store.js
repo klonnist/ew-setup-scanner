@@ -4,7 +4,7 @@ const KEY = 'ew-setup-scanner:backtests:v1';
 export const MAX_BYTES = 3.5 * 1024 * 1024; // localStorage ~5 MB; ayarlar vb. için pay bırak
 
 // Sıkıştırılmış işlem satırı alanları (sıra önemli)
-const FIELDS = ['coin', 'type', 'dir', 'created', 'entryTime', 'exitTime', 'entry', 'exit', 'stop', 'target', 'filledLegs', 'legs', 'R', 'outcome', 'bars', 'sensitivity', 'score', 'retr', 'timeRatio', 'abc', 'strength', 'inside', 'widthAtr', 'perfect', 'pattern', 'context', 'mfeFib', 'mfeH', 'startFib', 'reach', 'mae', 'alts', 'smt', 'cExt', 'w1Er', 'w1Speed'];
+const FIELDS = ['coin', 'type', 'dir', 'created', 'entryTime', 'exitTime', 'entry', 'exit', 'stop', 'target', 'filledLegs', 'legs', 'R', 'outcome', 'bars', 'sensitivity', 'score', 'retr', 'timeRatio', 'abc', 'strength', 'inside', 'widthAtr', 'perfect', 'pattern', 'context', 'mfeFib', 'mfeH', 'startFib', 'reach', 'mae', 'alts', 'smt', 'cExt', 'w1Er', 'w1Speed', 'tb', 'tbMiss'];
 const round = (x) => (typeof x === 'number' && !Number.isInteger(x) ? +x.toPrecision(6) : x);
 
 export function packTrades(trades) {

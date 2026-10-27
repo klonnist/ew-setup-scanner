@@ -88,7 +88,7 @@ test('R:R filtresi pickSetups ile uygulanır', () => {
   assert.equal(pickSetups(all, { minRR: 50 }).length, 0);
 });
 
-test('Dalga 1 kalitesi: düz itki yüksek verim/hız, testere düşük; cleanW1 kapalıyken sonuç değişmez', async () => {
+test('Dalga 1 kalitesi: düz itki yüksek verim/hız, testere düşük; şablon filtresi kapalıyken sonuç değişmez', async () => {
   const { w1Quality, findWave3Setups } = await import('../src/scan/wave3.js');
   const { fillAtr } = await import('../src/scan/zigzag.js');
   const { atr } = await import('../src/data/indicators.js');
@@ -104,11 +104,26 @@ test('Dalga 1 kalitesi: düz itki yüksek verim/hız, testere düşük; cleanW1 
   const choppy = q([...saw, [70, 105]], 20, 59);
   assert.ok(straight.er > 0.9 && straight.speed > choppy.speed, JSON.stringify({ straight, choppy }));
   assert.ok(choppy.er < 0.2, JSON.stringify(choppy));
-  // Kapalıyken (varsayılan) algılama aynı; açıkken testere dalga 1'li kurulum elenir
+  // Kapalıyken (varsayılan) algılama aynı ve her kurulum şablon puanı taşır; açıkken şartı sağlamayan elenir
   const path = [[0, 120], [20, 100], [40, 130], [52, 115], [60, 122], [70, 110], [74, 115]];
   const o = { sensitivities: [4.5], subDivisors: [2], minRR: 0, entryType: 'both' };
   const off = findWave3Setups(build(path), o);
-  assert.ok(off.length && off.every((s) => s.w1q));
-  const on = findWave3Setups(build(path), { ...o, cleanW1: true, cleanW1Er: 2 });
+  assert.ok(off.length && off.every((s) => s.w1q && s.textbook));
+  const on = findWave3Setups(build(path), { ...o, textbook: true, textbookMin: 4, cleanW1Er: 2 });
   assert.equal(on.length, 0);
+});
+
+test('Ders kitabı şablonu: ideal oranlar 4/4, minicik ABC ve uzun dalga 2 eksik sayılır', async () => {
+  const { textbookOf, tbMissing, DEFAULTS } = await import('../src/scan/wave3.js');
+  const base = {
+    P0: { price: 100 }, P1: { price: 130 }, A: { price: 116 }, B: { price: 125 }, C: 107.5,
+    w1q: { er: 0.7, speed: 0.6 }, zone: { perfect: true }, timeRatio: 1.6, atr: 2,
+  };
+  const ideal = textbookOf(base, DEFAULTS); // a = 14/30, b = 9/14, c = 17,5/14
+  assert.equal(ideal.n, 4, JSON.stringify(ideal));
+  const tiny = textbookOf({ ...base, A: { price: 129 }, B: { price: 129.6 }, C: 128.8 }, DEFAULTS);
+  assert.equal(tiny.checks.abc, false);
+  const slow = textbookOf({ ...base, timeRatio: 4, zone: { perfect: false } }, DEFAULTS);
+  assert.equal(slow.n, 2);
+  assert.deepEqual(tbMissing(slow), ['★ yok', 'dalga 2 çok uzun']);
 });

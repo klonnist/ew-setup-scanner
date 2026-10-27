@@ -123,15 +123,20 @@ SMT **yalnızca etikettir**: kalıp, giriş, stop, hedef ve sıralama değişmez
 (varsayılan kapalı) açılırsa SMT'siz limit bölge long'ları gösterilmez ve backtest'te bunlara emir verilmez; diğer kurulumlar
 etkilenmez. Backtest raporunda SMT filtresi ve "SMT" ile "Plan tipi × SMT" kırılımları vardır.
 
-## Net itkili dalga 1 (dalga-3, isteğe bağlı)
+## Ders kitabı şekli (dalga-3, isteğe bağlı)
 
-Her dalga-3 kurulumu için dalga 1'in **verimi** (net kapanış farkı ÷ ardışık kapanış farklarının toplamı; 1 = dümdüz
-itki, 0 = testere) ve **hızı** (dalga 1 boyu × ATR ÷ mum sayısı) hesaplanır; ayrıntı panelinde görünür. "Sadece net
-itkili dalga 1" ayarı (varsayılan kapalı) açılırsa verimi ya da hızı eşiğin altındaki kurulumlar gösterilmez ve
-backtest'te emir verilmez. Backtest raporunda "Dalga 1 verimi" ve "Dalga 1 hızı" kırılımları vardır.
+Her dalga-3 kurulumu dört şarta göre puanlanır (kartta 📐 x/4, ayrıntıda oranlar ve eksik şartlar):
 
-Kalibrasyon (4H 1 yıl, 15m 3 ay): filtre sonuçları iyileştirmedi. 15m'de elenen işlemler kalanlardan daha iyiydi.
-Bu yüzden ayar bir performans filtresi değil, görsel tercih olarak sunulur.
+1. **Net dalga 1:** verim (net kapanış farkı ÷ ardışık kapanış farklarının toplamı) ≥ 0,35 ve hız (dalga 1 boyu × ATR ÷
+   mum sayısı) ≥ 0,3.
+2. **Orantılı ABC:** a = dalga 1'in %30–60'ı, b = a'nın %45–90'ı, c = a'nın 1–1,4 katı (oluşurken bölge çakışma seviyesi);
+   her bacak ≥ 1 ATR.
+3. **★ çakışma:** %61,8 ile C = 1,272A neredeyse aynı seviye.
+4. **Süre dengesi:** süre(2) / süre(1) ≤ 2,5.
+
+"Sadece ders kitabı şekli" (varsayılan kapalı) açılırsa en az 4/4 (ya da 3/4) uyanlar gösterilir ve backtest'te yalnızca
+onlara emir verilir. Backtest raporunda "Ders kitabı şablonu", "Şablonda eksik şart", "Dalga 1 verimi" ve "Dalga 1 hızı"
+kırılımları vardır.
 
 ## Çelişen sayım uyarısı
 
