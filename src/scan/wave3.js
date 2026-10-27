@@ -37,7 +37,23 @@ export const DEFAULTS = {
   minRiskPct: 0, // giriş-stop mesafesi fiyatın bu %'sinden azsa plan aktif sayılmaz (0 = kapalı)
   feePct: 0.1, // komisyon tahmini (% / işlem tarafı) — dar stop uyarısı için
   zoneTime: 'require', // 'require': limit emir süre(2) > minTimeRatio × süre(1) olunca aktif | 'ignore'
+  cleanW1: false, // yalnızca net itkili dalga 1 (testere gibi, yavaş dalga 1'ler elenir)
+  cleanW1Er: 0.35, // dalga 1 verimi: net kapanış farkı ÷ ardışık kapanış farklarının toplamı
+  cleanW1Speed: 0.3, // dalga 1 hızı: (|1 − 0| ÷ ATR) ÷ mum sayısı
 };
+
+/** Dalga 1 kalitesi: verim (1 = dümdüz itki, 0 = testere) ve hız (mum başına ATR). */
+export function w1Quality(candles, atrArr, P0, P1) {
+  let path = 0;
+  for (let i = P0.i + 1; i <= P1.i; i++) path += Math.abs(candles[i].close - candles[i - 1].close);
+  const bars = Math.max(1, P1.i - P0.i);
+  const er = path > 0 ? Math.abs(candles[P1.i].close - candles[P0.i].close) / path : 0;
+  const speed = Math.abs(P1.price - P0.price) / atrArr[P1.i] / bars;
+  return { er, speed, bars };
+}
+
+const w1Fail = (q, o) => o.cleanW1 && (q.er < o.cleanW1Er || q.speed < o.cleanW1Speed)
+  ? `Dalga 1 net itki değil (verim ${q.er.toFixed(2)} · hız ${q.speed.toFixed(2)})` : null;
 
 /** Bölge emrinin aktif olduğu ilk mutlak mum indeksi (süre koşulu). */
 const activeFromOf = (o, P0, P1) =>
@@ -158,6 +174,9 @@ function evaluateForming({ candles, atrArr, P0, P1, tentative, k, opts, live, pr
   const retrNow = Math.abs(Math.log(P1.price) - Math.log(cur.price)) / L1;
   const w1Atr = Math.abs(P1.price - P0.price) / atrArr[P1.i];
   if (w1Atr < opts.minW1Atr) reject.push(`Dalga 1 küçük (${w1Atr.toFixed(1)}×ATR)`);
+  const w1q = w1Quality(candles, atrArr, P0, P1);
+  const w1Bad = w1Fail(w1q, opts);
+  if (w1Bad) reject.push(w1Bad);
   if (retrNow > opts.retrMax) reject.push(`Dalga 2 geri çekilme %${(retrNow * 100).toFixed(1)} bant dışı`);
 
   const imp = evaluate('impulse', [P0, P1, cur].map((p) => ({ t: p.i, p: p.price })), { ruleSet: opts.ruleSet, logScale: true });
@@ -214,6 +233,7 @@ function evaluateForming({ candles, atrArr, P0, P1, tentative, k, opts, live, pr
     phase: 'forming',
     cDone: !!ab.cDone,
     cExt: !!ab.cExt,
+    w1q,
     direction: dirName,
     d,
     sensitivity: k,
@@ -251,6 +271,9 @@ function evaluateSetup({ candles, atrArr, rsiArr, P0, P1, P2, k, opts, live, pri
   const w1Atr = Math.abs(P1.price - P0.price) / atrArr[P1.i];
 
   if (w1Atr < opts.minW1Atr) reject.push(`Dalga 1 küçük (${w1Atr.toFixed(1)}×ATR)`);
+  const w1q = w1Quality(candles, atrArr, P0, P1);
+  const w1Bad = w1Fail(w1q, opts);
+  if (w1Bad) reject.push(w1Bad);
   if (retr < opts.retrMin || retr > opts.retrMax) reject.push(`Dalga 2 geri çekilme %${(retr * 100).toFixed(1)} bant dışı`);
   if (!(timeRatio > opts.minTimeRatio)) reject.push(`Süre(2)/Süre(1) = ${timeRatio.toFixed(2)}× (> ${opts.minTimeRatio} olmalı)`);
 
@@ -357,6 +380,7 @@ function evaluateSetup({ candles, atrArr, rsiArr, P0, P1, P2, k, opts, live, pri
     stateLabel: STATE_LABEL[state],
     barsSince2: candles.length - 1 - P2.i,
     timeOk: true,
+    w1q,
     zone,
     score,
   };

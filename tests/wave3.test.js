@@ -87,3 +87,28 @@ test('R:R filtresi pickSetups ile uygulanır', () => {
   const all = findWave3Setups(c, OPTS);
   assert.equal(pickSetups(all, { minRR: 50 }).length, 0);
 });
+
+test('Dalga 1 kalitesi: düz itki yüksek verim/hız, testere düşük; cleanW1 kapalıyken sonuç değişmez', async () => {
+  const { w1Quality, findWave3Setups } = await import('../src/scan/wave3.js');
+  const { fillAtr } = await import('../src/scan/zigzag.js');
+  const { atr } = await import('../src/data/indicators.js');
+  const { build } = await import('./helpers.js');
+  const q = (path, i0, i1) => {
+    const c = build(path);
+    const a = fillAtr(atr(c.map((x) => x.high), c.map((x) => x.low), c.map((x) => x.close), 14));
+    return w1Quality(c, a, { i: i0, price: c[i0].low }, { i: i1, price: c[i1].high });
+  };
+  const straight = q([[0, 100], [20, 100.5], [30, 120], [40, 110]], 20, 29);
+  const saw = [[0, 100], [20, 100.5]];
+  for (let b = 22, p = 100.5; b <= 60; b += 2) { p += (b / 2) % 2 ? 3 : -2.5; saw.push([b, p]); }
+  const choppy = q([...saw, [70, 105]], 20, 59);
+  assert.ok(straight.er > 0.9 && straight.speed > choppy.speed, JSON.stringify({ straight, choppy }));
+  assert.ok(choppy.er < 0.2, JSON.stringify(choppy));
+  // Kapalıyken (varsayılan) algılama aynı; açıkken testere dalga 1'li kurulum elenir
+  const path = [[0, 120], [20, 100], [40, 130], [52, 115], [60, 122], [70, 110], [74, 115]];
+  const o = { sensitivities: [4.5], subDivisors: [2], minRR: 0, entryType: 'both' };
+  const off = findWave3Setups(build(path), o);
+  assert.ok(off.length && off.every((s) => s.w1q));
+  const on = findWave3Setups(build(path), { ...o, cleanW1: true, cleanW1Er: 2 });
+  assert.equal(on.length, 0);
+});

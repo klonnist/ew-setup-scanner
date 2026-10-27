@@ -264,6 +264,7 @@ const REASONS = [
   [/geri çekilme/, 'Geri çekilme bant dışı'],
   [/İtki/, 'İtki kuralı ihlali'],
   [/Dalga 1 küçük/, 'Dalga 1 küçük'],
+  [/net itki değil/, 'Dalga 1 net itki değil'],
   [/stop/i, "Bölge stop'un ötesinde"],
 ];
 
@@ -741,6 +742,7 @@ function renderDetail() {
       ${fact('Güncel fiyat', fmtPrice(s.price))}
       ${fact('Geçersizlik (0)', fmtPrice(s.points.p0.price, s.price))}
       ${fact(s.phase === 'forming' ? 'Dalga 2 geri çekilme (şu an)' : 'Dalga 2 geri çekilme', fmtPct(s.retr))}
+      ${s.w1q ? fact('Dalga 1: verim · hız', `${fmtX(s.w1q.er, 2).replace('×', '')} · ${fmtX(s.w1q.speed, 2).replace('×', '')} ATR/mum${s.w1q.er >= state.settings.cleanW1Er && s.w1q.speed >= state.settings.cleanW1Speed ? ' ✓ net itki' : ' – testere / yavaş'}`) : ''}
       ${fact('Süre: dalga 1 / dalga 2', `${s.durations.D1} / ${s.durations.D2} mum (${fmtX(s.timeRatio)})${s.phase === 'forming' ? (s.timeOk ? ' ✓' : ' – henüz sağlanmadı') : ''}`)}
       ${fact('Dalga 2 yapısı', s.abc ? esc(s.abc.label) + (s.phase === 'forming' ? (s.cDone ? ' (C tamam, dönüş başladı)' : ' (C oluşuyor)') : '') : 'ABC bulunamadı')}
       ${s.phase === 'complete' ? fact('RSI', esc(rsi.join(' · ') || '–')) : ''}

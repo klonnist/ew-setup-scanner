@@ -123,6 +123,16 @@ SMT **yalnızca etikettir**: kalıp, giriş, stop, hedef ve sıralama değişmez
 (varsayılan kapalı) açılırsa SMT'siz limit bölge long'ları gösterilmez ve backtest'te bunlara emir verilmez; diğer kurulumlar
 etkilenmez. Backtest raporunda SMT filtresi ve "SMT" ile "Plan tipi × SMT" kırılımları vardır.
 
+## Net itkili dalga 1 (dalga-3, isteğe bağlı)
+
+Her dalga-3 kurulumu için dalga 1'in **verimi** (net kapanış farkı ÷ ardışık kapanış farklarının toplamı; 1 = dümdüz
+itki, 0 = testere) ve **hızı** (dalga 1 boyu × ATR ÷ mum sayısı) hesaplanır; ayrıntı panelinde görünür. "Sadece net
+itkili dalga 1" ayarı (varsayılan kapalı) açılırsa verimi ya da hızı eşiğin altındaki kurulumlar gösterilmez ve
+backtest'te emir verilmez. Backtest raporunda "Dalga 1 verimi" ve "Dalga 1 hızı" kırılımları vardır.
+
+Kalibrasyon (4H 1 yıl, 15m 3 ay): filtre sonuçları iyileştirmedi. 15m'de elenen işlemler kalanlardan daha iyiydi.
+Bu yüzden ayar bir performans filtresi değil, görsel tercih olarak sunulur.
+
 ## Çelişen sayım uyarısı
 
 Modlar birbirinden bağımsız sayar; aynı yükseliş bir modda dalga 1, diğerinde dalga 4 olabilir. Tarama sırasında

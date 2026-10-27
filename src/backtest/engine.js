@@ -295,6 +295,7 @@ export function backtestCoin(candles, cfg) {
     return {
       sensitivity: s.sensitivity, score: s.score, retr: s.retr, timeRatio: s.timeRatio, abc: s.abc?.kind || null,
       widthAtr: s.zone ? s.zone.widthAtr : null, perfect: s.zone ? s.zone.perfect : null,
+      w1Er: s.w1q ? s.w1q.er : null, w1Speed: s.w1q ? s.w1q.speed : null,
     };
   }
 
