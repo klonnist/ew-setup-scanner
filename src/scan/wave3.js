@@ -38,7 +38,7 @@ export const DEFAULTS = {
   feePct: 0.1, // komisyon tahmini (% / işlem tarafı) — dar stop uyarısı için
   zoneTime: 'require', // 'require': limit emir süre(2) > minTimeRatio × süre(1) olunca aktif | 'ignore'
   textbook: false, // yalnızca ders kitabı şekli (şablon şartlarından en az textbookMin tanesi)
-  textbookMin: 4, // 4: dört şart da | 3: biri eksik olabilir
+  textbookMin: 3, // 3: en az üç şart (4/4'ler de dahil) | 4: yalnızca dört şart da (backtestte 4/4'ler en zayıf grup)
   cleanW1Er: 0.35, // dalga 1 verimi: net kapanış farkı ÷ ardışık kapanış farklarının toplamı
   cleanW1Speed: 0.3, // dalga 1 hızı: (|1 − 0| ÷ ATR) ÷ mum sayısı
 };

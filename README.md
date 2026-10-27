@@ -134,7 +134,7 @@ Her dalga-3 kurulumu dört şarta göre puanlanır (kartta 📐 x/4, ayrıntıda
 3. **★ çakışma:** %61,8 ile C = 1,272A neredeyse aynı seviye.
 4. **Süre dengesi:** süre(2) / süre(1) ≤ 2,5.
 
-"Sadece ders kitabı şekli" (varsayılan kapalı) açılırsa en az 4/4 (ya da 3/4) uyanlar gösterilir ve backtest'te yalnızca
+"Sadece ders kitabı şekli" (varsayılan kapalı) açılırsa en az 3/4 (varsayılan; 4/4'ler dahil) ya da yalnızca 4/4 uyanlar gösterilir ve backtest'te yalnızca
 onlara emir verilir. Backtest raporunda "Ders kitabı şablonu", "Şablonda eksik şart", "Dalga 1 verimi" ve "Dalga 1 hızı"
 kırılımları vardır.
 
