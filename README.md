@@ -129,8 +129,9 @@ Her dalga-3 kurulumu dört şarta göre puanlanır (kartta 📐 x/4, ayrıntıda
 
 1. **Net dalga 1:** verim (net kapanış farkı ÷ ardışık kapanış farklarının toplamı) ≥ 0,35 ve hız (dalga 1 boyu × ATR ÷
    mum sayısı) ≥ 0,3.
-2. **Orantılı ABC:** a = dalga 1'in %30–60'ı, b = a'nın %45–90'ı, c = a'nın 1–1,4 katı (oluşurken bölge çakışma seviyesi);
-   her bacak ≥ 1 ATR.
+2. **Orantılı ABC:** a = dalga 1'in %30–60'ı, b = a'nın %50–78,6'sı, c = a'nın 1–1,4 katı (oluşurken bölge çakışma
+   seviyesi); her bacak ≥ 1 ATR. A–B ilişkisi 1–2 ilişkisi gibi kurulur: A da dalga 1 gibi net itki olmalı (aynı verim/hız
+   eşikleri); değilse eksik şart "A testere" yazılır.
 3. **★ çakışma:** %61,8 ile C = 1,272A neredeyse aynı seviye.
 4. **Süre dengesi:** süre(2) / süre(1) ≤ 2,5.
 

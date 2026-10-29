@@ -54,25 +54,34 @@ export function w1Quality(candles, atrArr, P0, P1) {
   return { er, speed, bars };
 }
 
-// Ders kitabı şablonu: net dalga 1, orantılı ABC (a = dalga 1'in %30–60'ı, b = a'nın %45–90'ı, c = a'nın 1–1,4 katı,
-// her bacak ≥ 1 ATR), ★ çakışma (%61,8 ≈ C = 1,272A) ve süre(2)/süre(1) ≤ 2,5.
-const TB = { aMin: 0.3, aMax: 0.6, bMin: 0.45, bMax: 0.9, cMin: 1, cMax: 1.4, legAtr: 1, timeMax: 2.5 };
+// Ders kitabı şablonu: net dalga 1, orantılı ABC (a = dalga 1'in %30–60'ı, b = a'nın %50–78,6'sı, c = a'nın 1–1,4 katı,
+// her bacak ≥ 1 ATR; A da dalga 1 gibi net itki — A–B ilişkisi 1–2 ilişkisi gibi), ★ çakışma (%61,8 ≈ C = 1,272A)
+// ve süre(2)/süre(1) ≤ 2,5.
+const TB = { aMin: 0.3, aMax: 0.6, bMin: 0.5, bMax: 0.786, cMin: 1, cMax: 1.4, legAtr: 1, timeMax: 2.5 };
 const TB_MISS = { w1: 'dalga 1 testere', abc: 'ABC orantısız', star: '★ yok', time: 'dalga 2 çok uzun' };
 
-/** Şablon uyumu: { n: sağlanan şart sayısı (0–4), checks, ratios: { a, b, c } }. C: dalga 2'nin ucu (oluşuyorsa bölge çakışma seviyesi). */
-export function textbookOf({ P0, P1, A, B, C, w1q, zone, timeRatio, atr }, o) {
+const isImpulse = (q, o) => !!q && q.er >= o.cleanW1Er && q.speed >= o.cleanW1Speed;
+
+/**
+ * Şablon uyumu: { n: sağlanan şart sayısı (0–4), checks, ratios: { a, b, c, aEr }, abcWhy: 'oran' | 'a' }.
+ * C: dalga 2'nin ucu (oluşuyorsa bölge çakışma seviyesi); aq: A bacağının kalitesi (w1Quality, 1 → A).
+ */
+export function textbookOf({ P0, P1, A, B, C, w1q, aq, zone, timeRatio, atr }, o) {
   const L = Math.abs(P1.price - P0.price);
-  let ratios = null, abc = false;
+  let ratios = null, abc = false, abcWhy = 'oran';
   if (A && B && C != null) {
     const la = Math.abs(A.price - P1.price), lb = Math.abs(B.price - A.price), lc = Math.abs(C - B.price);
-    ratios = { a: la / L, b: lb / la, c: lc / la };
-    abc = ratios.a >= TB.aMin && ratios.a <= TB.aMax && ratios.b >= TB.bMin && ratios.b <= TB.bMax
+    ratios = { a: la / L, b: lb / la, c: lc / la, aEr: aq ? aq.er : null };
+    const prop = ratios.a >= TB.aMin && ratios.a <= TB.aMax && ratios.b >= TB.bMin && ratios.b <= TB.bMax
       && ratios.c >= TB.cMin && ratios.c <= TB.cMax && Math.min(la, lb, lc) >= TB.legAtr * atr;
+    abc = prop && isImpulse(aq, o);
+    if (prop && !abc) abcWhy = 'a';
   }
-  const checks = { w1: w1q.er >= o.cleanW1Er && w1q.speed >= o.cleanW1Speed, abc, star: !!zone?.perfect, time: timeRatio <= TB.timeMax };
-  return { n: Object.values(checks).filter(Boolean).length, checks, ratios };
+  const checks = { w1: isImpulse(w1q, o), abc, star: !!zone?.perfect, time: timeRatio <= TB.timeMax };
+  return { n: Object.values(checks).filter(Boolean).length, checks, ratios, abcWhy };
 }
-export const tbMissing = (tb) => Object.keys(tb.checks).filter((k) => !tb.checks[k]).map((k) => TB_MISS[k]);
+export const tbMissing = (tb) => Object.keys(tb.checks).filter((k) => !tb.checks[k])
+  .map((k) => (k === 'abc' && tb.abcWhy === 'a' ? 'A testere' : TB_MISS[k]));
 const tbReason = (tb) => `Ders kitabı şekli değil (${tb.n}/4: ${tbMissing(tb).join(', ')})`;
 
 /** Bölge emrinin aktif olduğu ilk mutlak mum indeksi (süre koşulu). */
@@ -244,7 +253,8 @@ function evaluateForming({ candles, atrArr, P0, P1, tentative, k, opts, live, pr
 
   const D1 = P1.i - P0.i, D2 = last - P1.i;
   const timeRatio = D2 / (D1 || 1);
-  const textbook = textbookOf({ P0, P1, A: ab.A, B: ab.B, C: zone.confluence, w1q, zone, timeRatio, atr: atrArr[P1.i] }, opts);
+  const aq = w1Quality(candles, atrArr, P1, ab.A);
+  const textbook = textbookOf({ P0, P1, A: ab.A, B: ab.B, C: zone.confluence, w1q, aq, zone, timeRatio, atr: atrArr[P1.i] }, opts);
   if (opts.textbook && textbook.n < opts.textbookMin) {
     opts.diagnostics?.push({ direction: dirName, sensitivity: k, phase: 'forming', reasons: [tbReason(textbook)] });
     return null;
@@ -373,7 +383,8 @@ function evaluateSetup({ candles, atrArr, rsiArr, P0, P1, P2, k, opts, live, pri
     if (zone?.invalid) zone = null;
     if (zone?.perfect) score = Math.min(100, score + 10);
   }
-  const textbook = textbookOf({ P0, P1, A: abc.none ? null : abc.A, B: abc.none ? null : abc.B, C: P2.price, w1q, zone, timeRatio, atr: atrArr[P1.i] }, opts);
+  const aq = abc.none ? null : w1Quality(candles, atrArr, P1, abc.A);
+  const textbook = textbookOf({ P0, P1, A: abc.none ? null : abc.A, B: abc.none ? null : abc.B, C: P2.price, w1q, aq, zone, timeRatio, atr: atrArr[P1.i] }, opts);
   if (opts.textbook && textbook.n < opts.textbookMin) {
     opts.diagnostics?.push({ direction: dirName, sensitivity: k, reasons: [tbReason(textbook)] });
     return null;

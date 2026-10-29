@@ -117,13 +117,18 @@ test('Ders kitabı şablonu: ideal oranlar 4/4, minicik ABC ve uzun dalga 2 eksi
   const { textbookOf, tbMissing, DEFAULTS } = await import('../src/scan/wave3.js');
   const base = {
     P0: { price: 100 }, P1: { price: 130 }, A: { price: 116 }, B: { price: 125 }, C: 107.5,
-    w1q: { er: 0.7, speed: 0.6 }, zone: { perfect: true }, timeRatio: 1.6, atr: 2,
+    w1q: { er: 0.7, speed: 0.6 }, aq: { er: 0.6, speed: 0.5 }, zone: { perfect: true }, timeRatio: 1.6, atr: 2,
   };
-  const ideal = textbookOf(base, DEFAULTS); // a = 14/30, b = 9/14, c = 17,5/14
+  const ideal = textbookOf(base, DEFAULTS); // a = 14/30, b = 9/14 (%64), c = 17,5/14
   assert.equal(ideal.n, 4, JSON.stringify(ideal));
   const tiny = textbookOf({ ...base, A: { price: 129 }, B: { price: 129.6 }, C: 128.8 }, DEFAULTS);
   assert.equal(tiny.checks.abc, false);
   const slow = textbookOf({ ...base, timeRatio: 4, zone: { perfect: false } }, DEFAULTS);
   assert.equal(slow.n, 2);
   assert.deepEqual(tbMissing(slow), ['★ yok', 'dalga 2 çok uzun']);
+  // A–B ilişkisi 1–2 gibi: B, A'nın %85'i → orantısız; A testere → "A testere"
+  const deepB = textbookOf({ ...base, B: { price: 127.9 }, C: 110 }, DEFAULTS);
+  assert.deepEqual(tbMissing(deepB), ['ABC orantısız']);
+  const sawA = textbookOf({ ...base, aq: { er: 0.15, speed: 0.1 } }, DEFAULTS);
+  assert.deepEqual(tbMissing(sawA), ['A testere']);
 });

@@ -751,7 +751,7 @@ function renderDetail() {
       ${fact('Geçersizlik (0)', fmtPrice(s.points.p0.price, s.price))}
       ${fact(s.phase === 'forming' ? 'Dalga 2 geri çekilme (şu an)' : 'Dalga 2 geri çekilme', fmtPct(s.retr))}
       ${s.w1q ? fact('Dalga 1: verim · hız', `${fmtX(s.w1q.er, 2).replace('×', '')} · ${fmtX(s.w1q.speed, 2).replace('×', '')} ATR/mum${s.textbook?.checks.w1 ? ' ✓ net itki' : ' – testere / yavaş'}`) : ''}
-      ${s.textbook ? fact('Ders kitabı şablonu', `${s.textbook.n}/4${s.textbook.ratios ? ` · a %${Math.round(s.textbook.ratios.a * 100)} · b %${Math.round(s.textbook.ratios.b * 100)} · c ${fmtX(s.textbook.ratios.c, 2)}` : ''}${tbMissing(s.textbook).length ? ' – eksik: ' + tbMissing(s.textbook).join(', ') : ' ✓'}`) : ''}
+      ${s.textbook ? fact('Ders kitabı şablonu', `${s.textbook.n}/4${s.textbook.ratios ? ` · a %${Math.round(s.textbook.ratios.a * 100)} · b %${Math.round(s.textbook.ratios.b * 100)} · c ${fmtX(s.textbook.ratios.c, 2)}${s.textbook.ratios.aEr != null ? ` · A verim ${fmtX(s.textbook.ratios.aEr, 2).replace('×', '')}` : ''}` : ''}${tbMissing(s.textbook).length ? ' – eksik: ' + tbMissing(s.textbook).join(', ') : ' ✓'}`) : ''}
       ${fact('Süre: dalga 1 / dalga 2', `${s.durations.D1} / ${s.durations.D2} mum (${fmtX(s.timeRatio)})${s.phase === 'forming' ? (s.timeOk ? ' ✓' : ' – henüz sağlanmadı') : ''}`)}
       ${fact('Dalga 2 yapısı', s.abc ? esc(s.abc.label) + (s.phase === 'forming' ? (s.cDone ? ' (C tamam, dönüş başladı)' : ' (C oluşuyor)') : '') : 'ABC bulunamadı')}
       ${s.phase === 'complete' ? fact('RSI', esc(rsi.join(' · ') || '–')) : ''}
