@@ -12,6 +12,19 @@ export const ZONE_LABEL = {
 };
 
 const C_LEVELS = [1, 1.272, 1.382, 1.618];
+export const BOOK_TARGETS = [1.272, 1.618, 2.618];
+const num = (k) => String(k).replace('.', ',');
+
+/**
+ * Hedefler (log ölçek, yakından uzağa). Klasik: base'den opts.targets × dalga 1.
+ * Kitabi: dalga 1 ucunun −0,236 uzantısı (1 + 0,236 × dalga 1), sonra base'den 1,272 / 1,618 / 2,618 × dalga 1.
+ * base = dalga 2'nin ucu (C) ya da planlanan giriş.
+ */
+export function targetList({ d, p1, base, l1Log }, opts) {
+  const fromBase = (m) => ({ k: m, short: num(m), label: `${num(m)} × W1`, price: Math.exp(Math.log(base) + d * m * l1Log) });
+  if (opts.targetSet !== 'book') return opts.targets.map(fromBase);
+  return [{ k: -0.236, short: '−0,236', label: '−0,236 uzantı', price: Math.exp(Math.log(p1) + d * 0.236 * l1Log) }, ...BOOK_TARGETS.map(fromBase)];
+}
 const R_LEVELS = [0.5, 0.618, 0.786, 0.886];
 
 /**
@@ -70,7 +83,7 @@ export function zonePlan(z, path, complete, opts) {
   // Dolum simülasyonu: B'den sonraki mumlar sırayla.
   const filledLegs = new Set();
   let state = 'waiting', fillIdx = -1;
-  const t1Of = (entry) => Math.exp(Math.log(z.base ?? entry) + d * opts.targets[0] * z.l1Log);
+  const t1Of = (entry) => targetList({ d, p1, base: z.base ?? entry, l1Log: z.l1Log }, opts)[0].price;
   const activeFrom = z.activeFrom ?? -Infinity;
   let pendingTime = false;
   for (let j = 0; j < path.length; j++) {
@@ -104,7 +117,7 @@ export function zonePlan(z, path, complete, opts) {
 
   const entry = entryOf();
   const base = z.base ?? entry;
-  const targets = opts.targets.map((m) => ({ k: m, price: Math.exp(Math.log(base) + d * m * z.l1Log) }));
+  const targets = targetList({ d, p1, base, l1Log: z.l1Log }, opts);
   const main = targets[Math.min(opts.mainTarget, targets.length - 1)].price;
   const risk = d * (entry - stop);
   const rr = risk > 0 ? (d * (main - entry)) / risk : 0;

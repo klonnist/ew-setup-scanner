@@ -203,3 +203,17 @@ test('cExt: uzayan C\'de true, tek parça C\'de false (yalnızca etiket)', async
   assert.equal(forming([...HEAD, [80, 106]]).cExt, true);
   assert.equal(forming([...HEAD, [80, 106], [83, 110]]).cExt, true);
 });
+
+test('Hedef seti: kitabi = −0,236 uzantı + C\'den 1,272 / 1,618 / 2,618; klasik değişmez', async () => {
+  const { targetList } = await import('../src/scan/zone.js');
+  const { DEFAULTS } = await import('../src/scan/wave3.js');
+  // SUI 15m: 0 = 1,1088, 1 = 1,1846, C ≈ 1,137
+  const z = { d: 1, p1: 1.1846, base: 1.137, l1Log: Math.log(1.1846 / 1.1088) };
+  const book = targetList(z, { ...DEFAULTS, targetSet: 'book' });
+  assert.deepEqual(book.map((x) => x.short), ['−0,236', '1,272', '1,618', '2,618']);
+  assert.ok(Math.abs(book[0].price - 1.2025) < 0.002, String(book[0].price));
+  assert.ok(book.every((x, i) => i === 0 || x.price > book[i - 1].price), 'yakından uzağa');
+  const classic = targetList(z, DEFAULTS);
+  assert.deepEqual(classic.map((x) => x.k), DEFAULTS.targets);
+  assert.ok(Math.abs(classic[0].price - Math.exp(Math.log(1.137) + z.l1Log)) < 1e-12);
+});

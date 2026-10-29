@@ -139,7 +139,7 @@ export function snapshot(s, candles, ctx) {
       entryKind: s.state === 'triggered' ? 'market' : 'stop',
       legs: [L.entry],
       stop: L.stop,
-      targets: L.targets.map((x) => ({ name: `Hedef (${x.k} × W1)`, price: x.price })),
+      targets: L.targets.map((x) => ({ name: `Hedef (${x.label ?? x.k + ' × W1'})`, price: x.price })),
       cancelBeyond: s.points.p2.price, cancelFav: null, activeFrom: null,
     });
   }
@@ -150,7 +150,7 @@ export function snapshot(s, candles, ctx) {
       entryKind: z.state === 'filled' ? 'market' : 'limit',
       legs: z.state === 'filled' ? [s.price] : z.legs,
       stop: z.stop,
-      targets: z.targets.map((x) => ({ name: `Hedef (${x.k} × W1)`, price: x.price })),
+      targets: z.targets.map((x) => ({ name: `Hedef (${x.label ?? x.k + ' × W1'})`, price: x.price })),
       cancelBeyond: null, cancelFav: s.abc?.B.price ?? null,
       activeFrom: z.activeFrom != null && z.state !== 'filled' ? tAt(z.activeFrom) : null,
     });

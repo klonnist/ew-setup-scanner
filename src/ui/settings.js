@@ -91,7 +91,8 @@ const FIELDS = [
   ['zoneFrontAtr', 'Limit emri seviyenin önüne (× ATR)', 'number', { group: 'wave3', sub: 'Limit bölge', step: 0.05, min: 0, hint: 'Fiyat seviyeye birkaç tik kala dönse de emir dolsun. 0 = tam seviye.' }],
   ['approachAtr', 'Yaklaşma uyarısı (× ATR)', 'number', { group: 'wave3', sub: 'Limit bölge', step: 0.1, min: 0, hint: 'Fiyat emre bu kadar yaklaşınca kart "Seviyeye yaklaştı" olur ve bildirim gelir.' }],
   ['zoneTime', 'Süre koşulu', 'select', { group: 'wave3', sub: 'Limit bölge', options: [['require', 'Emir, süre(2) > süre(1) olunca aktif'], ['ignore', 'Süreye bakma']] }],
-  ['targets', 'Hedefler (× dalga 1)', 'list', { group: 'wave3', sub: 'Hedef ve R:R' }],
+  ['targetSet', 'Hedef seti', 'select', { group: 'wave3', sub: 'Hedef ve R:R', options: [['classic', "Klasik (C'den 1 · 1,618 · 2,618 × dalga 1)"], ['book', 'Kitabi (−0,236 uzantı · 1,272 · 1,618 · 2,618)']], hint: "Kitabi: ilk hedef dalga 1 tepesinin 0,236 × dalga 1 ötesi; sonrakiler C'den ölçülür." }],
+  ['targets', 'Hedefler (× dalga 1, klasik set)', 'list', { group: 'wave3', sub: 'Hedef ve R:R' }],
   ['mainTarget', 'R:R için hedef', 'select', { group: 'wave3', sub: 'Hedef ve R:R', options: [[0, 'Hedef 1'], [1, 'Hedef 2'], [2, 'Hedef 3']], num: true }],
   ['minRR', 'Min. R:R', 'number', { group: 'wave3', sub: 'Hedef ve R:R', step: 0.25, min: 0 }],
 

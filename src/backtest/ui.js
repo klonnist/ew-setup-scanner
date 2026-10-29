@@ -255,7 +255,7 @@ async function run() {
 }
 
 const SETTING_KEYS = ['ruleSet', 'sensitivities', 'w1Extend', 'retrMin', 'retrMax', 'requireAbc', 'abcKinds', 'minTimeRatio', 'minW1Atr',
-  'rsiMode', 'volume', 'stopMode', 'stopAtr', 'targets', 'minRR', 'direction', 'zoneCExt', 'zoneRetr', 'zoneEntry', 'zoneStop', 'zoneTime',
+  'rsiMode', 'volume', 'stopMode', 'stopAtr', 'targets', 'targetSet', 'minRR', 'direction', 'zoneCExt', 'zoneRetr', 'zoneEntry', 'zoneStop', 'zoneTime',
   'perfectAtr', 'zoneFrontAtr', 'approachAtr', 'onlyPerfect', 'minRiskPct', 'textbook', 'textbookMin', 'cleanW1Er', 'cleanW1Speed',
   'triType', 'triContext', 'flatAtr', 'minTops', 'minBottoms', 'minWidthBars', 'triTarget', 'triMinRR',
   'abcdeEntry', 'eRetr', 'innerAbc', 'w3Check', 'abcdeVariant', 'abcdeSens', 'abcdeStopAtr', 'abcdeTarget', 'abcdeMinRR',
@@ -474,7 +474,8 @@ function filterBar(all, p) {
   const inType = all.filter((t) => matchType(t, p.mode, filter.type));
   const tg = exitTargets(inType);
   const exits = tg
-    ? [['', 'Ana hedef', 'Backtest\'in kullandığı ana hedef'], ...tg.map((x, k) => [String(k + 1), `Hedef ${k + 1}`, `Hedef ${k + 1}: ${x.name}${x.share < 1 ? ` (işlemlerin %${Math.round(x.share * 100)}'ünde)` : ''}`])]
+    ? [['', 'Ana hedef', 'Backtest\'in kullandığı ana hedef'], ...tg.map((x, k) => [String(k + 1), `Hedef ${k + 1}`, `Hedef ${k + 1}: ${x.name}${x.share < 1 ? ` (işlemlerin %${Math.round(x.share * 100)}'ünde)` : ''}`]),
+      ['scale', 'Kademeli (eşit)', 'Pozisyon hedeflere eşit bölünür, her parça kendi hedefinde ya da ortak stopta kapanır']]
     : [['', 'Ana hedef'], ['1', 'Hedef 1', 'Bu çalışma eski: her hedef için çıkış kaydı yok. Backtest\'i yeniden çalıştır.', true], ['2', 'Hedef 2', '', true], ['3', 'Hedef 3', '', true]];
   const coins = [...new Set(all.map((t) => t.coin))].sort();
   const hasSmt = all.some((t) => t.smt);
@@ -504,7 +505,7 @@ function filterLine(p) {
   const st = subtypesOf(p.mode).find(([k]) => k === filter.type);
   if (filter.type && st) parts.push(st[1]);
   if (filter.dir) parts.push(filter.dir === 'long' ? 'Long' : 'Short');
-  parts.push(filter.exit ? `Hedef ${filter.exit}` : 'Ana hedef');
+  parts.push(filter.exit === 'scale' ? 'Kademeli çıkış' : filter.exit ? `Hedef ${filter.exit}` : 'Ana hedef');
   if (filter.smt) parts.push(SMT_LABEL[filter.smt]);
   if (filter.coin) parts.push(filter.coin);
   return parts.join(' · ');
@@ -521,6 +522,19 @@ function withExit(t, k, feePct) {
   const R = risk > 0 ? (d * (a.x - t.entry) - fee) / risk : t.R;
   const bars = t.bars + Math.round((a.e - t.exitTime) / Math.max(1, (t.exitTime - t.entryTime) / Math.max(1, t.bars)));
   return { ...t, exit: a.x, outcome: a.o, exitTime: a.e, target: a.p, R, bars: Number.isFinite(bars) ? bars : t.bars, exitName: a.n, mae: a.m ?? t.mae };
+}
+
+/** Kademeli çıkış: pozisyon hedeflere eşit bölünür, stop sabit; R = her hedefte tam çıkışın R ortalaması. */
+function withScale(t, feePct) {
+  if (!Array.isArray(t.alts) || !t.alts.length) return t;
+  const parts = t.alts.map((_, i) => withExit(t, i + 1, feePct));
+  const mean = (f) => parts.reduce((s, x) => s + f(x), 0) / parts.length;
+  const last = parts.reduce((a, x) => (x.exitTime > a.exitTime ? x : a));
+  const hit = parts.filter((x) => x.outcome === 'hedef').length;
+  return {
+    ...t, R: mean((x) => x.R), exit: mean((x) => x.exit), exitTime: last.exitTime, bars: last.bars,
+    outcome: hit === parts.length ? 'hedef' : hit ? 'kısmi' : last.outcome, exitName: `Kademeli (${hit}/${parts.length} hedef)`,
+  };
 }
 
 // ------------------------------------------------------------------ para simülasyonu
@@ -710,7 +724,8 @@ function show(runObj) {
   const allTrades = unpackTrades(runObj.trades);
   if (filter.coin && !allTrades.some((t) => t.coin === filter.coin)) filter = { ...filter, coin: '' };
   const picked = allTrades.filter((t) => matchType(t, p.mode, filter.type) && (!filter.dir || t.dir === filter.dir) && (!filter.coin || t.coin === filter.coin) && (!filter.smt || t.smt === filter.smt));
-  const trades = filter.exit ? picked.map((t) => withExit(t, Number(filter.exit), p.feePct)) : picked;
+  const trades = filter.exit === 'scale' ? picked.map((t) => withScale(t, p.feePct))
+    : filter.exit ? picked.map((t) => withExit(t, Number(filter.exit), p.feePct)) : picked;
   view = { trades, p, all: allTrades };
   $('#results').hidden = false;
   $('#resTitle').textContent = `${p.tf} · ${isoDay(p.from)} → ${isoDay(p.to)} · ${p.coins.length} coin${p.note ? ' · ' + p.note : ''}`;

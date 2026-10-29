@@ -154,7 +154,7 @@ export function toCsv(rows, { typeName = {}, withMoney = false } = {}) {
   const d = (ms) => (ms ? new Date(ms).toISOString().slice(0, 16).replace('T', ' ') : '');
   const num = (x, p = 6) => (x == null || !Number.isFinite(x) ? '' : String(+x.toPrecision(p)).replace('.', ','));
   const money = (x) => (x == null ? '' : x.toFixed(2).replace('.', ','));
-  const OUT = { hedef: 'Hedef', stop: 'Stop', 'süre': 'Süre doldu', open: 'Açık (anlık)' };
+  const OUT = { hedef: 'Hedef', stop: 'Stop', 'süre': 'Süre doldu', open: 'Açık (anlık)', 'kısmi': 'Kısmi (bazı hedefler)' };
   const head = ['#', 'Giriş (UTC)', 'Çıkış (UTC)', 'Coin', 'Plan', 'Yön', 'Giriş fiyatı', 'Stop', 'Çıkış fiyatı', 'Sonuç', 'R', 'Fiyat değişimi %', 'SMT', 'C uzadı'];
   if (withMoney) head.push('Alındı mı', 'Teminat $', 'Pozisyon $', 'Tasfiye fiyatı', 'Tasfiye', 'Kâr/zarar $', 'Bakiye $');
   const lines = [head];

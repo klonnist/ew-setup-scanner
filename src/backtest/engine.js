@@ -103,7 +103,7 @@ export function backtestCoin(candles, cfg) {
             type: 'break', d: s.d, created: t, key,
             legs: [{ level: s.state === 'triggered' ? bar.close : L.trigger, w: 1, market: s.state === 'triggered' }],
             stop: L.stop, target: L.targets[Math.min(c.exitTarget, L.targets.length - 1)].price,
-            alts: altsOf(L.targets.map((x, i) => ({ name: `Hedef ${i + 1} (${x.k}× W1)`, price: x.price })), s.d, s.state === 'triggered' ? bar.close : L.trigger),
+            alts: altsOf(L.targets.map((x, i) => ({ name: `Hedef ${i + 1} (${x.label ?? x.k + '× W1'})`, price: x.price })), s.d, s.state === 'triggered' ? bar.close : L.trigger),
             t1: L.targets[0].price, cancelBeyond: s.points.p2.price, cancelFav: null,
             meta: { ...meta(s), smt },
           };
@@ -130,7 +130,7 @@ export function backtestCoin(candles, cfg) {
           legs: z.legs.map((level) => ({ level, w, market: false })),
           activeFrom: z.activeFrom != null ? z.activeFrom + off : -Infinity,
           stop: z.stop, target: z.targets[Math.min(c.exitTarget, z.targets.length - 1)].price,
-          alts: altsOf(z.targets.map((x, i) => ({ name: `Hedef ${i + 1} (${x.k}× W1)`, price: x.price })), s.d, z.entry),
+          alts: altsOf(z.targets.map((x, i) => ({ name: `Hedef ${i + 1} (${x.label ?? x.k + '× W1'})`, price: x.price })), s.d, z.entry),
           t1: z.targets[0].price, cancelBeyond: null, cancelFav: s.abc.B.price,
           meta: { ...meta(s), smt, strength: z.strength, inside: z.inside, cExt: !!s.cExt },
         };

@@ -98,7 +98,7 @@ export function drawSetup(el, candles, live, s, show = { showBreak: true, showZo
     if (Z.front > 0) Z.legs.forEach((lv) => line(lv, C.zone, 'Emir', LW.LineStyle.Dotted));
     line(Z.stop, C.zoneStop, 'Stop (bölge)');
   }
-  (L?.targets || Z?.targets || []).forEach((t, i) => line(t.price, C.target, `H${i + 1} ${t.k}`));
+  (L?.targets || Z?.targets || []).forEach((t, i) => line(t.price, C.target, `H${i + 1} ${t.short ?? t.k}`));
 
   // Görünüm: 0 noktasının biraz öncesinden sona
   const from = Math.max(0, p0.i - Math.round((all.length - p0.i) * 0.25));

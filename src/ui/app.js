@@ -672,7 +672,7 @@ function breakFacts(s) {
     <div class="facts">
       ${fact(s.state === 'triggered' ? 'Giriş (güncel fiyat)' : 'Tetik (B kırılımı)', fmtPrice(L.entry, s.price))}
       ${fact('Stop', fmtPrice(L.stop, s.price), ` <small class="muted">risk ${fmtPct(risk)}</small>`)}
-      ${L.targets.map((t, i) => fact(`Hedef ${i + 1} (${t.k} × W1)`, fmtPrice(t.price, s.price))).join('')}
+      ${L.targets.map((t, i) => fact(`Hedef ${i + 1} (${t.label})`, fmtPrice(t.price, s.price))).join('')}
       ${fact(`R:R (hedef ${state.settings.mainTarget + 1})`, fmtX(s.rr, 2))}
     </div>`;
 }
@@ -698,7 +698,7 @@ function zoneFacts(s) {
       ${fact('Bölge gücü', `${esc(z.strength)} · ${fmtX(z.widthAtr, 1)} ATR · ${fmtPct(z.widthPct, 2)}`)}
       ${fact('Giriş', fmtPrice(z.entry, s.price), ` <small class="muted">${esc(entryTxt)}${z.filledLegs ? `, ${z.filledLegs}/${z.legs.length} doldu` : ''}</small>`)}
       ${fact(z.stopMode === 'r886' ? 'Stop (dalga 2 = %88,6)' : 'Stop (dalga 1 başı)', fmtPrice(z.stop, s.price), ` <small class="muted">risk ${fmtPct(risk)}</small>`)}
-      ${z.targets.map((t, i) => fact(`Hedef ${i + 1} (${t.k} × W1)`, fmtPrice(t.price, s.price))).join('')}
+      ${z.targets.map((t, i) => fact(`Hedef ${i + 1} (${t.label})`, fmtPrice(t.price, s.price))).join('')}
       ${fact(`R:R (hedef ${state.settings.mainTarget + 1})`, fmtX(z.rr, 2))}
     </div>
     <ul class="levels">${levels}</ul>`;

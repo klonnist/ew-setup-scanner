@@ -138,6 +138,12 @@ Her dalga-3 kurulumu dört şarta göre puanlanır (kartta 📐 x/4, ayrıntıda
 onlara emir verilir. Backtest raporunda "Ders kitabı şablonu", "Şablonda eksik şart", "Dalga 1 verimi" ve "Dalga 1 hızı"
 kırılımları vardır.
 
+## Hedef seti ve kademeli çıkış (dalga-3)
+
+"Hedef seti" ayarı: **Klasik** (C'den 1 · 1,618 · 2,618 × dalga 1) ya da **Kitabi** (dalga 1 tepesinin −0,236 uzantısı,
+sonra C'den 1,272 · 1,618 · 2,618 × dalga 1). Backtest sonuçlarında "Çıkış hedefi" grubundaki **Kademeli (eşit)**
+düğmesi pozisyonu hedeflere eşit böler (stop sabit); R, her hedefte tam çıkışın R ortalamasıdır.
+
 ## Çelişen sayım uyarısı
 
 Modlar birbirinden bağımsız sayar; aynı yükseliş bir modda dalga 1, diğerinde dalga 4 olabilir. Tarama sırasında

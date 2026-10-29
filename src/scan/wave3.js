@@ -3,7 +3,7 @@
 import { evaluate } from '../ew/engine/analyze.js';
 import { zigzag, fillAtr } from './zigzag.js';
 import { atr as atrOf, rsi as rsiOf } from '../data/indicators.js';
-import { zonePlan } from './zone.js';
+import { zonePlan, targetList } from './zone.js';
 
 export const DEFAULTS = {
   ruleSet: 'course',
@@ -22,6 +22,7 @@ export const DEFAULTS = {
   stopMode: 'w2', // 'w2': dalga 2 ucu − stopAtr × ATR, 'w0': 0 noktası − stopAtr × ATR
   stopAtr: 0.25,
   targets: [1, 1.618, 2.618],
+  targetSet: 'classic', // 'classic': C'den targets × dalga 1 | 'book': −0,236 uzantı, sonra C'den 1,272 / 1,618 / 2,618
   mainTarget: 1, // R:R hesabında kullanılan hedefin indeksi (1.618)
   minRR: 2,
   direction: 'both', // 'both' | 'long' | 'short'
@@ -330,8 +331,7 @@ function evaluateSetup({ candles, atrArr, rsiArr, P0, P1, P2, k, opts, live, pri
 
   // Seviyeler
   const atrNow = atrArr[candles.length - 1];
-  const lg = (x) => Math.log(x);
-  const targets = opts.targets.map((m) => ({ k: m, price: Math.exp(lg(P2.price) + d * m * L1) }));
+  const targets = targetList({ d, p1: P1.price, base: P2.price, l1Log: L1 }, opts);
   const trigger = !abc.none
     ? (d === 1 ? Math.min(abc.B.price, P1.price) : Math.max(abc.B.price, P1.price))
     : P1.price;
