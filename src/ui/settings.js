@@ -71,6 +71,7 @@ const FIELDS = [
   ['w1Extend', 'Dalga 1 başlangıcı', 'select', { group: 'wave3', sub: 'Dalga yapısı', options: [[0, 'Son dönüş noktası'], [1, '1 iç dalgalanma geri'], [2, '2 iç dalgalanma geri'], [99, 'En geniş dalga 1']], num: true, hint: "Daha önceki dip daha aşağıdaysa ve aradaki tepe 1'i geçmiyorsa 0 noktası geriye taşınır." }],
   ['minW1Atr', 'Min. dalga 1 boyu (× ATR)', 'number', { group: 'wave3', sub: 'Dalga yapısı', step: 0.5, min: 0 }],
   ['textbook', 'Sadece ders kitabı şekli', 'bool', { group: 'wave3', sub: 'Dalga yapısı', hint: "Şablon: net dalga 1 · orantılı ABC (a = dalga 1'in %30–60'ı, b = a'nın %50–78,6'sı, c = a'nın 1–1,4 katı; A da net itki) · ★ çakışma · dalga 2 süresi ≤ 2,5 × dalga 1." }],
+  ['originReal', 'Yapı kırılımı şart (önceki trend bitmiş olsun)', 'bool', { group: 'wave3', sub: 'Dalga yapısı', hint: "Dalga 1, 0'dan önceki son tepeyi (short: dibi) geçmiş olmalı. Düşüş trendinde tepeler alçalır; son alçalan tepenin kırılması düşüşün bittiğini gösterir." }],
   ['textbookMin', 'En az şablon uyumu', 'select', { group: 'wave3', sub: 'Dalga yapısı', options: [[3, '3/4 ve üstü (biri eksik olabilir)'], [4, 'Sadece 4/4 (dört şart da)']], num: true }],
   ['cleanW1Er', 'Dalga 1 verimi en az (şablon)', 'number', { group: 'wave3', sub: 'Dalga yapısı', step: 0.05, min: 0, hint: 'Net hareket ÷ mumların gidip geldiği toplam yol. 1 = dümdüz itki, 0 = testere.' }],
   ['cleanW1Speed', 'Dalga 1 hızı en az (şablon, ATR / mum)', 'number', { group: 'wave3', sub: 'Dalga yapısı', step: 0.05, min: 0, hint: 'Dalga 1 boyu (× ATR) ÷ mum sayısı.' }],

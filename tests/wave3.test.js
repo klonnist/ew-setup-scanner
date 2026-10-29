@@ -132,3 +132,27 @@ test('Ders kitabı şablonu: ideal oranlar 4/4, minicik ABC ve uzun dalga 2 eksi
   const sawA = textbookOf({ ...base, aq: { er: 0.15, speed: 0.1 } }, DEFAULTS);
   assert.deepEqual(tbMissing(sawA), ['A testere']);
 });
+
+test('Yapı kırılımı: dalga 1 son alçalan tepeyi geçerse ✓, geçmezse ✗ (düşüş sürüyor), short aynası; kapalıyken algılama aynı', async () => {
+  const { originOf, findWave3Setups } = await import('../src/scan/wave3.js');
+  const { build } = await import('./helpers.js');
+  const piv = (...xs) => xs.map(([i, price, type]) => ({ i, price, type }));
+  // Düşüş: 160 → 120 → 140 (son alçalan tepe) → 100 = 0
+  const pivots = piv([0, 160, 'H'], [20, 120, 'L'], [30, 140, 'H'], [50, 100, 'L']);
+  const P0 = pivots[3];
+  assert.equal(originOf(pivots, P0, { i: 60, price: 145 }, 1).ok, true); // 145 > 140: yapı kırıldı
+  const no = originOf(pivots, P0, { i: 60, price: 130 }, 1); // 130 < 140: düşüş sürüyor
+  assert.equal(no.ok, false);
+  assert.ok(Math.abs(no.prior - 40 / 30) < 1e-9);
+  // Short aynası: yükseliş 40 → 80 → 60 (son yükselen dip) → 100 = 0; dalga 1 55'e inerse kırıldı
+  const up = piv([0, 40, 'L'], [20, 80, 'H'], [30, 60, 'L'], [50, 100, 'H']);
+  assert.equal(originOf(up, up[3], { i: 60, price: 55 }, -1).ok, true);
+  assert.equal(originOf(up, up[3], { i: 60, price: 70 }, -1).ok, false);
+  // 0 öncesinde pivot yoksa ölçülemez → ok değil
+  assert.equal(originOf(piv([0, 100, 'L']), { i: 0, price: 100 }, { i: 10, price: 120 }, 1).ok, false);
+  // Kapalıyken (varsayılan) kurulumlar bilgiyi taşır ve algılama değişmez
+  const path = [[0, 120], [20, 100], [40, 130], [52, 115], [60, 122], [70, 110], [74, 115]];
+  const o = { sensitivities: [4.5], subDivisors: [2], minRR: 0, entryType: 'both' };
+  const off = findWave3Setups(build(path), o);
+  assert.ok(off.length && off.every((s) => s.origin));
+});

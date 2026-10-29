@@ -256,7 +256,7 @@ async function run() {
 
 const SETTING_KEYS = ['ruleSet', 'sensitivities', 'w1Extend', 'retrMin', 'retrMax', 'requireAbc', 'abcKinds', 'minTimeRatio', 'minW1Atr',
   'rsiMode', 'volume', 'stopMode', 'stopAtr', 'targets', 'targetSet', 'minRR', 'direction', 'zoneCExt', 'zoneRetr', 'zoneEntry', 'zoneStop', 'zoneTime',
-  'perfectAtr', 'zoneFrontAtr', 'approachAtr', 'onlyPerfect', 'minRiskPct', 'textbook', 'textbookMin', 'cleanW1Er', 'cleanW1Speed',
+  'perfectAtr', 'zoneFrontAtr', 'approachAtr', 'onlyPerfect', 'minRiskPct', 'textbook', 'textbookMin', 'cleanW1Er', 'cleanW1Speed', 'originReal',
   'triType', 'triContext', 'flatAtr', 'minTops', 'minBottoms', 'minWidthBars', 'triTarget', 'triMinRR',
   'abcdeEntry', 'eRetr', 'innerAbc', 'w3Check', 'abcdeVariant', 'abcdeSens', 'abcdeStopAtr', 'abcdeTarget', 'abcdeMinRR',
   'diagType', 'diagShape', 'diagSens', 'diagW4Entry', 'diagW2Min', 'diagExpMax', 'diagRetr', 'diagStopAtr', 'diagEndTarget', 'diagLeadTarget', 'diagMinRR', 'smtRef', 'smtWin', 'smtOnly'];
@@ -303,6 +303,7 @@ function settingsText(p) {
   if (s.minRiskPct > 0) parts.push(`min stop %${s.minRiskPct}`);
   if (s.onlyPerfect) parts.unshift(`★ sadece mükemmel (≤${s.perfectAtr} ATR)`);
   if (s.textbook) parts.unshift(`📐 ders kitabı ≥ ${s.textbookMin}/4`);
+  if (s.originReal) parts.unshift('yapı kırılımı şart');
   if (p.entryType !== 'break') {
     parts.push(`bölge ${ZONE_ENTRY_TXT[s.zoneEntry] || s.zoneEntry}/${s.zoneStop === 'r886' ? 'stop %88,6' : 'stop 0'}${s.zoneTime === 'ignore' ? '/süresiz' : ''}`);
     if (s.zoneFrontAtr != null) parts.push(`ön pay ${s.zoneFrontAtr} ATR`);
@@ -328,6 +329,8 @@ function widthBucket(w) {
 // Stop mesafesi ve komisyon maliyeti işlemin entry / exit / stop alanlarından hesaplanır (eski kayıtlarda da çalışır).
 const tradeRiskPct = (t) => (Math.abs(t.entry - t.stop) / t.entry) * 100;
 const tradeFeeR = (t, feePct) => ((feePct / 100) * (t.entry + t.exit)) / (Math.abs(t.entry - t.stop) || Infinity);
+const PRIOR_BUCKETS = ['< 0,5×', '0,5–1×', '1–2×', '2–4×', '≥ 4×'];
+const priorBucket = (v) => (v == null ? null : PRIOR_BUCKETS[v < 0.5 ? 0 : v < 1 ? 1 : v < 2 ? 2 : v < 4 ? 3 : 4]);
 // Dalga 1 kalitesi (dalga-3): verim = net hareket ÷ gidip gelme yolu, hız = ATR / mum
 const ER_BUCKETS = ['< 0,2 (testere)', '0,2–0,3', '0,3–0,4', '0,4–0,5', '≥ 0,5 (net itki)'];
 const erBucket = (e) => (e == null ? null : ER_BUCKETS[e < 0.2 ? 0 : e < 0.3 ? 1 : e < 0.4 ? 2 : e < 0.5 ? 3 : 4]);
@@ -763,6 +766,8 @@ function show(runObj) {
     groupTable('Plan tipi × SMT', closed, (t) => (t.smt ? `${TYPE_NAME[t.type]} · ${t.dir === 'long' ? 'L' : 'S'} · ${SMT_LABEL[t.smt]}` : null)),
     groupTable('C uzadı mı (limit bölge; dolduğu anda C dip → tepki → daha derin dip yapmış mıydı)', closed, (t) => (t.cExt == null ? null : `${t.dir === 'long' ? 'Long' : 'Short'} · ${t.cExt ? 'C uzadı' : 'C tek parça'}`)),
     groupTable('C uzadı × SMT (limit bölge long)', closed, (t) => (t.cExt == null || !t.smt ? null : `${t.cExt ? 'C uzadı' : 'C tek parça'} · ${SMT_LABEL[t.smt]}`)),
+    groupTable('Yapı kırılımı (dalga 1, 0 öncesi son tepeyi/dibi geçti mi)', closed, (t) => (t.orgOk == null ? null : t.orgOk ? 'Kırıldı' : 'Kırılmadı')),
+    groupTable('0 öncesi son bacak (× dalga 1)', closed, (t) => priorBucket(t.orgPrior), { order: PRIOR_BUCKETS }),
     groupTable('Ders kitabı şablonu (x/4: net dalga 1, orantılı ABC, ★, süre)', closed, (t) => (t.tb == null ? null : `${t.tb}/4`), { order: ['4/4', '3/4', '2/4', '1/4', '0/4'] }),
     groupTable('Şablonda eksik şart', closed, (t) => (t.tb == null ? null : t.tbMiss || 'yok (4/4)')),
     groupTable('Dalga 1 verimi (net hareket ÷ gidip gelme yolu)', closed, (t) => erBucket(t.w1Er), { order: ER_BUCKETS }),

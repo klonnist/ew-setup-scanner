@@ -139,6 +139,15 @@ Her dalga-3 kurulumu dört şarta göre puanlanır (kartta 📐 x/4, ayrıntıda
 onlara emir verilir. Backtest raporunda "Ders kitabı şablonu", "Şablonda eksik şart", "Dalga 1 verimi" ve "Dalga 1 hızı"
 kırılımları vardır.
 
+## Yapı kırılımı (dalga-3, isteğe bağlı)
+
+Sistem 0 noktasını seçili derecedeki son dönüş noktasından alır; bu, süren bir düşüşün ortasındaki bir dip olabilir.
+Önceki trendin bitip bitmediği **yapı kırılımıyla** ölçülür: dalga 1, aynı derecede 0'dan önceki son tepeyi (short'ta
+son dibi) geçti mi? Düşüş trendinde tepeler alçalır; son alçalan tepenin kırılması düşüşün bittiğini gösterir.
+
+Kırılmadıysa kartta "⚠ Yapı kırılmadı" görünür. "Yapı kırılımı şart" (varsayılan kapalı) açılırsa bu kurulumlar
+gösterilmez ve backtest'te emir verilmez. Backtest raporunda "Yapı kırılımı" ve "0 öncesi son bacak" kırılımları vardır.
+
 ## Hedef seti ve kademeli çıkış (dalga-3)
 
 "Hedef seti" ayarı: **Klasik** (C'den 1 · 1,618 · 2,618 × dalga 1) ya da **Kitabi** (dalga 1 tepesinin −0,236 uzantısı,

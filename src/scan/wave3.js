@@ -42,6 +42,7 @@ export const DEFAULTS = {
   textbookMin: 3, // 3: en az üç şart (4/4'ler de dahil) | 4: yalnızca dört şart da (backtestte 4/4'ler en zayıf grup)
   cleanW1Er: 0.35, // dalga 1 verimi: net kapanış farkı ÷ ardışık kapanış farklarının toplamı
   cleanW1Speed: 0.3, // dalga 1 hızı: (|1 − 0| ÷ ATR) ÷ mum sayısı
+  originReal: false, // yapı kırılımı şart: dalga 1, 0'dan önceki son tepeyi (short: dibi) kırmış olmalı
 };
 
 /** Dalga 1 kalitesi: verim (1 = dümdüz itki, 0 = testere) ve hız (mum başına ATR). */
@@ -59,6 +60,20 @@ export function w1Quality(candles, atrArr, P0, P1) {
 // ve süre(2)/süre(1) ≤ 2,5.
 const TB = { aMin: 0.3, aMax: 0.6, bMin: 0.5, bMax: 0.786, cMin: 1, cMax: 1.4, legAtr: 1, timeMax: 2.5 };
 const TB_MISS = { w1: 'dalga 1 testere', abc: 'ABC orantısız', star: '★ yok', time: 'dalga 2 çok uzun' };
+
+/**
+ * Yapı kırılımı (long): dalga 1, aynı derecede 0'dan önceki son tepeyi geçti mi? Düşüş trendinde tepeler alçalır;
+ * son alçalan tepenin kırılması düşüşün bittiğini gösterir. prev: o tepe, prior: |prev − 0| ÷ dalga 1.
+ */
+export function originOf(pivots, P0, P1, d) {
+  const j = pivots.findIndex((p) => p.i === P0.i);
+  const prev = j > 0 ? pivots[j - 1] : null;
+  if (!prev) return { prev: null, prior: null, ok: false };
+  return { prev: prev.price, prior: Math.abs(prev.price - P0.price) / Math.abs(P1.price - P0.price), ok: d * (P1.price - prev.price) > 0 };
+}
+const originFail = (g, d, o) => (!o.originReal || g.ok ? null
+  : g.prev == null ? `0 öncesi ${d === 1 ? 'tepe' : 'dip'} yok (yapı kırılımı ölçülemedi)`
+    : `Yapı kırılmadı (dalga 1, 0 öncesi son ${d === 1 ? 'tepeyi' : 'dibi'} geçmedi)`);
 
 const isImpulse = (q, o) => !!q && q.er >= o.cleanW1Er && q.speed >= o.cleanW1Speed;
 
@@ -167,7 +182,7 @@ export function findWave3Setups(candles, options = {}, live = null) {
       const key = `${P0.i}-${P1.i}-${P2.i}`;
       if (!seen.has(key)) {
         seen.add(key);
-        const s = evaluateSetup({ candles, atrArr, rsiArr, P0, P1, P2, k, opts, live, price });
+        const s = evaluateSetup({ candles, atrArr, rsiArr, pivots, P0, P1, P2, k, opts, live, price });
         if (s) out.push(s);
       }
     }
@@ -178,7 +193,7 @@ export function findWave3Setups(candles, options = {}, live = null) {
       const key = `f${P0.i}-${P1.i}`;
       if (!seen.has(key)) {
         seen.add(key);
-        const s = evaluateForming({ candles, atrArr, P0, P1, tentative, k, opts, live, price });
+        const s = evaluateForming({ candles, atrArr, pivots, P0, P1, tentative, k, opts, live, price });
         if (s) out.push(s);
       }
     }
@@ -190,7 +205,7 @@ export function findWave3Setups(candles, options = {}, live = null) {
 const PARTIAL_OK = new Set(['CRS-IMP-1']);
 
 /** Dalga 2 sürüyor: 0-1 onaylı, iç yapıda A ve B onaylı, C oluşuyor → limit bölge planı. */
-function evaluateForming({ candles, atrArr, P0, P1, tentative, k, opts, live, price }) {
+function evaluateForming({ candles, atrArr, pivots, P0, P1, tentative, k, opts, live, price }) {
   const d = P0.type === 'L' ? 1 : -1;
   const dirName = d === 1 ? 'long' : 'short';
   if (opts.direction !== 'both' && opts.direction !== dirName) return null;
@@ -204,6 +219,9 @@ function evaluateForming({ candles, atrArr, P0, P1, tentative, k, opts, live, pr
   const w1Atr = Math.abs(P1.price - P0.price) / atrArr[P1.i];
   if (w1Atr < opts.minW1Atr) reject.push(`Dalga 1 küçük (${w1Atr.toFixed(1)}×ATR)`);
   const w1q = w1Quality(candles, atrArr, P0, P1);
+  const origin = originOf(pivots, P0, P1, d);
+  const originBad = originFail(origin, d, opts);
+  if (originBad) reject.push(originBad);
   if (retrNow > opts.retrMax) reject.push(`Dalga 2 geri çekilme %${(retrNow * 100).toFixed(1)} bant dışı`);
 
   const imp = evaluate('impulse', [P0, P1, cur].map((p) => ({ t: p.i, p: p.price })), { ruleSet: opts.ruleSet, logScale: true });
@@ -267,6 +285,7 @@ function evaluateForming({ candles, atrArr, P0, P1, tentative, k, opts, live, pr
     cDone: !!ab.cDone,
     cExt: !!ab.cExt,
     w1q,
+    origin,
     textbook,
     direction: dirName,
     d,
@@ -291,7 +310,7 @@ function evaluateForming({ candles, atrArr, P0, P1, tentative, k, opts, live, pr
   };
 }
 
-function evaluateSetup({ candles, atrArr, rsiArr, P0, P1, P2, k, opts, live, price }) {
+function evaluateSetup({ candles, atrArr, rsiArr, pivots, P0, P1, P2, k, opts, live, price }) {
   const d = P0.type === 'L' ? 1 : -1; // long: 0 dip, 1 tepe, 2 dip
   const dirName = d === 1 ? 'long' : 'short';
   if (opts.direction !== 'both' && opts.direction !== dirName) return null;
@@ -306,6 +325,9 @@ function evaluateSetup({ candles, atrArr, rsiArr, P0, P1, P2, k, opts, live, pri
 
   if (w1Atr < opts.minW1Atr) reject.push(`Dalga 1 küçük (${w1Atr.toFixed(1)}×ATR)`);
   const w1q = w1Quality(candles, atrArr, P0, P1);
+  const origin = originOf(pivots, P0, P1, d);
+  const originBad = originFail(origin, d, opts);
+  if (originBad) reject.push(originBad);
   if (retr < opts.retrMin || retr > opts.retrMax) reject.push(`Dalga 2 geri çekilme %${(retr * 100).toFixed(1)} bant dışı`);
   if (!(timeRatio > opts.minTimeRatio)) reject.push(`Süre(2)/Süre(1) = ${timeRatio.toFixed(2)}× (> ${opts.minTimeRatio} olmalı)`);
 
@@ -418,6 +440,7 @@ function evaluateSetup({ candles, atrArr, rsiArr, P0, P1, P2, k, opts, live, pri
     barsSince2: candles.length - 1 - P2.i,
     timeOk: true,
     w1q,
+    origin,
     textbook,
     zone,
     score,
