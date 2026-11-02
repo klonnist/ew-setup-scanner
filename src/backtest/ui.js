@@ -55,9 +55,11 @@ function defaultsFor(tf) {
 function loadParams() {
   let p = null;
   try { p = JSON.parse(localStorage.getItem(PKEY) || 'null'); } catch { /* yoksay */ }
+  // rev 2: önerilen kurulum varsayılan (limit bölge, tüm setup'lar) — eski kayıtlara bir kez uygulanır
+  if (p && (p.rev || 1) < 2) Object.assign(p, { rev: 2, mode: 'wave3', entryType: 'zone', onlyPerfect: '' });
   const tf = p?.tf && TIMEFRAMES[p.tf] ? p.tf : '4H';
   return {
-    tf, ...defaultsFor(tf), topN: 20, mode: 'wave3', entryType: 'both', onlyPerfect: '', note: '',
+    tf, ...defaultsFor(tf), topN: 20, mode: 'wave3', entryType: 'zone', onlyPerfect: '', note: '', rev: 2,
     exitTarget: BT_DEFAULTS.exitTarget, feePct: BT_DEFAULTS.feePct, maxPending: BT_DEFAULTS.maxPending, maxHold: BT_DEFAULTS.maxHold,
     ...(p || {}), tf,
   };

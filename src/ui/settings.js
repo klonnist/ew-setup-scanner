@@ -8,6 +8,13 @@ import { SMT_DEFAULTS } from '../scan/smt.js';
 
 const KEY = 'ew-setup-scanner:settings:v1';
 
+// Önerilen kurulum (backtest 4H 1 yıl: dalga 1'i içte 5'li limit bölge long'lar en iyi grup). Varsayılandır;
+// zararı görülen filtreler (★ sadece mükemmel, ders kitabı, yapı kırılımı) kapalı, hedef seti klasik.
+const REC = {
+  entryType: 'zone', direction: 'long', structTpl: true,
+  onlyPerfect: false, textbook: false, originReal: false, smtOnly: false, targetSet: 'classic',
+};
+
 export const UI_DEFAULTS = {
   ...TRI_DEFAULTS,
   ...ABCDE_DEFAULTS,
@@ -17,12 +24,12 @@ export const UI_DEFAULTS = {
   ...DEFAULTS, // ortak anahtar (sensitivities) dalga-3 varsayılanı
   mode: 'wave3', // 'wave3' | 'triangle' | 'abcde' | 'diagonal'
   timeframe: '4H',
-  entryType: 'both',
+  ...REC,
   topN: 50,
   manualCoins: '',
   autoRefresh: 0, // dakika; 0 = kapalı
   showAll: false,
-  settingsRev: 2, // 2: textbookMin varsayılanı 3'e çekildi (eski kayıtlı 4 bir kez sıfırlanır)
+  settingsRev: 3, // 2: textbookMin varsayılanı 3'e çekildi; 3: önerilen kurulum (REC) varsayılan oldu — eski kayıtlara bir kez uygulanır
 };
 
 export function loadSettings() {
@@ -31,6 +38,7 @@ export function loadSettings() {
     if (raw) {
       const s = { ...UI_DEFAULTS, ...JSON.parse(raw) };
       if ((s.settingsRev || 1) < 2) { s.textbookMin = UI_DEFAULTS.textbookMin; s.settingsRev = 2; }
+      if (s.settingsRev < 3) { Object.assign(s, REC, { mode: 'wave3', timeframe: '4H' }); s.settingsRev = 3; }
       if (!TIMEFRAMES[s.timeframe]) s.timeframe = UI_DEFAULTS.timeframe; // ör. kaldırılan 1H
       return s;
     }
