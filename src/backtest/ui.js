@@ -64,7 +64,14 @@ function loadParams() {
 }
 function saveParams() { try { localStorage.setItem(PKEY, JSON.stringify(params)); } catch { /* yoksay */ } }
 
+/** Formdaki ortak tarama ayarları (yön, yapı şablonu). */
+function syncShared() {
+  $('#btDirection').value = settings.direction || 'both';
+  $('#btStructTpl').value = settings.structTpl ? '1' : '';
+}
+
 function syncForm() {
+  syncShared();
   for (const b of document.querySelectorAll('#tf button')) b.setAttribute('aria-pressed', String(b.dataset.tf === params.tf));
   for (const k of ['from', 'to', 'topN', 'mode', 'entryType', 'onlyPerfect', 'exitTarget', 'feePct', 'maxPending', 'maxHold', 'note']) $('#' + k).value = params[k];
   $('#to').max = isoDay(Date.now());
@@ -305,6 +312,7 @@ function settingsText(p) {
   if (s.textbook) parts.unshift(`📐 ders kitabı ≥ ${s.textbookMin}/4`);
   if (s.originReal) parts.unshift('yapı kırılımı şart');
   if (s.structTpl) parts.unshift('🧩 yapı şablonu');
+  if (s.direction && s.direction !== 'both') parts.unshift(s.direction === 'long' ? 'sadece long' : 'sadece short');
   if (p.entryType !== 'break') {
     parts.push(`bölge ${ZONE_ENTRY_TXT[s.zoneEntry] || s.zoneEntry}/${s.zoneStop === 'r886' ? 'stop %88,6' : 'stop 0'}${s.zoneTime === 'ignore' ? '/süresiz' : ''}`);
     if (s.zoneFrontAtr != null) parts.push(`ön pay ${s.zoneFrontAtr} ATR`);
@@ -886,9 +894,16 @@ function init() {
     settings = patch === null ? { ...UI_DEFAULTS } : { ...settings, ...patch };
     saveSettings(settings);
     if (patch === null) renderSettings($('#settings'), settings, onSettings, { mode: params.mode });
+    syncShared();
     updateEstimate();
   };
   renderSettings($('#settings'), settings, onSettings, { mode: params.mode });
+  // Yön ve yapı şablonu tarama ayarlarıdır (tarayıcı sayfasıyla ortak); formda da gösterilir ve buradan değiştirilebilir.
+  const shared = (patch) => { onSettings(patch); renderSettings($('#settings'), settings, onSettings, { mode: params.mode }); };
+  $('#btDirection').addEventListener('change', (e) => shared({ direction: e.target.value }));
+  $('#btStructTpl').addEventListener('change', (e) => shared({ structTpl: e.target.value === '1' }));
+  // Tarayıcı sayfasında başka sekmede değişirse (ör. 🧩 Sadece şablon) burada da güncellenir
+  window.addEventListener('storage', () => { settings = loadSettings(); renderSettings($('#settings'), settings, onSettings, { mode: params.mode }); syncShared(); });
   for (const b of document.querySelectorAll('#tf button')) {
     b.addEventListener('click', () => { params = { ...params, tf: b.dataset.tf, ...defaultsFor(b.dataset.tf) }; saveParams(); syncForm(); });
   }
