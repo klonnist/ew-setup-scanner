@@ -256,7 +256,7 @@ async function run() {
 
 const SETTING_KEYS = ['ruleSet', 'sensitivities', 'w1Extend', 'retrMin', 'retrMax', 'requireAbc', 'abcKinds', 'minTimeRatio', 'minW1Atr',
   'rsiMode', 'volume', 'stopMode', 'stopAtr', 'targets', 'targetSet', 'minRR', 'direction', 'zoneCExt', 'zoneRetr', 'zoneEntry', 'zoneStop', 'zoneTime',
-  'perfectAtr', 'zoneFrontAtr', 'approachAtr', 'onlyPerfect', 'minRiskPct', 'textbook', 'textbookMin', 'cleanW1Er', 'cleanW1Speed', 'originReal',
+  'perfectAtr', 'zoneFrontAtr', 'approachAtr', 'onlyPerfect', 'minRiskPct', 'textbook', 'textbookMin', 'cleanW1Er', 'cleanW1Speed', 'originReal', 'structTpl',
   'triType', 'triContext', 'flatAtr', 'minTops', 'minBottoms', 'minWidthBars', 'triTarget', 'triMinRR',
   'abcdeEntry', 'eRetr', 'innerAbc', 'w3Check', 'abcdeVariant', 'abcdeSens', 'abcdeStopAtr', 'abcdeTarget', 'abcdeMinRR',
   'diagType', 'diagShape', 'diagSens', 'diagW4Entry', 'diagW2Min', 'diagExpMax', 'diagRetr', 'diagStopAtr', 'diagEndTarget', 'diagLeadTarget', 'diagMinRR', 'smtRef', 'smtWin', 'smtOnly'];
@@ -304,6 +304,7 @@ function settingsText(p) {
   if (s.onlyPerfect) parts.unshift(`★ sadece mükemmel (≤${s.perfectAtr} ATR)`);
   if (s.textbook) parts.unshift(`📐 ders kitabı ≥ ${s.textbookMin}/4`);
   if (s.originReal) parts.unshift('yapı kırılımı şart');
+  if (s.structTpl) parts.unshift('🧩 yapı şablonu');
   if (p.entryType !== 'break') {
     parts.push(`bölge ${ZONE_ENTRY_TXT[s.zoneEntry] || s.zoneEntry}/${s.zoneStop === 'r886' ? 'stop %88,6' : 'stop 0'}${s.zoneTime === 'ignore' ? '/süresiz' : ''}`);
     if (s.zoneFrontAtr != null) parts.push(`ön pay ${s.zoneFrontAtr} ATR`);
@@ -766,6 +767,8 @@ function show(runObj) {
     groupTable('Plan tipi × SMT', closed, (t) => (t.smt ? `${TYPE_NAME[t.type]} · ${t.dir === 'long' ? 'L' : 'S'} · ${SMT_LABEL[t.smt]}` : null)),
     groupTable('C uzadı mı (limit bölge; dolduğu anda C dip → tepki → daha derin dip yapmış mıydı)', closed, (t) => (t.cExt == null ? null : `${t.dir === 'long' ? 'Long' : 'Short'} · ${t.cExt ? 'C uzadı' : 'C tek parça'}`)),
     groupTable('C uzadı × SMT (limit bölge long)', closed, (t) => (t.cExt == null || !t.smt ? null : `${t.cExt ? 'C uzadı' : 'C tek parça'} · ${SMT_LABEL[t.smt]}`)),
+    groupTable("Yapı şablonu (5'li dalga 1 + 5-3-5)", closed, (t) => (t.tplOk == null ? null : t.tplOk ? 'Uyuyor' : 'Uymuyor')),
+    groupTable('Yapı şablonunda eksik', closed, (t) => (t.tplOk == null ? null : t.tplMiss || 'yok')),
     groupTable('Yapı kırılımı (dalga 1, 0 öncesi son tepeyi/dibi geçti mi)', closed, (t) => (t.orgOk == null ? null : t.orgOk ? 'Kırıldı' : 'Kırılmadı')),
     groupTable('0 öncesi son bacak (× dalga 1)', closed, (t) => priorBucket(t.orgPrior), { order: PRIOR_BUCKETS }),
     groupTable('Ders kitabı şablonu (x/4: net dalga 1, orantılı ABC, ★, süre)', closed, (t) => (t.tb == null ? null : `${t.tb}/4`), { order: ['4/4', '3/4', '2/4', '1/4', '0/4'] }),

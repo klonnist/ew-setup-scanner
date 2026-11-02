@@ -156,3 +156,35 @@ test('Yapı kırılımı: dalga 1 son alçalan tepeyi geçerse ✓, geçmezse �
   const off = findWave3Setups(build(path), o);
   assert.ok(off.length && off.every((s) => s.origin));
 });
+
+test("Yapı şablonu: 5'li dalga 1 (değişimli) + 5'li (a) ve (c) bulunur; 3'lü dalga 1 reddedilir; şablon hedefleri", async () => {
+  const { fiveWaves, structureOf, DEFAULTS } = await import('../src/scan/wave3.js');
+  const { targetList } = await import('../src/scan/zone.js');
+  const { fillAtr } = await import('../src/scan/zigzag.js');
+  const { atr } = await import('../src/data/indicators.js');
+  const { build } = await import('./helpers.js');
+  const atrOf = (c) => fillAtr(atr(c.map((x) => x.high), c.map((x) => x.low), c.map((x) => x.close), 14));
+  // 0 = 100, i 110, ii 105 (keskin), iii 124, iv 119 (yatay, uzun), v 130; (a) 5'li → 121; b 126; (c) 5'li → 113
+  const c = build([[0, 104], [30, 100], [36, 110], [39, 105], [48, 124], [58, 119], [64, 130], [67, 126], [69, 128], [73, 122],
+    [75, 124], [78, 121], [84, 126], [87, 123], [89, 124.5], [93, 116], [95, 118], [98, 113], [102, 117]], { spread: 0.15 });
+  const a = atrOf(c);
+  const P = (i, hi) => ({ i, price: hi ? c[i].high : c[i].low, type: hi ? 'H' : 'L' });
+  assert.equal(fiveWaves(c, a, P(30, false), P(64, true), 3, DEFAULTS).length, 6);
+  const t = structureOf({ candles: c, atrArr: a, k: 3, P0: P(30, false), P1: P(64, true), A: P(78, false), B: P(84, true), C: P(98, false), retr: 0.57, timeRatio: 1, forming: false }, DEFAULTS);
+  assert.equal(t.ok, true, JSON.stringify(t.checks));
+  const forming = structureOf({ candles: c, atrArr: a, k: 3, P0: P(30, false), P1: P(64, true), A: P(78, false), B: P(84, true), C: null, retr: 0.57, timeRatio: 0.9, forming: true }, DEFAULTS);
+  assert.equal(forming.checks.cFive, null); // C bitmeden ölçülmez, şart sayılmaz
+  assert.equal(forming.ok, true);
+  // Zorunlu olan yalnızca dalga 1 5'li; geri çekilme ve süre bilgi olarak eksik görünür
+  const off = structureOf({ candles: c, atrArr: a, k: 3, P0: P(30, false), P1: P(64, true), A: P(78, false), B: P(84, true), C: null, retr: 0.3, timeRatio: 2, forming: true }, DEFAULTS);
+  assert.equal(off.ok, true);
+  assert.equal(off.checks.retr, false);
+  assert.equal(off.checks.time, false);
+  // 3'lü dalga 1
+  const three = build([[0, 104], [30, 100], [40, 112], [46, 106], [60, 130], [70, 120]], { spread: 0.15 });
+  assert.equal(fiveWaves(three, atrOf(three), { i: 30, price: three[30].low, type: 'L' }, { i: 60, price: three[60].high, type: 'H' }, 3, DEFAULTS), null);
+  // Şablon hedefleri: 1'in tepesi, −0,236, C'den 1 / 1,618 / 2,618 (yakından uzağa)
+  const tg = targetList({ d: 1, p1: 130, base: 112, l1Log: Math.log(130 / 100) }, { ...DEFAULTS, targetSet: 'tpl' });
+  assert.deepEqual(tg.map((x) => x.short), ['1 tepesi', '−0,236', '1', '1,618', '2,618']);
+  assert.equal(tg[0].price, 130);
+});

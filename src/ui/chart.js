@@ -67,13 +67,17 @@ export function drawSetup(el, candles, live, s, show = { showBreak: true, showZo
     priceFormat: { type: 'price', precision: prec, minMove: 10 ** -prec },
   });
   path.setData(pts.map(({ p }) => ({ time: sec(candles[p.i].time), value: p.price })));
-  LW.createSeriesMarkers(series, pts.map(({ p, label }) => ({
+  // Yapı şablonunda dalga 1'in iç dalgaları (i–iv) küçük etiketlerle
+  const inner = (s.tpl?.w1Pts || []).slice(1, 5).map((p, j) => ({
+    time: sec(candles[p.i].time), position: p.type === 'H' ? 'aboveBar' : 'belowBar', shape: 'circle', size: 0.4, color: C.wave, text: ['i', 'ii', 'iii', 'iv'][j],
+  }));
+  LW.createSeriesMarkers(series, [...pts.map(({ p, label }) => ({
     time: sec(candles[p.i].time),
     position: p.type === 'H' ? 'aboveBar' : 'belowBar',
     shape: p.type === 'H' ? 'arrowDown' : 'arrowUp',
     color: C.wave,
     text: label,
-  })));
+  })), ...inner].sort((a, b) => a.time - b.time));
 
   // Seviyeler
   const L = s.levels;

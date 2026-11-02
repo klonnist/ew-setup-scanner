@@ -22,6 +22,14 @@ const num = (k) => String(k).replace('.', ',');
  */
 export function targetList({ d, p1, base, l1Log }, opts) {
   const fromBase = (m) => ({ k: m, short: num(m), label: `${num(m)} × W1`, price: Math.exp(Math.log(base) + d * m * l1Log) });
+  if (opts.targetSet === 'tpl') {
+    // Yapı şablonu: dalga 1 tepesi, −0,236 uzantı, sonra C'den 1 / 1,618 / 2,618 × dalga 1 (yakından uzağa)
+    return [
+      { k: 0, short: '1 tepesi', label: 'Dalga 1 tepesi', price: p1 },
+      { k: -0.236, short: '−0,236', label: '−0,236 uzantı', price: Math.exp(Math.log(p1) + d * 0.236 * l1Log) },
+      ...[1, 1.618, 2.618].map(fromBase),
+    ].sort((a, b) => d * (a.price - b.price));
+  }
   if (opts.targetSet !== 'book') return opts.targets.map(fromBase);
   return [{ k: -0.236, short: '−0,236', label: '−0,236 uzantı', price: Math.exp(Math.log(p1) + d * 0.236 * l1Log) }, ...BOOK_TARGETS.map(fromBase)];
 }

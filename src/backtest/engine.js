@@ -2,7 +2,7 @@
 // Her kapanan mumda canlı tarayıcının yaptığını yapar: son `window` mumla findWave3Setups.
 // Yeni çıkan setup'tan emir oluşturur ve sonraki mumlarda simüle eder. Gelecek veri kullanılmaz:
 // t mumunda görülen setup'ın emri en erken t+1 mumunda dolabilir (tetiklenmişse t kapanışından piyasa emri).
-import { findWave3Setups, DEFAULTS, riskOk, tbMissing } from '../scan/wave3.js';
+import { findWave3Setups, DEFAULTS, riskOk, tbMissing, tplMissing } from '../scan/wave3.js';
 import { findTriangles, TRI_DEFAULTS, reachOf } from '../scan/triangle.js';
 import { findAbcde, ABCDE_DEFAULTS, abcdeReach } from '../scan/abcde.js';
 import { findDiagonals, DIAG_DEFAULTS } from '../scan/diagonal.js';
@@ -297,6 +297,7 @@ export function backtestCoin(candles, cfg) {
       widthAtr: s.zone ? s.zone.widthAtr : null, perfect: s.zone ? s.zone.perfect : null,
       w1Er: s.w1q ? s.w1q.er : null, w1Speed: s.w1q ? s.w1q.speed : null,
       orgOk: s.origin ? s.origin.ok : null, orgPrior: s.origin ? s.origin.prior : null,
+      tplOk: s.tpl ? s.tpl.ok : null, tplMiss: s.tpl ? tplMissing(s.tpl).join(', ') : null,
       tb: s.textbook ? s.textbook.n : null, tbMiss: s.textbook ? tbMissing(s.textbook).join(', ') : null,
     };
   }

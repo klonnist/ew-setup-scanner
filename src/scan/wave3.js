@@ -43,6 +43,17 @@ export const DEFAULTS = {
   cleanW1Er: 0.35, // dalga 1 verimi: net kapanış farkı ÷ ardışık kapanış farklarının toplamı
   cleanW1Speed: 0.3, // dalga 1 hızı: (|1 − 0| ÷ ATR) ÷ mum sayısı
   originReal: false, // yapı kırılımı şart: dalga 1, 0'dan önceki son tepeyi (short: dibi) kırmış olmalı
+  structTpl: false, // yapı şablonu: yalnızca dalga 1'i içte 5'li itki olan kurulumlar (diğer şablon şartları bilgi)
+};
+
+// Yapı şablonu: zorunlu şart dalga 1'in içte 5'li itki (i–v) olması. Diğerleri bilgi: ii/iv değişimi, dalga 2 zigzag
+// ((a) ve (c) içte 5'li — kısa bacakların iç dalgaları çoğu zaman aynı grafikte görülemez), dalga 2 ≈ %50–61,8,
+// süre(2)/süre(1) 0,5–1,5. Backtest: 4H limit bölge long'da dalga 1 5'li PF 2,41 (67 işlem); diğer şartlar iyileştirmedi.
+export const TPL = { retrMin: 0.45, retrMax: 0.7, timeMin: 0.5, timeMax: 1.5 };
+const TPL_DIVS = [2, 2.5, 3, 4, 5, 6, 8, 10, 12];
+const TPL_MISS = {
+  w1Five: "dalga 1 5'li değil", alt: 'ii/iv değişimi yok', aFive: "(a) 5'li değil", cFive: "(c) 5'li değil",
+  retr: 'dalga 2 %50–61,8 değil', time: 'süre oranı uymuyor',
 };
 
 /** Dalga 1 kalitesi: verim (1 = dümdüz itki, 0 = testere) ve hız (mum başına ATR). */
@@ -74,6 +85,62 @@ export function originOf(pivots, P0, P1, d) {
 const originFail = (g, d, o) => (!o.originReal || g.ok ? null
   : g.prev == null ? `0 öncesi ${d === 1 ? 'tepe' : 'dip'} yok (yapı kırılımı ölçülemedi)`
     : `Yapı kırılmadı (dalga 1, 0 öncesi son ${d === 1 ? 'tepeyi' : 'dibi'} geçmedi)`);
+
+/**
+ * İç pivotları 4'e indirir: en küçük salınımı (ardışık iki iç pivot) birleştirerek siler; sıra (tepe/dip) bozulmaz.
+ * Böylece alt dalgacıklar ana i–v'nin içinde kalır.
+ */
+function reduceTo4(S, ins, E) {
+  const p = [S, ...ins, E];
+  while (p.length > 6) {
+    let best = -1, size = Infinity;
+    for (let j = 1; j + 1 < p.length - 1; j++) {
+      const sw = Math.abs(p[j + 1].price - p[j].price);
+      if (sw < size) { size = sw; best = j; }
+    }
+    if (best < 0) break;
+    p.splice(best, 2);
+  }
+  return p.length === 6 ? p : null;
+}
+
+/** S → E arasında alt derecede 5 dalga (4 iç pivot; fazlası en küçük salınımlar birleştirilerek) itki kurallarına uyuyorsa 6 noktayı döndürür. */
+export function fiveWaves(candles, atrArr, S, E, k, o) {
+  for (const div of TPL_DIVS) {
+    const { pivots } = zigzag(candles, atrArr, k / div, { from: S.i, to: E.i, start: { i: S.i, type: S.type } });
+    const ins = pivots.filter((p) => p.i > S.i && p.i < E.i);
+    if (ins.length < 4) continue; // küçük bölen: az pivot; bölen büyüdükçe artar
+    if (ins[0].type === S.type || ins[ins.length - 1].type !== S.type) continue;
+    const pts = reduceTo4(S, ins, E);
+    if (pts && evaluate('impulse', pts.map((p) => ({ t: p.i, p: p.price })), { ruleSet: o.ruleSet, logScale: true }).valid) return pts;
+  }
+  return null;
+}
+
+/** Değişim: ii ile iv'ten biri keskin (≥ %50), diğeri yatay (< %50) ya da süreleri en az 2 kat farklı. */
+function alternates(p) {
+  const dep2 = Math.abs(p[2].price - p[1].price) / Math.abs(p[1].price - p[0].price);
+  const dep4 = Math.abs(p[4].price - p[3].price) / Math.abs(p[3].price - p[2].price);
+  const t2 = p[2].i - p[1].i, t4 = p[4].i - p[3].i;
+  return (dep2 >= 0.5) !== (dep4 >= 0.5) || Math.max(t2, t4) >= 2 * Math.max(1, Math.min(t2, t4));
+}
+
+/** Şablon uyumu: { checks (null = henüz ölçülemez), n, need, ok (= dalga 1 5'li), w1Pts }. C yalnızca bittiyse verilir. */
+export function structureOf({ candles, atrArr, k, P0, P1, A, B, C, retr, timeRatio, forming }, o) {
+  const w1 = fiveWaves(candles, atrArr, P0, P1, k, o);
+  const checks = {
+    w1Five: !!w1,
+    alt: !!w1 && alternates(w1),
+    aFive: !!A && !!fiveWaves(candles, atrArr, P1, A, k, o),
+    cFive: C && B ? !!fiveWaves(candles, atrArr, B, C, k, o) : null,
+    retr: retr >= TPL.retrMin && retr <= TPL.retrMax,
+    time: timeRatio <= TPL.timeMax && (forming || timeRatio >= TPL.timeMin),
+  };
+  const vals = Object.values(checks).filter((v) => v !== null);
+  return { checks, n: vals.filter(Boolean).length, need: vals.length, ok: !!w1, w1Pts: w1 };
+}
+export const tplMissing = (t) => Object.keys(t.checks).filter((k) => t.checks[k] === false).map((k) => TPL_MISS[k]);
+const tplReason = () => "Yapı şablonu değil (dalga 1 5'li değil)";
 
 const isImpulse = (q, o) => !!q && q.er >= o.cleanW1Er && q.speed >= o.cleanW1Speed;
 
@@ -277,6 +344,14 @@ function evaluateForming({ candles, atrArr, pivots, P0, P1, tentative, k, opts, 
     opts.diagnostics?.push({ direction: dirName, sensitivity: k, phase: 'forming', reasons: [tbReason(textbook)] });
     return null;
   }
+  const tpl = structureOf({
+    candles, atrArr, k, P0, P1, A: ab.A, B: ab.B, C: ab.cDone ? ab.C : null,
+    retr: Math.abs(P1.price - zone.entry) / Math.abs(P1.price - P0.price), timeRatio, forming: true,
+  }, opts);
+  if (opts.structTpl && !tpl.ok) {
+    opts.diagnostics?.push({ direction: dirName, sensitivity: k, phase: 'forming', reasons: [tplReason(tpl)] });
+    return null;
+  }
   const strengthPts = { 'Mükemmel': 15, 'Güçlü': 10, 'Orta': 5, 'Zayıf': 0 }[zone.strength] + Math.min(zone.inside, 3) * 2;
   const score = Math.min(100, Math.round(0.35 * imp.score + 0.35 * ab.eval.score + strengthPts));
 
@@ -287,6 +362,7 @@ function evaluateForming({ candles, atrArr, pivots, P0, P1, tentative, k, opts, 
     w1q,
     origin,
     textbook,
+    tpl,
     direction: dirName,
     d,
     sensitivity: k,
@@ -411,6 +487,14 @@ function evaluateSetup({ candles, atrArr, rsiArr, pivots, P0, P1, P2, k, opts, l
     opts.diagnostics?.push({ direction: dirName, sensitivity: k, reasons: [tbReason(textbook)] });
     return null;
   }
+  const tpl = structureOf({
+    candles, atrArr, k, P0, P1, A: abc.none ? null : abc.A, B: abc.none ? null : abc.B, C: abc.none ? null : P2,
+    retr, timeRatio, forming: false,
+  }, opts);
+  if (opts.structTpl && !tpl.ok) {
+    opts.diagnostics?.push({ direction: dirName, sensitivity: k, reasons: [tplReason(tpl)] });
+    return null;
+  }
 
   return {
     phase: 'complete',
@@ -442,6 +526,7 @@ function evaluateSetup({ candles, atrArr, rsiArr, pivots, P0, P1, P2, k, opts, l
     w1q,
     origin,
     textbook,
+    tpl,
     zone,
     score,
   };

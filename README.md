@@ -139,6 +139,23 @@ Her dalga-3 kurulumu dört şarta göre puanlanır (kartta 📐 x/4, ayrıntıda
 onlara emir verilir. Backtest raporunda "Ders kitabı şablonu", "Şablonda eksik şart", "Dalga 1 verimi" ve "Dalga 1 hızı"
 kırılımları vardır.
 
+## Yapı şablonu (dalga-3, isteğe bağlı)
+
+Liste üstündeki **🧩 Sadece şablon** kutusu (Ayarlar → Dalga yapısı'nda da var) yalnızca **dalga 1'i içte 5'li itki** olan
+kurulumları gösterir: daha küçük ZigZag derecelerinde iç pivotlar bulunur (fazlası en küçük salınımlar birleştirilerek 4'e
+indirilir) ve 0-i-ii-iii-iv-v itki kurallarına uyar (ii 0'ı geçmez, iii en kısa değil, iv i'ye girmez). Grafikte i–iv küçük
+etiketlerle gösterilir.
+
+Diğer şablon şartları zorunlu değil, kartta ("🧩 Şablon ✓ x/y") ve ayrıntıda bilgi olarak görünür: ii/iv değişimi, (a) ve (c)
+içte 5'li ((c) yalnızca bittiyse ölçülür), dalga 2 ≈ %50–61,8, süre(2)/süre(1) 0,5–1,5. (a)'nın iç dalgaları kısa olduğu için
+çoğu zaman aynı grafikte görülemez; zorunlu tutulunca neredeyse hiç kurulum kalmadı.
+
+Kutu yalnızca filtredir: bölge, süre koşulu ve hedefler normal ayarlardan gelir. İstenirse "Hedef seti → Şablon"
+(**dalga 1 tepesi · −0,236 uzantı · C'den 1 · 1,618 · 2,618 × dalga 1**) ayrıca seçilebilir. Backtest (4H 1 yıl, limit
+bölge long): dalga 1'i 5'li olanlar 67 işlem PF 2,41, diğerleri PF 1,16; şablonun %50–61,8 bölgesi, 0,5 süre koşulu ve
+şablon hedefleri birlikte uygulanınca PF ~1,2–1,4'e düştüğü için bunlar otomatik açılmaz. 15m'de fark görülmedi.
+Backtest raporunda "Yapı şablonu" ve "Yapı şablonunda eksik" kırılımları vardır.
+
 ## Yapı kırılımı (dalga-3, isteğe bağlı)
 
 Sistem 0 noktasını seçili derecedeki son dönüş noktasından alır; bu, süren bir düşüşün ortasındaki bir dip olabilir.
