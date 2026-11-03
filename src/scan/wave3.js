@@ -86,35 +86,115 @@ const originFail = (g, d, o) => (!o.originReal || g.ok ? null
   : g.prev == null ? `0 öncesi ${d === 1 ? 'tepe' : 'dip'} yok (yapı kırılımı ölçülemedi)`
     : `Yapı kırılmadı (dalga 1, 0 öncesi son ${d === 1 ? 'tepeyi' : 'dibi'} geçmedi)`);
 
-/**
- * İç pivotları 4'e indirir: en küçük salınımı (ardışık iki iç pivot) birleştirerek siler; sıra (tepe/dip) bozulmaz.
- * Böylece alt dalgacıklar ana i–v'nin içinde kalır.
- */
-function reduceTo4(S, ins, E) {
-  const p = [S, ...ins, E];
-  while (p.length > 6) {
-    let best = -1, size = Infinity;
-    for (let j = 1; j + 1 < p.length - 1; j++) {
-      const sw = Math.abs(p[j + 1].price - p[j].price);
-      if (sw < size) { size = sw; best = j; }
-    }
-    if (best < 0) break;
-    p.splice(best, 2);
-  }
-  return p.length === 6 ? p : null;
+const TPL_MAX_PIVOTS = 30; // daha çok iç pivotta (çok ince derece) kombinasyon denenmez
+
+// Ders kitabı oranları (seçilen tek sayım için): ii, i'nin %38,2–78,6'sı; iv, iii'ün %23,6–50'si; iii, i'den uzun.
+const TPL_W = { r2Min: 0.382, r2Max: 0.786, r4Min: 0.236, r4Max: 0.5 };
+
+/** Seçilen 0-i-ii-iii-iv-v sayımı ders kitabı oranlarına uyuyor mu. */
+export function textbookFive(p) {
+  const len = (a, b) => Math.abs(p[b].price - p[a].price);
+  const w1 = len(0, 1), w2 = len(1, 2), w3 = len(2, 3), w4 = len(3, 4);
+  return w2 / w1 >= TPL_W.r2Min && w2 / w1 <= TPL_W.r2Max && w4 / w3 >= TPL_W.r4Min && w4 / w3 <= TPL_W.r4Max && w3 > w1;
 }
 
-/** S → E arasında alt derecede 5 dalga (4 iç pivot; fazlası en küçük salınımlar birleştirilerek) itki kurallarına uyuyorsa 6 noktayı döndürür. */
+/**
+ * İç pivotlardan tek "doğru sayım"ı seçer (analist gibi): olası tüm sıralı i-ii-iii-iv seçimleri denenir; her seçilen
+ * nokta kendi aralığındaki iç pivotların en ucu olmalı (i: 0 ile ii arasındaki en yüksek tepe, ii: i ile iii arasındaki en
+ * derin dip, …; v = E, iv'den sonraki tepelerin hepsinden yüksek) ve 0-i-ii-iii-iv-v itki kurallarına uymalı. Geçerliler
+ * arasından ii ve iv'ün en büyük iki düzeltme olduğu (|ii − i| + |iv − iii| en büyük) sayım döner; eşitlikte kural motoru
+ * skoru. (Long; short'ta aynası.)
+ */
+export function pickFive(S, ins, E, o) {
+  const d = S.type === 'L' ? 1 : -1;
+  const hiT = d === 1 ? 'H' : 'L';
+  const beyond = (a, b) => d * (a.price - b.price); // > 0: a, b'den daha uçta (long: tepe daha yüksek / dip daha derin için işaret)
+  // j..k (hariç) aralığında aynı tipteki noktaların en ucu mu
+  const isExt = (p, from, to) => ins.every((q, n) => n <= from || n >= to || q.type !== p.type
+    || (q.type === hiT ? beyond(p, q) >= 0 : beyond(q, p) >= 0));
+  const pts = ins.map((p, n) => ({ ...p, n }));
+  const H = pts.filter((p) => p.type === hiT), L = pts.filter((p) => p.type !== hiT);
+  const last = ins.length;
+  let best = null, bestCorr = -Infinity, bestScore = -Infinity;
+  for (const i1 of H) for (const i2 of L) {
+    if (i2.n <= i1.n) continue;
+    for (const i3 of H) {
+      if (i3.n <= i2.n) continue;
+      for (const i4 of L) {
+        if (i4.n <= i3.n) continue;
+        if (!isExt(i1, -1, i2.n) || !isExt(i2, i1.n, i3.n) || !isExt(i3, i2.n, i4.n) || !isExt(i4, i3.n, last)) continue;
+        if (pts.some((q) => q.n > i4.n && q.type === hiT && beyond(q, E) > 0)) continue; // v (E) en uç tepe
+        const six = [S, i1, i2, i3, i4, E];
+        const ev = evaluate('impulse', six.map((p) => ({ t: p.i, p: p.price })), { ruleSet: o.ruleSet, logScale: true });
+        if (!ev.valid) continue;
+        const corr = Math.abs(i2.price - i1.price) + Math.abs(i4.price - i3.price);
+        if (corr > bestCorr || (corr === bestCorr && ev.score > bestScore)) {
+          bestCorr = corr; bestScore = ev.score; best = six.map(({ n, ...p }) => p);
+        }
+      }
+    }
+  }
+  return best;
+}
+
+/**
+ * S → E arasında alt derecede 5 dalga: ilk geçerli sayım bulunan derecede tek doğru sayım (pickFive) seçilir; ders kitabı
+ * oranlarına uyuyorsa 6 noktayı, uymuyorsa null döndürür (başka bir sayıma geçilmez).
+ */
 export function fiveWaves(candles, atrArr, S, E, k, o) {
   for (const div of TPL_DIVS) {
     const { pivots } = zigzag(candles, atrArr, k / div, { from: S.i, to: E.i, start: { i: S.i, type: S.type } });
     const ins = pivots.filter((p) => p.i > S.i && p.i < E.i);
     if (ins.length < 4) continue; // küçük bölen: az pivot; bölen büyüdükçe artar
-    if (ins[0].type === S.type || ins[ins.length - 1].type !== S.type) continue;
-    const pts = reduceTo4(S, ins, E);
-    if (pts && evaluate('impulse', pts.map((p) => ({ t: p.i, p: p.price })), { ruleSet: o.ruleSet, logScale: true }).valid) return pts;
+    if (ins.length > TPL_MAX_PIVOTS) break;
+    const pts = pickFive(S, ins, E, o);
+    if (pts) return textbookFive(pts) ? pts : null;
   }
   return null;
+}
+
+/**
+ * İç pivotlardan a-b seçer (S → a → b → E, 3 dalga): a, S ile b arasındaki en uç tepe; b, a ile E arasındaki en derin dip;
+ * E, b'den sonraki tepelerin hepsinden uçta. Zigzag ya da flat kurallarına uymalı; birden çok aday varsa b düzeltmesi
+ * (|b − a|) en büyük olan döner. (Long yönlü bacak; ters yönde aynası.)
+ */
+export function pickThree(S, ins, E, o) {
+  const d = S.type === 'L' ? 1 : -1;
+  const hiT = d === 1 ? 'H' : 'L';
+  const beyond = (a, b) => d * (a.price - b.price);
+  const pts = ins.map((p, n) => ({ ...p, n }));
+  let best = null, bestCorr = -Infinity;
+  for (const a of pts) {
+    if (a.type !== hiT) continue;
+    for (const b of pts) {
+      if (b.type === hiT || b.n <= a.n) continue;
+      if (pts.some((q) => q.n < b.n && q.type === hiT && beyond(q, a) > 0)) continue; // a, b'ye kadarki en uç tepe
+      if (pts.some((q) => q.n > a.n && q.type !== hiT && beyond(b, q) > 0)) continue; // b, a'dan sonraki en derin dip
+      if (pts.some((q) => q.n > b.n && q.type === hiT && beyond(q, E) > 0)) continue; // E en uç
+      const four = [S, a, b, E].map((p) => ({ t: p.i, p: p.price }));
+      const ok = ['zigzag', 'flat'].some((id) => evaluate(id, four, { ruleSet: o.ruleSet, logScale: true }).valid);
+      const corr = Math.abs(b.price - a.price);
+      if (ok && corr > bestCorr) { bestCorr = corr; best = [S, a, b, E].map(({ n, ...p }) => p); }
+    }
+  }
+  return best;
+}
+
+/**
+ * Bir bacağın (S → E) alt yapısı: 3'lü (a-b-c) ve/veya 5'li (i–v) sayılabiliyor mu. Diagonal alt dalgaları için;
+ * ders kitabı oran şartı uygulanmaz. { three: 4 nokta | null, five: 6 nokta | null }
+ */
+export function legCount(candles, atrArr, S, E, k, o) {
+  let three = null, five = null;
+  for (const div of TPL_DIVS) {
+    const { pivots } = zigzag(candles, atrArr, k / div, { from: S.i, to: E.i, start: { i: S.i, type: S.type } });
+    const ins = pivots.filter((p) => p.i > S.i && p.i < E.i);
+    if (ins.length > TPL_MAX_PIVOTS) break;
+    if (!three && ins.length >= 2) three = pickThree(S, ins, E, o);
+    if (!five && ins.length >= 4) five = pickFive(S, ins, E, o);
+    if (three && five) break;
+  }
+  return { three, five };
 }
 
 /** Değişim: ii ile iv'ten biri keskin (≥ %50), diğeri yatay (< %50) ya da süreleri en az 2 kat farklı. */

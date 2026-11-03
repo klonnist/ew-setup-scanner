@@ -303,7 +303,8 @@ export const ABCDE_LEGEND = [
 ];
 
 // ---------------------------------------------------------------- diagonal
-const DG = { path: '#e8ebf1', l13: '#5299ec', l24: '#f0c75e', entry: '#3987e5', limit: '#ff9f43', stop: '#ef5350', target: '#7cc4a8' };
+const DG = { path: '#e8ebf1', l13: '#5299ec', l24: '#f0c75e', entry: '#3987e5', limit: '#ff9f43', stop: '#ef5350', target: '#7cc4a8', fib: '#8b93a7', sub: '#b8bfcc' };
+const SUB_NAMES = { 3: ['a', 'b'], 5: ['i', 'ii', 'iii', 'iv'] };
 
 /** Diagonal: 0-1-2-3-4-5 yolu, 1–3 ve 2–4 çizgileri (ileri uzatılmış), giriş / limit, stop ve hedefler. */
 export function drawDiagonal(el, candles, live, t) {
@@ -353,6 +354,13 @@ export function drawDiagonal(el, candles, live, t) {
   const names = w4 ? ['0', '1', '2', '3', t.forming ? '4?' : '4'] : ['0', '1', '2', '3', '4', t.forming ? '5?' : '5'];
   const marks = seq.map((q, n) => ({ time: tm(q.i), position: q.type === 'H' ? 'aboveBar' : 'belowBar', shape: q.type === 'H' ? 'arrowDown' : 'arrowUp', color: DG.path, text: names[n] }));
   for (const q of t.plans) if (q.fillIdx >= 0) marks.push({ time: tm(q.fillIdx), position: t.d === 1 ? 'belowBar' : 'aboveBar', shape: t.d === 1 ? 'arrowUp' : 'arrowDown', color: q.entryKind === 'limit' ? DG.limit : DG.entry, text: 'giriş' });
+  // Alt dalga sayımı: her bacağın iç noktaları (3'lüde a-b, 5'lide i-iv); bacak sonu ana etiket (1, 2, 3, 4)
+  for (const leg of t.sub?.legs || []) {
+    if (!leg.pts || !SUB_NAMES[leg.n]) continue;
+    leg.pts.slice(1, -1).forEach((q, j) => marks.push({
+      time: tm(q.i), position: q.type === 'H' ? 'aboveBar' : 'belowBar', shape: 'circle', size: 0.4, color: DG.sub, text: SUB_NAMES[leg.n][j],
+    }));
+  }
   LW.createSeriesMarkers(series, marks.sort((a, b) => a.time - b.time));
 
   const line = (price, color, title, style = LW.LineStyle.Dashed) =>
@@ -360,11 +368,22 @@ export function drawDiagonal(el, candles, live, t) {
   const ENTRY_TXT = { d4lim: 'Dalga 4 limiti', d4conf: '4 onayı', dlead: 'Dalga 2 limiti' };
   for (const q of t.plans) {
     const lim = q.entryKind === 'limit';
-    line(q.entry, lim ? DG.limit : DG.entry, ENTRY_TXT[q.type] || (q.fillIdx >= 0 ? 'Giriş' : 'Tetik (2–4)'), LW.LineStyle.Solid);
+    if (q.legs?.length > 1) q.legs.forEach((lv, j) => line(lv, DG.limit, `${ENTRY_TXT[q.type]} ${j + 1}/${q.legs.length}`, LW.LineStyle.Solid));
+    else line(q.entry, lim ? DG.limit : DG.entry, ENTRY_TXT[q.type] || (q.fillIdx >= 0 ? 'Giriş' : 'Tetik (2–4)'), LW.LineStyle.Solid);
   }
   if (t.zone) {
-    line(t.zone.far, DG.limit, '4 bölgesi', LW.LineStyle.Dotted);
+    if (!t.zone.fib) line(t.zone.far, DG.limit, '4 bölgesi', LW.LineStyle.Dotted);
     line(t.zone.invalid, DG.stop, '4 geçersiz', LW.LineStyle.Dotted);
+  }
+  // Fibonacci (dalga 4): 0→3 ve 2→3 geri çekilmeleri, −0,236 uzantıları
+  if (w4 && t.fib) {
+    const pc = (r) => `%${String(+(r * 100).toFixed(1)).replace('.', ',')}`;
+    for (const x of t.fib.pairs) {
+      line(x.a, DG.fib, `0→3 ${pc(x.ra)}`, LW.LineStyle.Dotted);
+      line(x.b, DG.fib, `2→3 ${pc(x.rb)}`, LW.LineStyle.Dotted);
+    }
+    line(t.fib.ext03, DG.fib, '0→3 −0,236', LW.LineStyle.Dotted);
+    line(t.fib.ext23, DG.fib, '2→3 −0,236', LW.LineStyle.Dotted);
   }
   line(p.stop, DG.stop, 'Stop');
   for (const x of p.targets) line(x.price, DG.target, x.name.replace(' (dalga 1 sonu)', '').replace('Dalga 3 = ', 'D3 '));
@@ -384,6 +403,8 @@ export const DIAG_LEGEND = [
   ['2–4 çizgisi', DG.l24, ''],
   ['Tetik / giriş', DG.entry, ''],
   ['Limit (dalga 4 / dalga 2)', DG.limit, ''],
+  ['Fibonacci (0→3, 2→3)', DG.fib, 'dash'],
+  ['Alt dalgalar (a-b / i-iv)', DG.sub, ''],
   ['Stop', DG.stop, 'dash'],
   ['Hedefler', DG.target, 'dash'],
 ];

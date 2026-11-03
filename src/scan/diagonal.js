@@ -8,7 +8,7 @@
 // Saf fonksiyonlar; DOM ve ağ kullanmaz.
 import { zigzag, fillAtr } from './zigzag.js';
 import { atr as atrOf } from '../data/indicators.js';
-import { DEFAULTS as W3 } from './wave3.js';
+import { DEFAULTS as W3, legCount } from './wave3.js';
 import { evaluate } from '../ew/engine/analyze.js';
 
 export const DIAG_DEFAULTS = {
@@ -22,7 +22,8 @@ export const DIAG_DEFAULTS = {
   diagRetr: 0.618, // leading: dalga 2 limiti = 0→5'in bu oranı
   diagEndTarget: 'p0', // ending ana hedef: 'p4' | 'p2' | 'p0'
   diagLeadTarget: 'w3a', // leading ana hedef: 'p5' | 'w3a' (1×) | 'w3b' (1,618×)
-  diagW4Entry: 'near', // dalga 4 limiti: 'near' bölgenin yakın kenarı | 'mid' ortası | 'far' uzak kenarı
+  diagW4Entry: 'fib', // dalga 4 limiti: 'fib' iki Fibonacci çakışması (kademeli) | 'near' bölgenin yakın kenarı | 'mid' ortası | 'far' uzak kenarı
+  diagBook: false, // yalnızca kitabi diagonal: alt dalgalar 3-3-3-3-3 ya da 5-3-5-3-5 ve en az bir Fibonacci çakışması
   diagW2Min: 0.5, // dalga 4 → 5: dalga 2, dalga 1'in en az bu oranını geri almalı (diagonalde dalga 2 derindir)
   diagExpMax: 1.618, // dalga 4 → 5 genişleyen: dalga 3 en fazla bu × dalga 1
   diagMinRR: 1,
@@ -36,7 +37,7 @@ export const DIAG_STATE = {
   triggered: 'Kırıldı (giriş)',
   old: 'Kırılım eski',
   failed: 'Bozuldu (5 uzadı)',
-  ready: 'Girişe hazır',
+  ready: '4 tamam · 5 başlıyor',
   cold: 'Giriş eski',
   lwaiting: 'Limit bekliyor',
   lapproaching: 'Limite yaklaştı',
@@ -109,7 +110,8 @@ export function findDiagonals(candles, options = {}, live = null) {
     });
     if (!dup) kept.push(t);
   }
-  return kept;
+  // Yön ayarı (Genel → Yön): işlem yönüne göre süzülür (ending dönüşünde işlem yönü diagonal'in tersi)
+  return o.direction && o.direction !== 'both' ? kept.filter((t) => t.direction === o.direction) : kept;
 }
 
 function evaluateDiagonal({ all, atrArr, cand, k, o, price, last }) {
@@ -204,37 +206,69 @@ function evaluateW4({ all, atrArr, cand, k, o, price, last }) {
   const ev = evaluate('diagonal', pts, { ruleSet: o.ruleSet, logScale: false }, { kind: 'ending', shape });
   if (!ev.valid) return null;
 
+  // Fibonacci: A = 0→3, B = 2→3. Çakışmalar (daralan): üst A %38,2 ≈ B %50, alt A %50 ≈ B %61,8;
+  // genişleyende bir kademe derin (A %50 ≈ B %61,8, A %61,8 ≈ B %78,6). İki seviye ≤ 0,5 ATR ise çakışma sıkı.
+  const fA = (r) => P3.price - d * r * size03, fB = (r) => P3.price - d * r * len3;
+  const pairs = shape === 'contracting' ? [[0.382, 0.5], [0.5, 0.618]] : [[0.5, 0.618], [0.618, 0.786]];
+  const fib = {
+    pairs: pairs.map(([ra, rb]) => ({ ra, rb, a: fA(ra), b: fB(rb), mid: (fA(ra) + fB(rb)) / 2, tight: Math.abs(fA(ra) - fB(rb)) <= 0.5 * atrE })),
+    ext03: P3.price + d * 0.236 * size03, // −0,236 uzantıları (5. dalga hedefi)
+    ext23: P3.price + d * 0.236 * len3,
+  };
+  fib.tight = fib.pairs.filter((x) => x.tight).length;
+
+  // Alt dalgalar: 3-3-3-3-3 (ending tipi) ya da 5-3-5-3-5 (leading tipi); 4 oluşuyorsa 4 sayılmaz
+  const sub = subStructure({ all, atrArr, k, o, pts: cand.forming4 ? [P0, P1, P2, P3] : [P0, P1, P2, P3, P4] });
+  if (o.diagBook && (!sub.pattern || fib.tight < 1)) return null;
+
   // Dalga 4 bölgesi ve limit (yakın kenar; dalga 1 bölgesinin içinde olmalı)
+  const useFib = o.diagW4Entry === 'fib';
   const [r1, r2] = shape === 'contracting' ? [0.382, 0.5] : [0.5, 0.618];
-  let near = P3.price - d * r1 * size03;
-  let far = P3.price - d * r2 * size03;
+  let near = useFib ? fib.pairs[0].mid : P3.price - d * r1 * size03;
+  let far = useFib ? fib.pairs[1].mid : P3.price - d * r2 * size03;
   if (v(near) > v(P1)) near = P1.price; // örtüşme şartı
   if (v(far) > v(near)) far = near;
   const minV = v(invalid) + 0.1 * atrE; // geçersizliğin önünde kal
   if (v(far) < minV) far = dd * minV;
   if (v(near) < minV) return null; // bölge geçersizliğin ötesinde kalıyor
   const stop = invalid - d * o.diagStopAtr * atrE;
-  const targets = [{ key: 'p3', name: "3'ün ucu", price: P3.price }];
   const t1 = P3.price;
+  // Limit seviyeleri: fib'de kademeli (yarısı üst, yarısı alt çakışma), diğerlerinde tek seviye
+  const lvls = useFib ? (near === far ? [near] : [near, far]) : [o.diagW4Entry === 'far' ? far : o.diagW4Entry === 'mid' ? (near + far) / 2 : near];
+  const planned = lvls.reduce((s, x) => s + x, 0) / lvls.length;
+  const targets = [{ key: 'p3', name: "3'ün ucu", price: P3.price }];
+  if (useFib) {
+    // H2: −0,236 uzantılarının ortası; daralanda dalga 5, dalga 3'ten kısa olmalı (planlanan girişten ölçülür)
+    let h2 = (fib.ext03 + fib.ext23) / 2;
+    if (shape === 'contracting' && d * (h2 - planned) > 0.99 * len3) h2 = planned + d * 0.99 * len3;
+    if (d * (h2 - P3.price) > 0) targets.push({ key: 'e236', name: '−0,236 uzantı (dalga 5)', price: h2 });
+  }
+  const main = targets[targets.length - 1];
 
   const plans = [];
-  // 1) Dalga 4 limiti: 3'ten sonra fiyat yakın kenara gelince dolar; dolmadan 3 aşılırsa kaçtı
+  // 1) Dalga 4 limiti: 3'ten sonra fiyat seviyelere gelince dolar; dolmadan 3 aşılırsa kaçtı
   {
-    const level = o.diagW4Entry === 'far' ? far : o.diagW4Entry === 'mid' ? (near + far) / 2 : near;
-    let st = 'lwaiting', fillIdx = -1, fill = null;
+    const got = [];
+    const filledL = lvls.map(() => false);
+    let st = 'lwaiting', fillIdx = -1;
     for (let i = P3.i + 1; i <= last; i++) {
-      const adverse = d === 1 ? all[i].low : all[i].high;
-      if (d * (adverse - level) <= 0) { fillIdx = i; fill = d === 1 ? Math.min(level, all[i].open) : Math.max(level, all[i].open); break; }
-      const fav = d === 1 ? all[i].high : all[i].low;
-      if (d * (fav - t1) > 0) { st = 'missed'; break; }
+      const c = all[i];
+      const adverse = d === 1 ? c.low : c.high, fav = d === 1 ? c.high : c.low;
+      const wasFilled = got.length > 0;
+      lvls.forEach((lv, li) => {
+        if (!filledL[li] && d * (adverse - lv) <= 0) { filledL[li] = true; got.push(d === 1 ? Math.min(lv, c.open) : Math.max(lv, c.open)); }
+      });
+      if (!got.length) { if (d * (fav - t1) > 0) { st = 'missed'; break; } continue; }
+      if (fillIdx < 0) fillIdx = i;
+      if (got.some((f) => d * (f - stop) <= 0) || d * (adverse - stop) <= 0) { st = 'stopped'; break; }
+      if (wasFilled && d * (fav - t1) >= 0) { st = 'target'; break; } // dolum mumunda hedef sayılmaz
+      st = 'filled';
     }
-    if (fillIdx >= 0) {
-      const adverse = d === 1 ? all[fillIdx].low : all[fillIdx].high;
-      if (d * (fill - stop) <= 0 || d * (adverse - stop) <= 0) st = 'stopped';
-      else { const a = afterEntry(all, fillIdx, last, d, stop, t1); st = a === 'open' ? 'filled' : a; }
-    } else if (st === 'lwaiting' && d * (price - level) <= 0.5 * atrE) st = 'lapproaching';
-    const entry = fill ?? level;
-    plans.push({ type: 'd4lim', entryKind: 'limit', level, entry, fillIdx, state: st, stateLabel: DIAG_STATE[st], stop, targets, main: targets[0], rr: rrOf(entry, stop, targets[0], d) });
+    if (st === 'lwaiting' && d * (price - lvls[0]) <= 0.5 * atrE) st = 'lapproaching';
+    const entry = got.length ? got.reduce((s, x) => s + x, 0) / got.length : planned;
+    const label = st === 'lwaiting' ? '4 bölgesi bekleniyor' : st === 'lapproaching' ? '4 bölgesine yaklaşıyor'
+      : st === 'filled' ? `4 bölgesinde · ${got.length}/${lvls.length} doldu` : DIAG_STATE[st];
+    plans.push({ type: 'd4lim', entryKind: 'limit', level: lvls[0], legs: lvls, filledLegs: got.length, entry, fillIdx, state: st, stateLabel: label, stop, targets, main, rr: rrOf(entry, stop, main, d) });
   }
   // 2) 4 onayı: ZigZag 4'ü onayladığı (fiyat 4'ten k × ATR döndüğü) mumun kapanışından
   if (!cand.forming4) {
@@ -249,7 +283,7 @@ function evaluateW4({ all, atrArr, cand, k, o, price, last }) {
         const a = afterEntry(all, ci, last, d, stop, t1);
         const st = a === 'open' ? (last - ci <= o.diagRecent ? 'ready' : 'cold') : a;
         const now = st === 'ready' ? price : entry;
-        plans.push({ type: 'd4conf', entryKind: 'market', level: entry, entry, fillIdx: ci, state: st, stateLabel: DIAG_STATE[st], stop, targets, main: targets[0], rr: rrOf(now, stop, targets[0], d) });
+        plans.push({ type: 'd4conf', entryKind: 'market', level: entry, entry, fillIdx: ci, state: st, stateLabel: DIAG_STATE[st], stop, targets, main, rr: rrOf(now, stop, main, d) });
       }
     }
   }
@@ -269,17 +303,38 @@ function evaluateW4({ all, atrArr, cand, k, o, price, last }) {
     endI: P4.i,
     line13: { i1: P1.i, p1: P1.price, i2: P3.i, p2: P3.price },
     line24: { i1: P2.i, p1: P2.price, i2: P4.i, p2: P4.price },
-    zone: { near, far, invalid, r1, r2 },
+    zone: { near, far, invalid, r1, r2, fib: useFib },
+    fib,
+    sub,
     eval: { label: ev.label, score: ev.score, results: ev.results, warns: ev.warns },
     plans,
     state: best.state,
     stateLabel: best.stateLabel,
-    levels: { entry: best.entry, stop, targets, main: targets[0], atr: atrE },
+    levels: { entry: best.entry, stop, targets, main, atr: atrE },
     rr: best.rr,
     size: size03,
     price,
     score: Math.min(100, Math.round(ev.score * 0.8 + (ev.warns ? 0 : 10) + (cand.forming4 ? 0 : 5))),
   };
+}
+
+/**
+ * Diagonal alt dalgaları: her bacak 3'lü (a-b-c) ve/veya 5'li (i–v) sayılabiliyor mu (wave3 legCount, doğru sayım).
+ * Hepsi 3 → '3-3-3-3-3'; 1-3(-5) beş ve 2-4 üç → '5-3-5-3-5'; değilse null (belirsiz).
+ * legs[j] = { n: 3|5|0, pts }: grafikte bacak içi etiketler için.
+ */
+export function subStructure({ all, atrArr, k, o, pts }) {
+  const raw = [];
+  for (let j = 0; j + 1 < pts.length; j++) raw.push(legCount(all, atrArr, pts[j], pts[j + 1], k, o));
+  const all3 = raw.every((l) => l.three);
+  const five = raw.every((l, j) => (j % 2 === 0 ? l.five : l.three));
+  const pattern = all3 ? '3-3-3-3-3' : five ? '5-3-5-3-5' : null;
+  const legs = raw.map((l, j) => {
+    if (pattern === '5-3-5-3-5' && j % 2 === 0) return { n: 5, pts: l.five };
+    if (pattern) return { n: 3, pts: l.three };
+    return l.three ? { n: 3, pts: l.three } : l.five ? { n: 5, pts: l.five } : { n: 0, pts: null };
+  });
+  return { pattern, legs };
 }
 
 /** İşlem yönünde (d) girişten sonra: stop görüldü → stopped, hedef 1 görüldü → target, yoksa open (aynı mumda ikisi → stop). */
@@ -366,6 +421,7 @@ export function pickDiagonals(all, options = {}) {
   return all.filter((t) => OPEN.has(t.state) && t.rr >= o.diagMinRR).sort(compareDiagonals);
 }
 
+// Öne çıkarma: bölgede / 4 tamam → 5 (0), bölgeye yaklaşıyor (1), bekleyenler (2)
 const RANK = { triggered: 0, filled: 0, ready: 0, approaching: 1, lapproaching: 1, waiting: 2, lwaiting: 2 };
 export function compareDiagonals(a, b) {
   const ra = RANK[a.state] ?? 5, rb = RANK[b.state] ?? 5;

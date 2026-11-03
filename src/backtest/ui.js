@@ -268,7 +268,7 @@ const SETTING_KEYS = ['ruleSet', 'sensitivities', 'w1Extend', 'retrMin', 'retrMa
   'perfectAtr', 'zoneFrontAtr', 'approachAtr', 'onlyPerfect', 'minRiskPct', 'textbook', 'textbookMin', 'cleanW1Er', 'cleanW1Speed', 'originReal', 'structTpl',
   'triType', 'triContext', 'flatAtr', 'minTops', 'minBottoms', 'minWidthBars', 'triTarget', 'triMinRR',
   'abcdeEntry', 'eRetr', 'innerAbc', 'w3Check', 'abcdeVariant', 'abcdeSens', 'abcdeStopAtr', 'abcdeTarget', 'abcdeMinRR',
-  'diagType', 'diagShape', 'diagSens', 'diagW4Entry', 'diagW2Min', 'diagExpMax', 'diagRetr', 'diagStopAtr', 'diagEndTarget', 'diagLeadTarget', 'diagMinRR', 'smtRef', 'smtWin', 'smtOnly'];
+  'diagType', 'diagShape', 'diagSens', 'diagW4Entry', 'diagW2Min', 'diagExpMax', 'diagRetr', 'diagStopAtr', 'diagEndTarget', 'diagLeadTarget', 'diagMinRR', 'diagBook', 'smtRef', 'smtWin', 'smtOnly'];
 const TRI_TARGET_TXT = { mm: 'ölçülü hareket', f382: '%38,2', f50: '%50', f618: '%61,8', f786: '%78,6', f100: '%100' };
 function pickSettings(o) { return Object.fromEntries(SETTING_KEYS.map((k) => [k, o[k]])); }
 
@@ -290,6 +290,8 @@ function settingsText(p) {
       'Diagonal',
       { w4: 'dalga 4 → 5', ending: 'ending dönüşü', leading: 'leading', all: 'hepsi' }[s.diagType] || s.diagType || 'ending + leading',
       { all: 'daralan + genişleyen', contracting: 'sadece daralan', expanding: 'sadece genişleyen' }[s.diagShape] || s.diagShape,
+      ...(s.diagBook ? ['🧩 kitabi diagonal'] : []),
+      ...(s.diagType === 'w4' || s.diagType === 'all' ? [`dalga 4 limiti: ${{ fib: 'fib çakışmaları (kademeli)', near: 'yakın kenar', mid: 'orta', far: 'uzak kenar' }[s.diagW4Entry || 'near'] || s.diagW4Entry}`] : []),
       `kural seti ${s.ruleSet}`, `dalga 2 limiti %${+(s.diagRetr * 100).toFixed(1)}`,
       `hedef: ending ${s.diagEndTarget} / leading ${s.diagLeadTarget}`, `min R:R ${s.diagMinRR}`, `kom. %${p.feePct}`,
     ].join(' · ');
@@ -794,6 +796,8 @@ function show(runObj) {
     groupTable('ABCDE önceki hareket', closed.filter(isAbcdeT), (t) => (t.abc === 'impulse' ? 'İtki (dalga 3) ✓' : 'İtki doğrulanamadı')),
     groupTable('Diagonal türü', closed.filter(isDiagT), (t) => TYPE_NAME[t.type]),
     groupTable('Diagonal şekli', closed.filter(isDiagT), (t) => (t.pattern === 'expanding' ? 'Genişleyen' : 'Daralan')),
+    groupTable('Diagonal alt yapı (dalga 4 → 5)', closed.filter(isDiagT), (t) => t.subPattern ?? null),
+    groupTable('Fibonacci çakışması (dalga 4)', closed.filter(isDiagT), (t) => (t.fibTight == null ? null : `${t.fibTight}/2 sıkı`)),
     groupTable('Bölge gücü (limit bölge)', closed.filter((t) => t.type === 'zone'), (t) => t.strength),
     groupTable('Bölgede çakışan seviye', closed.filter((t) => t.type === 'zone'), (t) => `${t.inside} çakışma`),
     groupTable('★ Mükemmel mi (iki kenar çakışıyor)', closed, (t) => (t.perfect == null ? null : t.perfect ? '★ Mükemmel' : 'Değil')),

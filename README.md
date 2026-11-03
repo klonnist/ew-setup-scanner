@@ -90,10 +90,19 @@ geçerli olmalı: dalga 4 dalga 1 bölgesine girer, daralan tipte 1>3>5 ve 2>4 (
 oluşturur. Kurs kuralları en katısıdır; daha fazla aday için kural setini değiştir. **Ayarlar → Diagonal: türü** ile seçilir:
 
 - **Dalga 4 → 5 (varsayılan):** diagonal'in 4. dalgasında giriş, 5. dalgayı alma. 0-1-2-3 oluşmuş, 4 oluşuyor (ya da yeni bitmiş).
-  - Dalga 4 bölgesi: 0→3'ün %38,2–50'si (daralan) / %50–61,8'i (genişleyen), dalga 1 bölgesine kırpılır (örtüşme şartı).
-  - **Dalga 4 limiti:** bölgenin yakın kenarında (Ayarlar'dan orta / uzak kenar) limit emir. **4 onayı:** ZigZag 4'ü onaylayınca kapanıştan giriş.
+  - **Dalga 4 limiti (varsayılan: Fibonacci çakışmaları, kademeli):** yarısı üst çakışmada (0→3 %38,2 ≈ 2→3 %50), yarısı
+    alt çakışmada (0→3 %50 ≈ 2→3 %61,8); genişleyende bir kademe derin (%50/%61,8 ve %61,8/%78,6). Seviyeler dalga 1 bölgesine
+    kırpılır (örtüşme şartı). İki Fibonacci seviyesi 0,5 ATR'den yakınsa çakışma "sıkı" sayılır (kartta "Fib çakışması x/2").
+    Ayarlar'dan eski tek seviye (0→3'ün %38,2–50'si / %50–61,8'i bölgesinin yakın / orta / uzak kenarı) seçilebilir.
+  - **4 onayı:** ZigZag 4'ü onaylayınca kapanıştan giriş ("4 tamam · 5 başlıyor").
   - Stop: 4'ün geçersizlik seviyesinin ötesi — daralanda 4 dalga 2'den kısa olmalı (3 − dalga 2 boyu), genişleyende 2'nin ucu.
-  - Hedef: **3'ün ucu** (kural gereği 5, 3'ü geçmeli). Limit dolmadan 3 aşılırsa kaçtı sayılır.
+  - Hedefler: **H1 = 3'ün ucu**, **H2 (ana) = 0→3 ve 2→3 −0,236 uzantılarının ortası**; daralanda dalga 5, dalga 3'ten kısa
+    kalacak şekilde sınırlanır. Limit dolmadan 3 aşılırsa kaçtı sayılır.
+  - **Alt dalgalar:** her bacak (doğru sayımla) 3'lü (a-b-c) ya da 5'li (i–v) sayılır; hepsi 3 → **3-3-3-3-3**, 1-3 beş ve 2-4
+    üç → **5-3-5-3-5**. Grafikte bacakların içinde a-b / i–iv etiketleri ve Fibonacci çizgileri gösterilir. "Sadece kitabi
+    diagonal" ayarı alt yapısı belirsiz ya da sıkı çakışması olmayanları gizler.
+  - Öne çıkarma ve bildirim: **4 bölgesine yaklaşıyor**, **4 bölgesinde · x/2 doldu**, **4 tamam · 5 başlıyor** aşamaları listenin
+    üstünde; her geçişte tarayıcı bildirimi. Genel → Yön ayarı diagonal modunda da uygulanır.
   - 4 dalga 1 bölgesine girmeden itkiden ayırt etmek için: dalga 2 dalga 1'in en az %50'sini geri almalı, genişleyende
     dalga 3 ≤ 1,618 × dalga 1, 0–2 ve 1–3 çizgileri kama oluşturmalı (Ayarlar'dan değiştirilebilir).
 - **Ending dönüşü:** 5. / C dalgası bittikten sonra. Kapanış 2–4 çizgisini (0,1 ATR tamponla) kırınca diagonal'in **tersine** giriş.

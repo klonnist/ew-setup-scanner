@@ -199,13 +199,21 @@ function notifyTriangles(silent) {
 /** Diagonal modu bildirimi: 2–4 kırılımı (ending), limite yaklaşan / dolan (leading). */
 function notifyDiagonals(silent) {
   const vis = visibleSetups();
-  const hot = new Set(vis.filter((t) => ['approaching', 'triggered', 'lapproaching', 'filled'].includes(t.state)).map(setupKey));
+  // Aşama anahtarı (kurulum + durum): dalga 4'te yaklaşıyor → bölgede → 4 tamam geçişlerinin her biri ayrı bildirilir
+  const stage = (t) => `${setupKey(t)}|${t.state}|${t.plans.find((p) => p.type === 'd4lim')?.filledLegs ?? ''}`;
+  const hotOf = (t) => ['approaching', 'triggered', 'lapproaching', 'filled', 'ready'].includes(t.state);
+  const hot = new Set(vis.filter(hotOf).map(stage));
   const prev = state.seenDiag;
   state.seenDiag = hot;
   if (!silent || !prev) return;
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
-  const fresh = vis.filter((t) => hot.has(setupKey(t)) && !prev.has(setupKey(t)));
-  const line = (t) => `${t.coin} ${dirTxt(t)} · ${t.typeLabel} · ${t.stateLabel}`;
+  const fresh = vis.filter((t) => hotOf(t) && !prev.has(stage(t)));
+  const fp = (x) => fmtPrice(x, x);
+  const w4Txt = (t) => {
+    const lim = t.plans.find((p) => p.type === 'd4lim');
+    return lim ? ` · 4: ${lim.legs.map(fp).join(' / ')} · hedef ${fp(lim.main.price)}` : '';
+  };
+  const line = (t) => `${t.coin} ${dirTxt(t)} · ${t.typeLabel} · ${t.stateLabel}${t.type === 'w4' ? w4Txt(t) : ''}`;
   try {
     if (fresh.length) new Notification(`Diagonal (${state.scan.tf.id})`, { body: fresh.slice(0, 5).map(line).join('\n') });
   } catch { /* yoksay */ }

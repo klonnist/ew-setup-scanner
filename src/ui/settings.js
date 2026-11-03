@@ -29,7 +29,7 @@ export const UI_DEFAULTS = {
   manualCoins: '',
   autoRefresh: 0, // dakika; 0 = kapalı
   showAll: false,
-  settingsRev: 3, // 2: textbookMin varsayılanı 3'e çekildi; 3: önerilen kurulum (REC) varsayılan oldu — eski kayıtlara bir kez uygulanır
+  settingsRev: 4, // 2: textbookMin 3; 3: önerilen kurulum (REC); 4: diagonal dalga 4 limiti 'fib' — eski kayıtlara bir kez uygulanır
 };
 
 export function loadSettings() {
@@ -39,6 +39,7 @@ export function loadSettings() {
       const s = { ...UI_DEFAULTS, ...JSON.parse(raw) };
       if ((s.settingsRev || 1) < 2) { s.textbookMin = UI_DEFAULTS.textbookMin; s.settingsRev = 2; }
       if (s.settingsRev < 3) { Object.assign(s, REC, { mode: 'wave3', timeframe: '4H' }); s.settingsRev = 3; }
+      if (s.settingsRev < 4) { s.diagW4Entry = 'fib'; s.settingsRev = 4; }
       if (!TIMEFRAMES[s.timeframe]) s.timeframe = UI_DEFAULTS.timeframe; // ör. kaldırılan 1H
       return s;
     }
@@ -128,12 +129,13 @@ const FIELDS = [
   ['abcdeMinRR', 'Min. R:R', 'number', { group: 'abcde', step: 0.25, min: 0 }],
 
   // Diagonal
-  ['diagType', 'Tür', 'select', { group: 'diagonal', sub: 'Genel', options: [['w4', 'Dalga 4 → 5 (4. dalgada giriş, hedef 3 ucu)'], ['ending', 'Ending dönüşü (5 bitince, 2–4 kırılımı)'], ['leading', 'Leading (bitince dalga 2 limiti)'], ['all', 'Hepsi']] }],
+  ['diagType', 'Tür', 'select', { group: 'diagonal', sub: 'Genel', options: [['w4', 'Dalga 4 → 5 (4. dalgada giriş, hedef 5)'], ['ending', 'Ending dönüşü (5 bitince, 2–4 kırılımı)'], ['leading', 'Leading (bitince dalga 2 limiti)'], ['all', 'Hepsi']] }],
   ['diagShape', 'Şekil', 'select', { group: 'diagonal', sub: 'Genel', options: [['all', 'Daralan + genişleyen'], ['contracting', 'Sadece daralan'], ['expanding', 'Sadece genişleyen']] }],
   ['diagSens', 'ZigZag duyarlılığı (× ATR)', 'list', { group: 'diagonal', sub: 'Genel' }],
   ['diagStopAtr', 'Stop tamponu (× ATR)', 'number', { group: 'diagonal', sub: 'Genel', step: 0.05, min: 0, hint: "Dalga 4: geçersizliğin ötesi. Ending: 5'in ötesi. Leading: 0'ın ötesi." }],
   ['diagMinRR', 'Min. R:R', 'number', { group: 'diagonal', sub: 'Genel', step: 0.25, min: 0 }],
-  ['diagW4Entry', 'Limit yeri', 'select', { group: 'diagonal', sub: 'Dalga 4 → 5', options: [['near', 'Bölgenin yakın kenarı'], ['mid', 'Bölgenin ortası'], ['far', 'Bölgenin uzak kenarı']] }],
+  ['diagW4Entry', 'Limit yeri', 'select', { group: 'diagonal', sub: 'Dalga 4 → 5', options: [['fib', 'Fibonacci çakışmaları (kademeli; hedef −0,236)'], ['near', 'Bölgenin yakın kenarı (hedef 3 ucu)'], ['mid', 'Bölgenin ortası (hedef 3 ucu)'], ['far', 'Bölgenin uzak kenarı (hedef 3 ucu)']] }],
+  ['diagBook', 'Sadece kitabi diagonal', 'bool', { group: 'diagonal', sub: 'Dalga 4 → 5', hint: "Alt dalgalar 3-3-3-3-3 ya da 5-3-5-3-5 sayılabilmeli ve dalga 4 seviyelerinden en az biri 0→3 ile 2→3 Fibonacci çakışması olmalı." }],
   ['diagW2Min', 'Dalga 2 en az', 'pct', { group: 'diagonal', sub: 'Dalga 4 → 5', hint: "Dalga 2'nin dalga 1'i geri alma oranı. Diagonalde dalga 2 derindir; itkiden ayırt etmeye yarar." }],
   ['diagExpMax', 'Genişleyende dalga 3 en fazla (× dalga 1)', 'number', { group: 'diagonal', sub: 'Dalga 4 → 5', step: 0.1, min: 1 }],
   ['diagEndTarget', 'Ana hedef', 'select', { group: 'diagonal', sub: 'Ending dönüşü', options: [['p0', 'Başlangıç (0)'], ['p2', '2 ucu'], ['p4', '4 ucu']] }],

@@ -188,3 +188,22 @@ test("Yapı şablonu: 5'li dalga 1 (değişimli) + 5'li (a) ve (c) bulunur; 3'l�
   assert.deepEqual(tg.map((x) => x.short), ['1 tepesi', '−0,236', '1', '1,618', '2,618']);
   assert.equal(tg[0].price, 130);
 });
+
+test("pickFive: fiyatça küçük ama derin 1–2 silinmez (AAVE 15m dalga 1, 10 iç pivot)", async () => {
+  const { pickFive, textbookFive, DEFAULTS } = await import('../src/scan/wave3.js');
+  const P = (i, price, type) => ({ i, price, type });
+  const S = P(0, 123.84, 'L'), E = P(40, 130.12, 'H');
+  const ins = [P(4, 126.36, 'H'), P(11, 124.91, 'L'), P(17, 127.75, 'H'), P(20, 126.55, 'L'), P(24, 129.27, 'H'),
+    P(27, 127.77, 'L'), P(31, 128.94, 'H'), P(34, 127.35, 'L'), P(35, 129.48, 'H'), P(39, 127.95, 'L')];
+  const five = pickFive(S, ins, E, DEFAULTS);
+  assert.ok(five, 'geçerli bir 5\'li bulunmalı');
+  // Analistin sayımı: en büyük iki düzeltme ii ve iv
+  assert.deepEqual(five.slice(1, 5).map((p) => p.price), [126.36, 124.91, 129.27, 127.35]);
+  assert.equal(textbookFive(five), true); // ii %58 · iv %44 · iii > i
+  // Oranlar: ii, i'nin %90'ı → değil; iii < i → değil
+  assert.equal(textbookFive([S, P(4, 130, 'H'), P(8, 124.4, 'L'), P(12, 129.6, 'H'), P(16, 128, 'L'), P(20, 131, 'H')]), false);
+  assert.equal(textbookFive([S, P(4, 128, 'H'), P(8, 126, 'L'), P(12, 129, 'H'), P(16, 128, 'L'), P(20, 131, 'H')]), false);
+  // Short aynası
+  const m = (p) => ({ ...p, price: 260 - p.price, type: p.type === 'H' ? 'L' : 'H' });
+  assert.ok(pickFive(m(S), ins.map(m), m(E), DEFAULTS));
+});

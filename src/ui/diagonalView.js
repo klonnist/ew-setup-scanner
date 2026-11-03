@@ -11,7 +11,7 @@ const KIND_ICON = { w4: '④', ending: '⤺', leading: '➚' };
 
 /** Planın ne yaptığı (kartta ve ayrıntıda): kullanıcı türleri karıştırmasın. */
 export const HOW = {
-  w4: "Diagonal'in 4. dalgasında giriş, 5. dalgayı hedefler. Dalga 4 dalga 1 bölgesine iner (0→3'ün %38,2–50'si daralanda, %50–61,8'i genişleyende); 5 diagonal yönünde 3'ün ucunu geçmelidir. Stop, 4'ün geçersizlik seviyesinin ötesinde (daralanda 4 dalga 2'den kısa olmalı, genişleyende 2'nin ucunu geçemez).",
+  w4: "Diagonal'in 4. dalgasında giriş, 5. dalgayı hedefler. Dalga 4 dalga 1 bölgesine iner; giriş iki Fibonacci çakışmasında kademeli: daralanda 0→3 %38,2 ≈ 2→3 %50 ve 0→3 %50 ≈ 2→3 %61,8 (genişleyende bir kademe derin). Hedef 1 3'ün ucu, ana hedef −0,236 uzantıları (5, 3'ü geçmeli; daralanda 3'ten kısa). Stop, 4'ün geçersizlik seviyesinin ötesinde (daralanda 4 dalga 2'den kısa olmalı, genişleyende 2'nin ucunu geçemez). Alt dalgalar 3-3-3-3-3 ya da 5-3-5-3-5 olmalı.",
   ending: "Ending diagonal 5. / C dalgasıdır: 5 bittikten sonra sert dönüş beklenir. Kapanış 2–4 çizgisini kırınca diagonal'in TERSİNE giriş, stop 5'in ötesinde, hedefler 4 → 2 → 0.",
   leading: "Leading diagonal 1. / A dalgasıdır: bittikten sonra derin dalga 2, ardından trend yönünde dalga 3 beklenir. Limit 0→5'in %61,8 geri alımında, stop diagonal'in başının (0) ötesinde.",
 };
@@ -30,11 +30,23 @@ function entryLabel(p) {
 function planBlock(t, p) {
   return `<div class="plan${isOpenDiag(p.state) ? '' : ' faded'}">
       <div class="plan-head"><span class="plan-name">${esc(DIAG_PLAN[p.type])}</span><span class="state dg-${p.state}">${esc(p.stateLabel)}</span><span class="rr">R:R <b class="num">${fmtX(p.rr, 1)}</b></span></div>
-      <div class="lv">${lv(entryLabel(p), fmtPrice(p.entry, t.price))}${lv('Stop', stopTxt(p.entry, p.stop, t.price))}${lv('Hedef 1', fmtPrice(p.targets[0].price, t.price))}${lv('Ana hedef', fmtPrice(p.main.price, t.price))}</div>
+      <div class="lv">${lv(entryLabel(p), p.legs?.length > 1 && p.filledLegs < p.legs.length ? p.legs.map((x) => fmtPrice(x, t.price)).join(' / ') : fmtPrice(p.entry, t.price))}${lv('Stop', stopTxt(p.entry, p.stop, t.price))}${lv('Hedef 1', fmtPrice(p.targets[0].price, t.price))}${lv('Ana hedef', fmtPrice(p.main.price, t.price))}</div>
     </div>`;
 }
 
 const progress = (t) => (t.type === 'w4' ? (t.forming ? '4 oluşuyor' : '4 bitti · 5 sürüyor') : t.forming ? '5 oluşuyor' : '5 bitti');
+
+/** Dalga 4 kitabi göstergeleri: alt dalga kalıbı ve Fibonacci çakışması. */
+function bookChips(t) {
+  if (t.type !== 'w4' || !t.sub) return '';
+  const sub = t.sub.pattern
+    ? `<span class="chip tb-full" title="Alt dalgalar ${esc(t.sub.pattern)} (ending tipi 3-3-3-3-3, leading tipi 5-3-5-3-5)">🧩 ${esc(t.sub.pattern)}</span>`
+    : '<span class="chip tb-part" title="Bacakların hepsi 3\'lü ya da 1-3 5\'li / 2-4 3\'lü sayılamadı">🧩 alt yapı belirsiz</span>';
+  const fib = t.fib?.tight
+    ? `<span class="chip tb-full" title="Dalga 4 seviyeleri: 0→3 ve 2→3 Fibonacci'leri ${t.fib.tight}/2 çakışmada 0,5 ATR'den yakın">Fib çakışması ${t.fib.tight}/2</span>`
+    : '';
+  return sub + fib;
+}
 
 export function diagCard(t, { selected }) {
   const open = t.plans.some((p) => isOpenDiag(p.state));
@@ -44,7 +56,7 @@ export function diagCard(t, { selected }) {
       <span class="coin">${esc(t.coin)}</span>
       <span class="dir ${t.direction}">${dirTxt(t)}</span>
       <span class="chip">${KIND_ICON[t.type]} ${esc(t.typeLabel)} · ${esc(t.shapeLabel)}</span>
-      ${smtChip(t)}${conflictChip(t)}
+      ${bookChips(t)}${smtChip(t)}${conflictChip(t)}
       <span class="score">Skor <b class="num">${t.score}</b></span>
     </div>
     <div class="meta">
@@ -89,8 +101,13 @@ export function diagDetail(t, { tfId, feePct, ruleSet }) {
       </div>`;
   }).join('');
   const z = t.zone;
+  const pc = (r) => `%${String(+(r * 100).toFixed(1)).replace('.', ',')}`;
+  const fibTxt = (x) => `0→3 ${pc(x.ra)} ${fmtPrice(x.a, t.price)} ≈ 2→3 ${pc(x.rb)} ${fmtPrice(x.b, t.price)}${x.tight ? ' ✓' : ''}`;
   const zoneFacts = z ? `
-      ${fact('Dalga 4 bölgesi', `${fmtPrice(z.near, t.price)} – ${fmtPrice(z.far, t.price)}`, ` <small class="muted">0→3'ün %${String(z.r1 * 100).replace('.', ',')}–${String(z.r2 * 100).replace('.', ',')}'i, dalga 1 bölgesine kırpılmış</small>`)}
+      ${z.fib && t.fib
+    ? fact('Dalga 4 bölgesi (kademeli)', `${fmtPrice(z.near, t.price)} / ${fmtPrice(z.far, t.price)}`, ` <small class="muted">üst: ${fibTxt(t.fib.pairs[0])} · alt: ${fibTxt(t.fib.pairs[1])}</small>`)
+    : fact('Dalga 4 bölgesi', `${fmtPrice(z.near, t.price)} – ${fmtPrice(z.far, t.price)}`, ` <small class="muted">0→3'ün %${String(z.r1 * 100).replace('.', ',')}–${String(z.r2 * 100).replace('.', ',')}'i, dalga 1 bölgesine kırpılmış</small>`)}
+      ${t.sub ? fact('Alt dalgalar', t.sub.pattern || 'belirsiz', ` <small class="muted">${t.sub.legs.map((l, j) => `${j + 1}: ${l.n ? `${l.n}'lü` : '?'}`).join(' · ')}</small>`) : ''}
       ${fact('4 geçersizlik', fmtPrice(z.invalid, t.price), ` <small class="muted">${t.shape === 'contracting' ? "daralan: 4, dalga 2'den kısa olmalı" : "genişleyen: 4, 2'nin ucunu geçemez"}</small>`)}` : '';
   const rules = t.eval.results.filter((r) => r.status !== 'na').map((r) => `<li class="${r.status}"><span class="ic">${ICON[r.status] || '·'}</span>
       <div><div class="nm">${esc(r.rule.name)}</div>${r.detail ? `<div class="dt">${esc(r.detail)}</div>` : ''}<div class="src">${esc(r.rule.source || '')}</div></div></li>`).join('');
@@ -101,7 +118,7 @@ export function diagDetail(t, { tfId, feePct, ruleSet }) {
       <span class="chip">${KIND_ICON[t.type]} ${esc(t.typeLabel)} · ${esc(t.shapeLabel)}</span>
       <span class="state dg-${p.state}">${esc(p.stateLabel)}</span>
       <span class="chip">${esc(tfId)} · derece ${t.sensitivity}×ATR</span>
-      ${smtChip(t)}${conflictChip(t)}
+      ${bookChips(t)}${smtChip(t)}${conflictChip(t)}
       <a class="ext" href="${tv}" target="_blank" rel="noopener">TradingView'de aç ↗</a>
     </div>
     <div class="chart" id="chart"></div>

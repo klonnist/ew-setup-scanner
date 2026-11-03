@@ -244,18 +244,22 @@ export function backtestCoin(candles, cfg) {
         orderCount++;
         if (isLimit && p.state !== 'lwaiting' && p.state !== 'lapproaching') { cancel({ type: p.type }, 'geç algılandı'); continue; }
         if (smtSkip(p.type, smt)) continue;
-        const entry = isLimit ? p.level : bar.close;
+        const levels = isLimit ? (p.legs ?? [p.level]) : [bar.close]; // dalga 4 fib: kademeli iki seviye
+        const entry = levels.reduce((s, x) => s + x, 0) / levels.length;
         if (p.rr < opts.diagMinRR) { cancel({ type: p.type }, 'R:R düşük'); continue; }
         if (!riskOk(entry, p.stop, opts)) { cancel({ type: p.type }, 'stop çok yakın'); continue; }
         const cancelFav = !isLimit ? null : p.type === 'd4lim' ? P.p3.price : P.p5.price;
         const o = {
           type: p.type, d: tr.d, created: t, key,
-          legs: [{ level: entry, w: 1, market: !isLimit }],
+          legs: levels.map((level) => ({ level, w: 1 / levels.length, market: !isLimit })),
           activeFrom: -Infinity,
           stop: p.stop, target: p.main.price, t1: p.targets[0].price,
           alts: altsOf(p.targets, tr.d, entry),
           cancelBeyond: null, cancelFav,
-          meta: { sensitivity: tr.sensitivity, score: tr.score, pattern: tr.shape, context: tr.type, strength: null, abc: null, retr: null, timeRatio: null, smt },
+          meta: {
+            sensitivity: tr.sensitivity, score: tr.score, pattern: tr.shape, context: tr.type, strength: null, abc: null, retr: null, timeRatio: null, smt,
+            subPattern: tr.sub ? tr.sub.pattern || 'belirsiz' : null, fibTight: tr.fib ? tr.fib.tight : null,
+          },
         };
         if (!isLimit) fillLeg(o, o.legs[0], bar.close, t);
         orders.push(o);
