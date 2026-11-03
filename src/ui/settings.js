@@ -64,7 +64,7 @@ const nums = (v) => String(v).split(/[\s,;]+/).map(Number).filter((x) => Number.
 // Form alanları: [anahtar, etiket, tür, ek]. ek.group: bölüm (general | wave3 | triangle | abcde | diagonal), ek.sub: alt başlık.
 const FIELDS = [
   // Genel
-  ['topN', 'Coin sayısı (hacme göre)', 'select', { group: 'general', options: [[20, 'İlk 20'], [50, 'İlk 50'], [100, 'İlk 100']], num: true }],
+  ['topN', 'Coin sayısı (hacme göre)', 'select', { group: 'general', options: [[20, 'İlk 20'], [50, 'İlk 50'], [100, 'İlk 100'], [150, 'İlk 150'], [200, 'İlk 200']], num: true, hint: 'Daha çok coin = daha uzun tarama (150 coin ≈ 30–60 sn).' }],
   ['manualCoins', 'Elle coin listesi', 'text', { group: 'general', hint: 'Doluysa hacim listesi yerine bu kullanılır. Ör: BTC, ETH, SOL' }],
   ['direction', 'Yön', 'select', { group: 'general', options: [['both', 'Long + Short'], ['long', 'Sadece long'], ['short', 'Sadece short']] }],
   ['minRiskPct', 'Min. stop mesafesi (%)', 'number', { group: 'general', step: 0.1, min: 0, hint: "Giriş ile stop arası bundan darsa plan gösterilmez. 0 = kapalı; dar stopta komisyon R'yi yer." }],
