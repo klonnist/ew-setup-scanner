@@ -36,7 +36,7 @@ Araç çubuğundaki **Giriş tipi** ile seçilir; "İkisi birden" seçilince kar
   - **Ön pay:** limit emir seviyenin 0,2 ATR önüne konur (fiyat seviyeye birkaç tik kala dönse de dolsun; 0 = tam seviye).
   - **Seviyeye yaklaştı:** fiyat emre 0,5 ATR'den yakınsa kart işaretlenir; otomatik yenilemede bildirim gelir.
 
-Tüm eşikler sayfadaki **Ayarlar** bölmesinden değiştirilebilir; ayarlar konu başlıklarına ayrılmıştır (Genel, Dalga-3, Üçgen, ABCDE, Diagonal) ve seçili modun başlığı açık gelir. Ağ gerektirmeyen ayarlar önbellekteki mumlarla anında yeniden hesaplanır.
+Tüm eşikler sayfadaki **Ayarlar** bölmesinden değiştirilebilir; ayarlar konu başlıklarına ayrılmıştır (Genel, Dalga-3, Üçgen, ABCDE, Diagonal, Fib kesişimi) ve seçili modun başlığı açık gelir. Ağ gerektirmeyen ayarlar önbellekteki mumlarla anında yeniden hesaplanır.
 
 ## ★ Takip listem
 
@@ -111,6 +111,44 @@ oluşturur. Kurs kuralları en katısıdır; daha fazla aday için kural setini 
   hedefler 5'in ucu, dalga 3 = 1 × ve 1,618 × dalga 1.
 - Backtest'te türler ayrı raporlanır; "Diagonal: nereye kadar gitti?" tablosu hedeflere ulaşma oranlarını verir.
 
+## Fib kesişimi modu
+
+Araç çubuğunda **Mod → Fib kesişimi (0,618×1,272)**. Fikir [mugiatama34/crypto_technical_analysis](https://github.com/mugiatama34/crypto_technical_analysis)
+sitesinden (MIT); kod bu projenin yapısına göre yazıldı.
+
+Bir itkiden (0→1) sonra düzeltme: itkinin **%61,8 geri çekilmesi** ile **C = B − 1,272 × A** aynı yere (≤ 0,5 ATR) düşüyorsa
+ortasına limit emir. Yön itkinin yönü. Formül dalga-3'teki ★ Mükemmel ile aynıdır; fark etrafındaki şartlardadır:
+
+- Elliott kuralı ve süre şartı yok. Son dört dönüş noktasına bakılır (ZigZag 2 / 3 / 4 × ATR): itki ≥ 3 ATR, A itkiye ters,
+  B, A'nın %38,2–100'ünü geri almış, bölge A'nın ötesinde ve itkinin başından önce.
+- Stop itkinin %88,6'sı + tampon (Ayarlar'da itkinin başı da seçilebilir). H1 = itki ucu, H2 = itki ucu + 0,272 × itki.
+- Ayarlar → Oranlar: sadece 0,618 × 1,272 (varsayılan) ya da tüm çiftler (0,5 / 0,618 / 0,786 × 1,272 / 1,382 / 1,618).
+- B henüz oluşurken kurulum çıkmaz: B oynadıkça seviye de oynar. Kaynak sitede bu aşamada da görünür, ayrıca o site başka
+  bir coin listesi kullanır; bu yüzden listeler birebir aynı olmaz.
+- Giriş hep limit; Genel → Yön ayarı uygulanır; SMT etiketi yoktur. Diğer modların sonuçları değişmez.
+
+Backtest (20 coin, ikinci hedefte çıkış; 4H 1 yıl komisyon %0,1, 15m 3 ay vadeli komisyon %0,035). R ve PF:
+
+| | 4H hepsi | 4H long | 4H short | 15m hepsi | 15m long | 15m short |
+|---|---|---|---|---|---|---|
+| Fib 0,618×1,272, stop %88,6 | 47 · −6,8R · 0,82 | 18 · −4,6R · 0,69 | 29 · −2,2R · 0,90 | 216 · +15,5R · 1,10 | 115 · +20,6R · 1,26 | 101 · −5,1R · 0,93 |
+| Fib 0,618×1,272, stop itki başı | 19 · −4,3R · 0,70 | 8 · −1,9R · 0,68 | 11 · −2,4R · 0,72 | 109 · +15,2R · 1,22 | 58 · +16,3R · 1,50 | 51 · −1,1R · 0,97 |
+| Fib tüm çiftler, stop %88,6 | 103 · +18,9R · 1,23 | 48 · −16,2R · 0,64 | 55 · +35,1R · 1,92 | 643 · −15,3R · 0,97 | 327 · +56,7R · 1,20 | 316 · −72,0R · 0,76 |
+| Fib tüm çiftler, stop itki başı | 75 · +21,7R · 1,42 | 38 · −8,8R · 0,72 | 37 · +30,6R · 2,59 | 518 · +2,4R · 1,01 | 258 · +52,7R · 1,28 | 260 · −50,4R · 0,77 |
+| Dalga-3 ★ mükemmel | 205 · −7,7R · 0,94 | 105 · +2,3R · 1,04 | 100 · −10,1R · 0,85 | 835 · +74,6R · 1,14 | 417 · +82,4R · 1,32 | 418 · −7,7R · 0,97 |
+| Dalga-3 limit (filtresiz) | 745 · +22,1R · 1,05 | 410 · +75,3R · 1,35 | 335 · −53,3R · 0,76 | 3475 · +329,5R · 1,15 | 1700 · +184,1R · 1,18 | 1775 · +145,4R · 1,13 |
+
+İki zaman diliminde tutarlı bir üstünlük yok: 0,618×1,272 4H'de negatif, tüm çiftlerde yönler ters (4H'de short, 15m'de long kazanıyor)
+ve işlem sayıları az. Bu mod bir "bakılacak yer" olarak düşünülmeli; aynı yönde tutarlı sonuç dalga-3 limit long'da.
+
+## Senaryo okları
+
+Liste üstündeki **Senaryo okları** kutusu (varsayılan açık) grafiğe aktif plandan iki kesikli yol çizer: yeşil **ana yol**
+(fiyat → giriş → H1 → H2) ve kırmızı **alternatif yol** (fiyat → giriş → stop → iptal). İşleme girildiyse giriş adımı atlanır,
+fiyatın geride bıraktığı hedefler çizilmez, aktif plan yoksa ok çıkmaz. Tüm modlarda ve takip listesinde çalışır; backtest
+grafiğinde çizilmez. Yalnızca çizimdir: algılama, sıralama ve backtest değişmez. **Tahmin değildir**, planın çizimidir; zaman
+ekseni temsilîdir. Kaynak sitedeki "likidite süpürme" yolu yoktur, çünkü burada likidite dedektörü yok.
+
 ## SMT etiketi (yalnızca dalga-3 limit bölge long)
 
 Dalga 2 sürerken (C oluşuyor) limit bölge LONG kurulumunda: C, A dibini süpürdü mü, aynı anda referans grafik
@@ -160,10 +198,12 @@ içte 5'li ((c) yalnızca bittiyse ölçülür), dalga 2 ≈ %50–61,8, süre(2
 çoğu zaman aynı grafikte görülemez; zorunlu tutulunca neredeyse hiç kurulum kalmadı.
 
 Kutu yalnızca filtredir: bölge, süre koşulu ve hedefler normal ayarlardan gelir. İstenirse "Hedef seti → Şablon"
-(**dalga 1 tepesi · −0,236 uzantı · C'den 1 · 1,618 · 2,618 × dalga 1**) ayrıca seçilebilir. Backtest (4H 1 yıl, limit
-bölge long): dalga 1'i 5'li olanlar 67 işlem PF 2,41, diğerleri PF 1,16; şablonun %50–61,8 bölgesi, 0,5 süre koşulu ve
-şablon hedefleri birlikte uygulanınca PF ~1,2–1,4'e düştüğü için bunlar otomatik açılmaz. 15m'de fark görülmedi.
-Backtest raporunda "Yapı şablonu" ve "Yapı şablonunda eksik" kırılımları vardır.
+(**dalga 1 tepesi · −0,236 uzantı · C'den 1 · 1,618 · 2,618 × dalga 1**) ayrıca seçilebilir.
+
+Backtest (limit bölge long, ii ve iv en büyük iki düzeltme olan doğru sayımla): 4H 1 yılda dalga 1'i 5'li olanlar 48 işlem
+−7,6R PF 0,73, diğerleri 367 işlem +81,0R PF 1,43. 15m 3 ayda 5'liler 205 işlem +28,5R PF 1,29, diğerleri PF 1,20. Yani bu
+filtrenin 4H'de ölçülen bir üstünlüğü yok; eski sayımdaki "67 işlem PF 2,41" sonucu tekrar etmedi. Backtest raporunda
+"Yapı şablonu" ve "Yapı şablonunda eksik" kırılımları vardır.
 
 ## Yapı kırılımı (dalga-3, isteğe bağlı)
 

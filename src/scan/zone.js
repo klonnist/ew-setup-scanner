@@ -30,6 +30,14 @@ export function targetList({ d, p1, base, l1Log }, opts) {
       ...[1, 1.618, 2.618].map(fromBase),
     ].sort((a, b) => d * (a.price - b.price));
   }
+  if (opts.targetSet === 'fib') {
+    // Fib kesişimi: itki ucu, sonra itki ucu + 0,272 × itki (seviyeler gibi doğrusal)
+    const L = Math.abs(p1 - Math.exp(Math.log(p1) - d * l1Log));
+    return [
+      { k: 0, short: 'İtki ucu', label: 'İtki ucu', price: p1 },
+      { k: -0.272, short: '+0,272', label: 'İtki ucu + 0,272 × itki', price: p1 + d * 0.272 * L },
+    ];
+  }
   if (opts.targetSet !== 'book') return opts.targets.map(fromBase);
   return [{ k: -0.236, short: '−0,236', label: '−0,236 uzantı', price: Math.exp(Math.log(p1) + d * 0.236 * l1Log) }, ...BOOK_TARGETS.map(fromBase)];
 }

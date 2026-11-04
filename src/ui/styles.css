@@ -357,6 +357,7 @@ body.mode-abcde .wave-only { display: none; }
 
 /* Diagonal modu: kural seti seçimi görünür kalır (diagonal kuralları sete göre değişir) */
 body.mode-diagonal .wave-only:not(.diag-show) { display: none; }
+body.mode-fib .wave-only { display: none; }
 .state.dg-waiting, .state.dg-lwaiting { color: var(--warn); background: rgba(250, 178, 25, 0.14); }
 .state.dg-approaching, .state.dg-lapproaching { color: #1a1300; background: #ffcf5c; font-weight: 600; }
 .state.dg-triggered { color: #fff; background: var(--accent); }

@@ -5,11 +5,12 @@ import { TRI_DEFAULTS } from '../scan/triangle.js';
 import { ABCDE_DEFAULTS } from '../scan/abcde.js';
 import { DIAG_DEFAULTS } from '../scan/diagonal.js';
 import { SMT_DEFAULTS } from '../scan/smt.js';
+import { FIB_DEFAULTS } from '../scan/fibcluster.js';
 
 const KEY = 'ew-setup-scanner:settings:v1';
 
-// Önerilen kurulum (backtest 4H 1 yıl: dalga 1'i içte 5'li limit bölge long'lar en iyi grup). Varsayılandır;
-// zararı görülen filtreler (★ sadece mükemmel, ders kitabı, yapı kırılımı) kapalı, hedef seti klasik.
+// Önerilen kurulum: limit bölge long, 🧩 sadece şablon. Varsayılandır; zararı görülen filtreler (★ sadece mükemmel,
+// ders kitabı, yapı kırılımı) kapalı, hedef seti klasik. Not: şablonun 4H üstünlüğü doğru sayımda tekrar etmedi (README).
 const REC = {
   entryType: 'zone', direction: 'long', structTpl: true,
   onlyPerfect: false, textbook: false, originReal: false, smtOnly: false, targetSet: 'classic',
@@ -20,15 +21,17 @@ export const UI_DEFAULTS = {
   ...ABCDE_DEFAULTS,
   ...DIAG_DEFAULTS,
   ...SMT_DEFAULTS,
+  ...FIB_DEFAULTS,
   smtOnly: false,
   ...DEFAULTS, // ortak anahtar (sensitivities) dalga-3 varsayılanı
-  mode: 'wave3', // 'wave3' | 'triangle' | 'abcde' | 'diagonal'
+  mode: 'wave3', // 'wave3' | 'triangle' | 'abcde' | 'diagonal' | 'fib'
   timeframe: '4H',
   ...REC,
   topN: 50,
   manualCoins: '',
   autoRefresh: 0, // dakika; 0 = kapalı
   showAll: false,
+  showScenario: true, // grafikte senaryo okları
   settingsRev: 4, // 2: textbookMin 3; 3: önerilen kurulum (REC); 4: diagonal dalga 4 limiti 'fib' — eski kayıtlara bir kez uygulanır
 };
 
@@ -57,7 +60,7 @@ export function toScanOptions(s) {
     .split(/[\s,;]+/)
     .map((x) => x.trim().toUpperCase().replace(/-USDT$/, ''))
     .filter(Boolean);
-  return { ...s, manualCoins: manual.length ? manual : null };
+  return { ...s, manualCoins: manual.length ? manual : null, ...(s.mode === 'fib' ? { entryType: 'zone' } : null) };
 }
 
 const nums = (v) => String(v).split(/[\s,;]+/).map(Number).filter((x) => Number.isFinite(x) && x > 0);
@@ -141,6 +144,15 @@ const FIELDS = [
   ['diagEndTarget', 'Ana hedef', 'select', { group: 'diagonal', sub: 'Ending dönüşü', options: [['p0', 'Başlangıç (0)'], ['p2', '2 ucu'], ['p4', '4 ucu']] }],
   ['diagRetr', 'Dalga 2 limiti', 'pct', { group: 'diagonal', sub: 'Leading', hint: '0→5 hareketinin geri alım oranı. Varsayılan %61,8.' }],
   ['diagLeadTarget', 'Ana hedef', 'select', { group: 'diagonal', sub: 'Leading', options: [['w3a', 'Dalga 3 = 1 × dalga 1'], ['w3b', 'Dalga 3 = 1,618 × dalga 1'], ['p5', '5 ucu (dalga 1 sonu)']] }],
+
+  // Fib kesişimi
+  ['fibPairs', 'Oranlar', 'select', { group: 'fib', options: [['golden', 'Sadece 0,618 × 1,272'], ['all', 'Tüm çiftler (0,5 / 0,618 / 0,786 × 1,272 / 1,382 / 1,618)']] }],
+  ['fibStop', 'Stop yeri', 'select', { group: 'fib', options: [['r886', 'İtkinin %88,6 geri çekilmesi'], ['w0', 'İtkinin başı (0 noktası)']], hint: 'Tampon: Dalga-3 bölümündeki stop tamponu.' }],
+  ['fibTolAtr', 'İki seviye farkı en fazla (× ATR)', 'number', { group: 'fib', step: 0.05, min: 0 }],
+  ['fibSens', 'ZigZag duyarlılığı (× ATR)', 'list', { group: 'fib' }],
+  ['fibMinImpulseAtr', 'Min. itki boyu (× ATR)', 'number', { group: 'fib', step: 0.5, min: 0 }],
+  ['fibBMin', "B, A'yı en az geri alır", 'pct', { group: 'fib' }],
+  ['fibBMax', "B, A'yı en fazla geri alır", 'pct', { group: 'fib' }],
 ];
 
 // Bölümler: sıra, başlık, hangi modla eşleştiği
@@ -150,6 +162,7 @@ const GROUPS = [
   { id: 'triangle', title: 'Üçgen kırılımı', mode: 'triangle' },
   { id: 'abcde', title: 'Running üçgen (ABCDE)', mode: 'abcde' },
   { id: 'diagonal', title: 'Diagonal', mode: 'diagonal' },
+  { id: 'fib', title: 'Fib kesişimi', mode: 'fib' },
 ];
 // Kullanıcının elle açıp kapattığı bölümler (sayfa açıkken hatırlanır); mod değişince seçili mod yeniden açılır
 const openState = new Map();

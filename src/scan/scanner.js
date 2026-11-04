@@ -1,9 +1,10 @@
-// Tarama akışı: hacme göre coin listesi → her coin için mumlar → moda göre setup'lar (dalga-3, üçgen, ABCDE üçgen ya da diagonal).
+// Tarama akışı: hacme göre coin listesi → her coin için mumlar → moda göre setup'lar (dalga-3, üçgen, ABCDE üçgen, diagonal ya da fib kesişimi).
 import { getTopCoins, getCandles, TIMEFRAMES } from '../data/okx.js';
 import { findWave3Setups, compareSetups, DEFAULTS } from './wave3.js';
 import { findTriangles, compareTriangles } from './triangle.js';
 import { findAbcde, compareAbcde } from './abcde.js';
 import { findDiagonals, compareDiagonals } from './diagonal.js';
+import { findFibClusters } from './fibcluster.js';
 import { tagSmt, refCoinFor, timeIndex, SMT_DEFAULTS } from './smt.js';
 import { openViews, tagConflicts } from './conflict.js';
 
@@ -22,6 +23,7 @@ export function detect(r, opts, refs = null) {
   const setups = opts.mode === 'triangle' ? findTriangles(subject, opts, r.live)
     : opts.mode === 'abcde' ? findAbcde(subject, opts, r.live)
     : opts.mode === 'diagonal' ? findDiagonals(subject, opts, r.live)
+    : opts.mode === 'fib' ? findFibClusters(subject, opts, r.live)
     : findWave3Setups(subject, opts, r.live);
   const rc = refCoinFor(r.coin, opts.smtRef ?? SMT_DEFAULTS.smtRef);
   tagSmt(setups, subject, rc ? refs?.[rc] || null : null, opts);

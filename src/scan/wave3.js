@@ -48,7 +48,7 @@ export const DEFAULTS = {
 
 // Yapı şablonu: zorunlu şart dalga 1'in içte 5'li itki (i–v) olması. Diğerleri bilgi: ii/iv değişimi, dalga 2 zigzag
 // ((a) ve (c) içte 5'li — kısa bacakların iç dalgaları çoğu zaman aynı grafikte görülemez), dalga 2 ≈ %50–61,8,
-// süre(2)/süre(1) 0,5–1,5. Backtest: 4H limit bölge long'da dalga 1 5'li PF 2,41 (67 işlem); diğer şartlar iyileştirmedi.
+// süre(2)/süre(1) 0,5–1,5. Backtest (doğru sayım, 4H limit bölge long): dalga 1 5'li 48 işlem PF 0,73, diğerleri 367 işlem PF 1,43.
 export const TPL = { retrMin: 0.45, retrMax: 0.7, timeMin: 0.5, timeMax: 1.5 };
 const TPL_DIVS = [2, 2.5, 3, 4, 5, 6, 8, 10, 12];
 const TPL_MISS = {

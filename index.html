@@ -32,6 +32,7 @@
           <option value="triangle">Üçgen kırılımı</option>
           <option value="abcde">Running üçgen (ABCDE)</option>
           <option value="diagonal">Diagonal (ending / leading)</option>
+          <option value="fib">Fib kesişimi (0,618×1,272)</option>
         </select>
       </label>
       <label class="field inline wave-only diag-show">
@@ -75,6 +76,7 @@
           <label class="check perfect-toggle wave-only"><input type="checkbox" id="onlyPerfect" /> ★ Sadece mükemmel</label>
           <label class="check perfect-toggle wave-only" title="Yalnızca dalga 1'i içte 5'li itki (i–v) olan kurulumlar"><input type="checkbox" id="structTpl" /> 🧩 Sadece şablon</label>
           <label class="check"><input type="checkbox" id="showAll" /> Kaçan / bozulanları da göster</label>
+          <label class="check" title="Grafikte yeşil ana yol (giriş → hedefler) ve kırmızı alternatif yol (stop). Tahmin değil, planın çizimi; zaman ekseni temsilî."><input type="checkbox" id="showScenario" /> Senaryo okları</label>
         </div>
         <div class="list-head watch-only">
           <select id="watchFilter" aria-label="Takip listesi filtresi">

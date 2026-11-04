@@ -6,6 +6,7 @@ import { findWave3Setups, DEFAULTS, riskOk, tbMissing, tplMissing } from '../sca
 import { findTriangles, TRI_DEFAULTS, reachOf } from '../scan/triangle.js';
 import { findAbcde, ABCDE_DEFAULTS, abcdeReach } from '../scan/abcde.js';
 import { findDiagonals, DIAG_DEFAULTS } from '../scan/diagonal.js';
+import { findFibClusters } from '../scan/fibcluster.js';
 import { smtCheck, smtPoints, smtApplies, timeIndex, SMT_DEFAULTS } from '../scan/smt.js';
 
 // Üçgen modunda canlı tarayıcıyla aynı uzun pencere (bkz. scanner.js LONG_BARS)
@@ -42,8 +43,9 @@ export function backtestCoin(candles, cfg) {
   const diagMode = opts.mode === 'diagonal';
   if (triMode || abcMode || diagMode) c.window = Math.max(c.window, TRI_WINDOW);
   const trackers = []; // üçgenler: girişten sonra en uç fiyatı (stop görülene kadar) izler
-  const useBreak = opts.entryType !== 'zone';
-  const useZone = opts.entryType !== 'break';
+  const fibMode = opts.mode === 'fib'; // yalnızca limit giriş
+  const useBreak = !fibMode && opts.entryType !== 'zone';
+  const useZone = fibMode || opts.entryType !== 'break';
   const n = candles.length;
   const startT = Math.max(60, candles.findIndex((x) => x.time >= c.from));
   if (startT < 0 || startT >= n) return { trades: [], stats: { orders: 0, cancelled: {} } };
@@ -85,7 +87,7 @@ export function backtestCoin(candles, cfg) {
       diagStep(win, off, bar, t);
       continue;
     }
-    const setups = findWave3Setups(win, opts, null);
+    const setups = fibMode ? findFibClusters(win, opts, null) : findWave3Setups(win, opts, null);
     for (const s of setups) {
       if (opts.onlyPerfect && !s.zone?.perfect) continue;
       const smt = smtOf(s, win);

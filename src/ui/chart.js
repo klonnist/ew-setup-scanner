@@ -1,5 +1,6 @@
 // Lightweight Charts 5 ile setup grafiği: mumlar, 0-1-A-B-2 dalga yolu, etiketler ve seviye çizgileri.
 import { decimals } from './format.js';
+import { SCENARIO_AHEAD } from '../scan/scenario.js';
 
 const C = {
   bg: '#121822', grid: '#1c2430', text: '#8f99aa',
@@ -22,11 +23,47 @@ export function destroyChart() {
   }
 }
 
+// ---------------------------------------------------------------- senaryo okları
+const SC = { main: '#4caf50', alt: '#ef5350' };
+export const SCENARIO_LEGEND = [['Senaryo · ana yol', SC.main, 'dash'], ['Senaryo · alternatif yol', SC.alt, 'dash']];
+
+/** Mum verisi; senaryo varsa sağda boş mumlar (ileri tarihli yollar bunların zamanına oturur). */
+function candleRows(all, scenario) {
+  const rows = all.map((c) => ({ time: sec(c.time), open: c.open, high: c.high, low: c.low, close: c.close }));
+  if (scenario && all.length > 1) {
+    const last = all[all.length - 1].time, step = last - all[all.length - 2].time;
+    for (let k = 1; k <= SCENARIO_AHEAD; k++) rows.push({ time: sec(last + k * step) });
+  }
+  return rows;
+}
+
+/** Ana (yeşil) ve alternatif (kırmızı) yol: kesikli çizgi, ara noktalarda etiket, uçta ok. */
+function drawScenario(chart, LW, all, paths, pf) {
+  if (!paths || all.length < 2) return;
+  const last = all[all.length - 1].time, step = last - all[all.length - 2].time;
+  const tAt = (k) => sec(last + k * step);
+  for (const [pts, color, lineWidth] of [[paths.alt, SC.alt, 2], [paths.main, SC.main, 3]]) {
+    const ln = chart.addSeries(LW.LineSeries, {
+      color, lineWidth, lineStyle: LW.LineStyle.Dashed, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, priceFormat: pf,
+    });
+    ln.setData(pts.map((p) => ({ time: tAt(p.k), value: p.price })));
+    const up = pts[pts.length - 1].price > pts[pts.length - 2].price;
+    LW.createSeriesMarkers(ln, pts.filter((p) => p.label).map((p, j, arr) => ({
+      time: tAt(p.k),
+      position: p.above ? 'aboveBar' : 'belowBar',
+      shape: j < arr.length - 1 ? 'circle' : up ? 'arrowUp' : 'arrowDown',
+      size: j < arr.length - 1 ? 0.4 : 1,
+      color,
+      text: p.label,
+    })));
+  }
+}
+
 /**
  * @param el     grafik kabı
  * @param candles kapanmış mumlar (+ canlı mum eklenebilir)
- * @param s      setup (wave3.js çıktısı)
- * @param show   { showBreak, showZone } hangi giriş planlarının çizileceği
+ * @param s      setup (wave3.js ya da fibcluster.js çıktısı)
+ * @param show   { showBreak, showZone, scenario } hangi giriş planlarının çizileceği, senaryo okları (scenarioPaths; yoksa çizilmez)
  */
 export function drawSetup(el, candles, live, s, show = { showBreak: true, showZone: false }) {
   destroyChart();
@@ -51,14 +88,15 @@ export function drawSetup(el, candles, live, s, show = { showBreak: true, showZo
     priceFormat: { type: 'price', precision: prec, minMove: 10 ** -prec },
   });
   const all = live ? [...candles, live] : candles;
-  series.setData(all.map((c) => ({ time: sec(c.time), open: c.open, high: c.high, low: c.low, close: c.close })));
+  series.setData(candleRows(all, show.scenario));
 
   // Dalga yolu ve etiketler
   const { p0, p1 } = s.points;
   const p2 = s.points.p2 || s.points.cNow;
+  const fib = s.kind === 'fib';
   const pts = [
-    { p: p0, label: '0' },
-    { p: p1, label: '1' },
+    { p: p0, label: fib ? 'İtki başı' : '0' },
+    { p: p1, label: fib ? 'İtki ucu' : '1' },
     ...(s.abc ? [{ p: s.abc.A, label: 'A' }, { p: s.abc.B, label: 'B' }] : []),
     { p: p2, label: s.phase === 'forming' ? 'C?' : s.abc ? '2 (C)' : '2' },
   ];
@@ -83,7 +121,7 @@ export function drawSetup(el, candles, live, s, show = { showBreak: true, showZo
   const L = s.levels;
   const line = (price, color, title, style = LW.LineStyle.Dashed) =>
     series.createPriceLine({ price, color, lineWidth: 1, lineStyle: style, axisLabelVisible: true, title });
-  line(p0.price, C.inval, '0 / geçersiz', LW.LineStyle.Dotted);
+  line(p0.price, C.inval, fib ? 'İtki başı' : '0 / geçersiz', LW.LineStyle.Dotted);
   if (show.showBreak && L) {
     line(L.entry, C.entry, s.state === 'triggered' ? 'Giriş (güncel)' : 'Tetik B', LW.LineStyle.Solid);
     line(L.stop, C.stop, 'Stop');
@@ -93,20 +131,28 @@ export function drawSetup(el, candles, live, s, show = { showBreak: true, showZo
   const Z = show.showZone ? s.zone : null;
   if (Z) {
     const nm = (v) => (v === Z.lvC ? `C=${String(Z.cExtK).replace('.', ',')}A` : `%${String(+(Z.retrR * 100).toFixed(1)).replace('.', ',')}`);
-    if (Z.perfect) {
-      line(Z.confluence, C.zone, `★ ${nm(Z.lvR)} ≈ ${nm(Z.lvC)}`, LW.LineStyle.Solid);
+    if (fib) {
+      // İki oran ayrı çizgi: neden orada olduğu görülsün
+      line(Z.lvR, C.zone, nm(Z.lvR), LW.LineStyle.Dotted);
+      line(Z.lvC, C.zone, nm(Z.lvC), LW.LineStyle.Dotted);
+      Z.legs.forEach((lv) => line(lv, C.zone, 'Emir', LW.LineStyle.Solid));
     } else {
-      line(Z.near, C.zone, `Bölge ${nm(Z.near)}`, LW.LineStyle.Solid);
-      line(Z.far, C.zone, `Bölge ${nm(Z.far)}`, LW.LineStyle.Solid);
+      if (Z.perfect) {
+        line(Z.confluence, C.zone, `★ ${nm(Z.lvR)} ≈ ${nm(Z.lvC)}`, LW.LineStyle.Solid);
+      } else {
+        line(Z.near, C.zone, `Bölge ${nm(Z.near)}`, LW.LineStyle.Solid);
+        line(Z.far, C.zone, `Bölge ${nm(Z.far)}`, LW.LineStyle.Solid);
+      }
+      if (Z.front > 0) Z.legs.forEach((lv) => line(lv, C.zone, 'Emir', LW.LineStyle.Dotted));
     }
-    if (Z.front > 0) Z.legs.forEach((lv) => line(lv, C.zone, 'Emir', LW.LineStyle.Dotted));
-    line(Z.stop, C.zoneStop, 'Stop (bölge)');
+    line(Z.stop, C.zoneStop, fib ? 'Stop' : 'Stop (bölge)');
   }
   (L?.targets || Z?.targets || []).forEach((t, i) => line(t.price, C.target, `H${i + 1} ${t.short ?? t.k}`));
+  drawScenario(chart, LW, all, show.scenario, { type: 'price', precision: prec, minMove: 10 ** -prec });
 
   // Görünüm: 0 noktasının biraz öncesinden sona
   const from = Math.max(0, p0.i - Math.round((all.length - p0.i) * 0.25));
-  chart.timeScale().setVisibleLogicalRange({ from, to: all.length + 6 });
+  chart.timeScale().setVisibleLogicalRange({ from, to: all.length + 6 + (show.scenario ? SCENARIO_AHEAD : 0) });
 
   const ro = new ResizeObserver(([e]) => {
     const r = e.contentRect;
@@ -127,11 +173,20 @@ export const LEGEND = [
   ['Hedefler', C.target, 'dash', ''],
 ];
 
+export const FIB_LEGEND = [
+  ['İtki ve A-B-C', C.wave, ''],
+  ['Emir', C.zone, ''],
+  ['İki oran', C.zone, 'dash'],
+  ['Stop', C.zoneStop, 'dash'],
+  ['İtki başı', C.inval, 'dash'],
+  ['Hedefler', C.target, 'dash'],
+];
+
 // ---------------------------------------------------------------- üçgen kırılımı
 const T = { flat: '#f0c75e', slope: '#5299ec', prior: '#8f99aa', entry: '#3987e5', stop: '#ef5350', mm: '#b06cf0', fib: '#7cc4a8' };
 
 /** Üçgen: düz kenar, eğik kenar (sona uzatılmış), dokunuş işaretleri, önceki hareket, giriş / stop / hedef çizgileri. */
-export function drawTriangle(el, candles, live, t) {
+export function drawTriangle(el, candles, live, t, { scenario = null } = {}) {
   destroyChart();
   const LW = window.LightweightCharts;
   if (!LW) {
@@ -155,7 +210,7 @@ export function drawTriangle(el, candles, live, t) {
     priceFormat: pf,
   });
   const all = live ? [...candles, live] : candles;
-  series.setData(all.map((c) => ({ time: sec(c.time), open: c.open, high: c.high, low: c.low, close: c.close })));
+  series.setData(candleRows(all, scenario));
   const tm = (i) => sec(all[Math.min(i, all.length - 1)].time);
   const lastI = all.length - 1;
   const lineOpts = (color, style = LW.LineStyle.Solid, width = 2) => ({
@@ -199,8 +254,10 @@ export function drawTriangle(el, candles, live, t) {
     line(x.price, x.kind === 'mm' ? T.mm : T.fib, x.kind === 'mm' ? 'Ölçülü' : x.name.replace('Geri çekilme ', '').replace('İzdüşüm ', 'İzd. '));
   }
 
+  drawScenario(chart, LW, all, scenario, pf);
+
   const from = Math.max(0, (t.prior ? t.prior.from.i : t.first.i) - 10);
-  chart.timeScale().setVisibleLogicalRange({ from, to: all.length + 6 });
+  chart.timeScale().setVisibleLogicalRange({ from, to: all.length + 6 + (scenario ? SCENARIO_AHEAD : 0) });
   const ro = new ResizeObserver(([e]) => {
     const r = e.contentRect;
     if (r.width > 0 && r.height > 0) chart.resize(Math.floor(r.width), Math.floor(r.height));
@@ -223,7 +280,7 @@ export const TRI_LEGEND = [
 const A5 = { path: '#e8ebf1', w3: '#8f99aa', ac: '#ef5350', bd: '#ef5350', limit: '#ff9f43', entry: '#3987e5', stop: '#ef5350', target: '#7cc4a8' };
 
 /** ABCDE: 0-A-B-C-D-E yolu ve etiketler, A–C ve B–D çizgileri (ileri uzatılmış), önceki hareket, E limiti / giriş / stop / hedefler. */
-export function drawAbcde(el, candles, live, t, { plans = t.plans } = {}) {
+export function drawAbcde(el, candles, live, t, { plans = t.plans, scenario = null } = {}) {
   destroyChart();
   const LW = window.LightweightCharts;
   if (!LW) {
@@ -247,7 +304,7 @@ export function drawAbcde(el, candles, live, t, { plans = t.plans } = {}) {
     priceFormat: pf,
   });
   const all = live ? [...candles, live] : candles;
-  series.setData(all.map((c) => ({ time: sec(c.time), open: c.open, high: c.high, low: c.low, close: c.close })));
+  series.setData(candleRows(all, scenario));
   const tm = (i) => sec(all[Math.min(i, all.length - 1)].time);
   const lastI = all.length - 1;
   const lineOpts = (color, style = LW.LineStyle.Solid, width = 2) => ({
@@ -283,7 +340,9 @@ export function drawAbcde(el, candles, live, t, { plans = t.plans } = {}) {
   line(t.levels.stop, A5.stop, 'Stop (C)');
   for (const x of t.levels.targets) line(x.price, A5.target, x.key === 'top' ? '0 (başlangıç)' : x.key === 'thrust' ? 'Thrust' : x.key === 'e1236' ? '1,236' : '1,618');
 
-  chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, P.w3s.i - 10), to: all.length + 6 });
+  drawScenario(chart, LW, all, scenario, pf);
+
+  chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, P.w3s.i - 10), to: all.length + 6 + (scenario ? SCENARIO_AHEAD : 0) });
   const ro = new ResizeObserver(([e]) => {
     const r = e.contentRect;
     if (r.width > 0 && r.height > 0) chart.resize(Math.floor(r.width), Math.floor(r.height));
@@ -307,7 +366,7 @@ const DG = { path: '#e8ebf1', l13: '#5299ec', l24: '#f0c75e', entry: '#3987e5', 
 const SUB_NAMES = { 3: ['a', 'b'], 5: ['i', 'ii', 'iii', 'iv'] };
 
 /** Diagonal: 0-1-2-3-4-5 yolu, 1–3 ve 2–4 çizgileri (ileri uzatılmış), giriş / limit, stop ve hedefler. */
-export function drawDiagonal(el, candles, live, t) {
+export function drawDiagonal(el, candles, live, t, { scenario = null } = {}) {
   destroyChart();
   const LW = window.LightweightCharts;
   if (!LW) {
@@ -331,7 +390,7 @@ export function drawDiagonal(el, candles, live, t) {
     priceFormat: pf,
   });
   const all = live ? [...candles, live] : candles;
-  series.setData(all.map((c) => ({ time: sec(c.time), open: c.open, high: c.high, low: c.low, close: c.close })));
+  series.setData(candleRows(all, scenario));
   const tm = (i) => sec(all[Math.min(i, all.length - 1)].time);
   const lastI = all.length - 1;
   const lineOpts = (color, style = LW.LineStyle.Solid, width = 2) => ({
@@ -387,8 +446,9 @@ export function drawDiagonal(el, candles, live, t) {
   }
   line(p.stop, DG.stop, 'Stop');
   for (const x of p.targets) line(x.price, DG.target, x.name.replace(' (dalga 1 sonu)', '').replace('Dalga 3 = ', 'D3 '));
+  drawScenario(chart, LW, all, scenario, pf);
 
-  chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, P.p0.i - 15), to: all.length + 6 });
+  chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, P.p0.i - 15), to: all.length + 6 + (scenario ? SCENARIO_AHEAD : 0) });
   const ro = new ResizeObserver(([e]) => {
     const r = e.contentRect;
     if (r.width > 0 && r.height > 0) chart.resize(Math.floor(r.width), Math.floor(r.height));
@@ -475,7 +535,7 @@ const W = { wave: '#f0c75e', entry: '#3987e5', stop: '#ef5350', target: '#7cc4a8
  * Takip kaydı: güncel mumlar + kayıttaki seviyeler. Pivotlar zamanla eşlenir; pencere dışında kalanlar çizilmez.
  * @param item  watch kaydı (snapshot)   @param evals  planların evaluatePlan sonuçları
  */
-export function drawWatch(el, candles, live, item, evals) {
+export function drawWatch(el, candles, live, item, evals, { scenario = null } = {}) {
   destroyChart();
   const LW = window.LightweightCharts;
   if (!LW) {
@@ -499,7 +559,7 @@ export function drawWatch(el, candles, live, item, evals) {
   const series = chart.addSeries(LW.CandlestickSeries, {
     upColor: C.up, downColor: C.down, borderUpColor: C.up, borderDownColor: C.down, wickUpColor: C.up, wickDownColor: C.down, priceFormat: pf,
   });
-  series.setData(all.map((c) => ({ time: sec(c.time), open: c.open, high: c.high, low: c.low, close: c.close })));
+  series.setData(candleRows(all, scenario));
   const times = new Set(all.map((c) => c.time));
   const pts = item.points.filter((p) => times.has(p.time)).sort((a, b) => a.time - b.time);
   if (item.kind !== 'triangle' && pts.length > 1) {
@@ -560,10 +620,11 @@ export function drawWatch(el, candles, live, item, evals) {
     line(p.stop, W.stop, `Stop${tag}`);
     if (i === 0) p.targets.forEach((t, k) => line(t.price, W.target, `H${k + 1}`));
   });
+  drawScenario(chart, LW, all, scenario, pf);
 
   const first = Math.min(...item.points.map((p) => p.time), item.savedAt, item.shape?.prior?.from.time ?? Infinity);
   const fromIdx = Math.max(0, all.findIndex((c) => c.time >= first) - 10);
-  chart.timeScale().setVisibleLogicalRange({ from: fromIdx, to: all.length + 6 });
+  chart.timeScale().setVisibleLogicalRange({ from: fromIdx, to: all.length + 6 + (scenario ? SCENARIO_AHEAD : 0) });
   const ro = new ResizeObserver(([e]) => {
     const r = e.contentRect;
     if (r.width > 0 && r.height > 0) chart.resize(Math.floor(r.width), Math.floor(r.height));

@@ -5,7 +5,8 @@ import { pickTriangles, findTriangles } from '../scan/triangle.js';
 import { pickAbcde } from '../scan/abcde.js';
 import { pickDiagonals } from '../scan/diagonal.js';
 import { loadSettings, saveSettings, renderSettings, toScanOptions, UI_DEFAULTS } from './settings.js';
-import { drawSetup, drawTriangle, drawAbcde, drawDiagonal, destroyChart, LEGEND, TRI_LEGEND, ABCDE_LEGEND, DIAG_LEGEND } from './chart.js';
+import { drawSetup, drawTriangle, drawAbcde, drawDiagonal, destroyChart, LEGEND, TRI_LEGEND, ABCDE_LEGEND, DIAG_LEGEND, FIB_LEGEND, SCENARIO_LEGEND } from './chart.js';
+import { scenarioPaths } from '../scan/scenario.js';
 import { triCard, triDetail, triSummary, triKey } from './triangleView.js';
 import { abcdeCard, abcdeDetail, abcdeSummary, abcdeKey } from './abcdeView.js';
 import { diagCard, diagDetail, diagSummary, diagKey } from './diagonalView.js';
@@ -40,8 +41,10 @@ const state = {
 const isTri = () => state.settings.mode === 'triangle';
 const isAbc = () => state.settings.mode === 'abcde';
 const isDiag = () => state.settings.mode === 'diagonal';
+const isFib = () => state.settings.mode === 'fib';
 const LONG_KINDS = new Set(['triangle', 'abcde', 'diagonal']); // 600 mumluk pencerede bulunanlar
-const setupKey = (s) => (s.kind === 'triangle' ? triKey(s) : s.kind === 'abcde' ? abcdeKey(s) : s.kind === 'diagonal' ? diagKey(s) : `${s.coin}|${s.direction}|${s.phase}|${s.points.p0.price}|${s.points.p1.price}`);
+const fibKey = (s) => `${s.coin}|${s.direction}|fib|${s.points.p0.price}|${s.points.p1.price}|${s.abc.A.price}|${s.abc.B.price}`;
+const setupKey = (s) => (s.kind === 'triangle' ? triKey(s) : s.kind === 'abcde' ? abcdeKey(s) : s.kind === 'diagonal' ? diagKey(s) : s.kind === 'fib' ? fibKey(s) : `${s.coin}|${s.direction}|${s.phase}|${s.points.p0.price}|${s.points.p1.price}`);
 
 // ------------------------------------------------------------------ araç çubuğu
 function syncToolbar() {
@@ -52,11 +55,13 @@ function syncToolbar() {
   $('#showAll').checked = !!s.showAll;
   $('#onlyPerfect').checked = !!s.onlyPerfect;
   $('#structTpl').checked = !!s.structTpl;
+  $('#showScenario').checked = !!s.showScenario;
   $('#mode').value = s.mode;
   // Dalga-3'e özgü kontroller üçgen modunda gizlenir
   document.body.classList.toggle('mode-triangle', s.mode === 'triangle');
   document.body.classList.toggle('mode-abcde', s.mode === 'abcde');
   document.body.classList.toggle('mode-diagonal', s.mode === 'diagonal');
+  document.body.classList.toggle('mode-fib', s.mode === 'fib');
 }
 
 function updateSettings(patch) {
@@ -236,8 +241,8 @@ function notifyAbcde(silent) {
 }
 
 // ------------------------------------------------------------------ çizim
-const useBreak = () => state.settings.entryType !== 'zone';
-const useZone = () => state.settings.entryType !== 'break';
+const useBreak = () => !isFib() && state.settings.entryType !== 'zone';
+const useZone = () => isFib() || state.settings.entryType !== 'break';
 const dirTxt = (s) => (s.direction === 'long' ? 'LONG ▲' : 'SHORT ▼');
 
 function visibleSetups() {
@@ -304,6 +309,17 @@ function renderSummary() {
     return;
   }
   const errors = r.results.filter((x) => x.error);
+  if (isFib()) {
+    const active = pickSetups(state.setups, opts);
+    $('#summary').innerHTML = `
+      <p><strong>${r.results.length} coin</strong> · ${esc(r.tf.label)} · ${fmtTime(r.at)} ·
+        <strong>${active.length}</strong> aktif kurulum · ${state.setups.length - active.length} kaçan/bozulan
+        ${errors.length ? `<span class="error"> · ${errors.length} coin okunamadı (${esc(errors.slice(0, 4).map((e) => e.coin).join(', '))})</span>` : ''}</p>
+      <p class="note">Bu mod yalnızca oran çakışmasına bakar: Elliott kuralı ve süre şartı yoktur. Backtest'te tutarlı bir üstünlük görülmedi
+        (0,618 × 1,272, ikinci hedef: 4H 1 yıl 47 işlem −6,8R, 15m 3 ay 216 işlem +15,5R).</p>`;
+    $('#listTitle').textContent = `Fib kesişimleri (${visibleSetups().length})`;
+    return;
+  }
   const vis = pickSetups(state.setups, opts);
   const nBreak = vis.filter((s) => activePlans(s, opts).some((p) => p.type === 'break')).length;
   const nZone = vis.filter((s) => activePlans(s, opts).some((p) => p.type === 'zone')).length;
@@ -433,6 +449,29 @@ function card(s) {
   </button>`;
 }
 
+const fibName = (f) => `${String(f.r).replace('.', ',')} × ${String(f.e).replace('.', ',')}`;
+
+function fibCard(s) {
+  const active = activePlans(s, toScanOptions(state.settings)).length > 0;
+  const sel = state.selected && setupKey(state.selected) === setupKey(s);
+  return `
+  <button type="button" class="card ${s.direction}${active ? '' : ' faded'}" data-key="${esc(setupKey(s))}" aria-current="${sel}">
+    <div class="head">
+      <span class="coin">${esc(s.coin)}</span>
+      <span class="dir ${s.direction}">${dirTxt(s)}</span>
+      <span class="chip">Fib ${esc(fibName(s.fib))}</span>
+      <span class="chip">${esc(s.stateLabel)}</span>
+      ${originChip(s)}${conflictChip(s)}
+    </div>
+    <div class="meta">
+      <span>B geri alımı ${fmtPct(s.fib.bRet, 1)}</span>
+      <span>Geri çekilme ${fmtPct(s.retr, 1)}${s.cDone ? '' : ' (şu an)'}</span>
+      <span>derece ${s.sensitivity}×ATR</span>
+    </div>
+    ${zoneBlock(s, active)}
+  </button>`;
+}
+
 function renderCards() {
   const vis = visibleSetups();
   const box = $('#cards');
@@ -449,6 +488,8 @@ function renderCards() {
   } else if (isDiag()) {
     const sel = state.selected && setupKey(state.selected);
     box.innerHTML = vis.map((t) => diagCard(t, { selected: setupKey(t) === sel })).join('');
+  } else if (isFib()) {
+    box.innerHTML = vis.map(fibCard).join('');
   } else {
     box.innerHTML = vis.map(card).join('');
   }
@@ -644,8 +685,12 @@ function renderWatchDetail() {
     : it.shape
     ? [...TRI_LEGEND.slice(0, 3), ['Giriş', '#3987e5', ''], ['Stop', '#ef5350', 'dash'], ['Hedefler', '#7cc4a8', 'dash']]
     : [['Dalga yolu', '#f0c75e', ''], ['Giriş', '#3987e5', ''], ['Stop', '#ef5350', 'dash'], ['0 / geçersiz', '#b06cf0', 'dash'], ['Hedefler', '#7cc4a8', 'dash']];
-  $('#watchLegend').innerHTML = legend.map(([t, c, cls]) => `<span><i class="${cls}" style="border-top-color:${c}"></i>${esc(t)}</span>`).join('');
-  if (data) drawWatch($('#chart'), data.candles, data.live, it, evals);
+  // Senaryo okları: ilk açık plan (bekliyor ya da girildi)
+  const open = state.settings.showScenario ? evals.findIndex((e) => isOpen(e.state)) : -1;
+  const price = watchPrice(it);
+  const scenario = open >= 0 && price ? scenarioPaths(it.plans[open], it.d, price, !!evals[open].entryTime) : null;
+  $('#watchLegend').innerHTML = legendHtml(legend, scenario);
+  if (data) drawWatch($('#chart'), data.candles, data.live, it, evals, { scenario });
   else $('#chart').innerHTML = '<p class="muted" style="padding:16px">Grafik verisi yükleniyor…</p>';
   $('#watchSaveNote').addEventListener('click', () => { updateWatch(it.id, { note: $('#watchNote').value.trim() }); renderWatch(); });
   $('#watchRemove').addEventListener('click', () => removeItem(it));
@@ -735,6 +780,46 @@ function zoneFacts(s) {
     <ul class="levels">${levels}</ul>`;
 }
 
+const legendHtml = (rows, scenario) => [...rows, ...(scenario ? SCENARIO_LEGEND : [])]
+  .map(([t, c, cls]) => `<span><i class="${cls}" style="border-top-color:${c}"></i>${esc(t)}</span>`).join('');
+
+/** Seçili kurulumun senaryo okları; kutu kapalıysa ya da seçili giriş tipinde aktif plan yoksa null. */
+function scenarioFor(s) {
+  if (!state.settings.showScenario) return null;
+  const r = resultOf(s);
+  const { plans } = snapshot(s, LONG_KINDS.has(s.kind) ? r.longCandles : r.candles, { tf: state.scan.tf, mode: state.settings.mode });
+  const plan = plans.find((p) => (p.type === 'zone' ? useZone() : p.type === 'break' ? useBreak() : true));
+  return plan ? scenarioPaths(plan, s.d, s.price) : null;
+}
+
+function fibDetail(s, scenario) {
+  const { p0, p1 } = s.points;
+  const f = s.fib;
+  const tv = `https://www.tradingview.com/chart/?symbol=OKX%3A${encodeURIComponent(s.coin)}USDT`;
+  return `
+    <div class="detail-head">
+      <h2>${esc(s.coin)}/USDT</h2>
+      <span class="dir ${s.direction}">${dirTxt(s)}</span>
+      <span class="chip">Fib ${esc(fibName(f))}</span>
+      <span class="chip">${esc(state.scan.tf.id)} · derece ${s.sensitivity}×ATR</span>
+      ${originChip(s)}${conflictChip(s)}
+      <a class="ext" href="${tv}" target="_blank" rel="noopener">TradingView'de aç ↗</a>
+    </div>
+    <div class="chart" id="chart"></div>
+    <div class="legend">${legendHtml(FIB_LEGEND, scenario)}</div>
+    <p class="note">Yalnızca oran çakışması: dalga sayımı, Elliott kuralı ve süre şartı kontrol edilmez.</p>
+    <div class="facts">
+      ${fact('Güncel fiyat', fmtPrice(s.price))}
+      ${fact('İtki', `${fmtPrice(p0.price, s.price)} → ${fmtPrice(p1.price, s.price)}`)}
+      ${fact('A → B', `${fmtPrice(s.abc.A.price, s.price)} → ${fmtPrice(s.abc.B.price, s.price)} (B geri alımı ${fmtPct(f.bRet, 1)})`)}
+      ${fact(`İtkinin %${String(+(f.r * 100).toFixed(1)).replace('.', ',')} geri çekilmesi`, fmtPrice(f.lvR, s.price))}
+      ${fact(`C = ${String(f.e).replace('.', ',')} × A (B'den)`, fmtPrice(f.lvC, s.price))}
+      ${fact(s.cDone ? 'Geri çekilme' : 'Geri çekilme (şu an)', fmtPct(s.retr, 1))}
+      ${fact('Süre: itki / düzeltme', `${s.durations.D1} / ${s.durations.D2} mum (${fmtX(s.timeRatio)})`)}
+    </div>
+    ${zoneFacts(s)}`;
+}
+
 function renderDetail() {
   const s = state.selected;
   const box = $('#detail');
@@ -744,22 +829,28 @@ function renderDetail() {
     return;
   }
   const r = resultOf(s);
+  const scenario = scenarioFor(s);
+  if (s.kind === 'fib') {
+    box.innerHTML = fibDetail(s, scenario);
+    drawSetup($('#chart'), r.candles, r.live, s, { showBreak: false, showZone: true, scenario });
+    return;
+  }
   if (s.kind === 'triangle') {
     box.innerHTML = triDetail(s, { tfId: state.scan.tf.id, feePct: state.settings.feePct });
-    $('#triLegend').innerHTML = TRI_LEGEND.map(([t, c, cls]) => `<span><i class="${cls}" style="border-top-color:${c}"></i>${esc(t)}</span>`).join('');
-    drawTriangle($('#chart'), r.longCandles, r.live, s);
+    $('#triLegend').innerHTML = legendHtml(TRI_LEGEND, scenario);
+    drawTriangle($('#chart'), r.longCandles, r.live, s, { scenario });
     return;
   }
   if (s.kind === 'diagonal') {
     box.innerHTML = diagDetail(s, { tfId: state.scan.tf.id, feePct: state.settings.feePct, ruleSet: state.settings.ruleSet });
-    $('#diagLegend').innerHTML = DIAG_LEGEND.map(([t, c, cls]) => `<span><i class="${cls}" style="border-top-color:${c}"></i>${esc(t)}</span>`).join('');
-    drawDiagonal($('#chart'), r.longCandles, r.live, s);
+    $('#diagLegend').innerHTML = legendHtml(DIAG_LEGEND, scenario);
+    drawDiagonal($('#chart'), r.longCandles, r.live, s, { scenario });
     return;
   }
   if (s.kind === 'abcde') {
     box.innerHTML = abcdeDetail(s, { tfId: state.scan.tf.id, feePct: state.settings.feePct, eRetr: state.settings.eRetr });
-    $('#abcdeLegend').innerHTML = ABCDE_LEGEND.map(([t, c, cls]) => `<span><i class="${cls}" style="border-top-color:${c}"></i>${esc(t)}</span>`).join('');
-    drawAbcde($('#chart'), r.longCandles, r.live, s);
+    $('#abcdeLegend').innerHTML = legendHtml(ABCDE_LEGEND, scenario);
+    drawAbcde($('#chart'), r.longCandles, r.live, s, { scenario });
     return;
   }
   const rsi = [];
@@ -776,7 +867,7 @@ function renderDetail() {
       <a class="ext" href="${tv}" target="_blank" rel="noopener">TradingView'de aç ↗</a>
     </div>
     <div class="chart" id="chart"></div>
-    <div class="legend">${LEGEND.filter(([, , , t]) => !t || (t === 'break' ? useBreak() : useZone())).map(([t, c, cls]) => `<span><i class="${cls}" style="border-top-color:${c}"></i>${esc(t)}</span>`).join('')}</div>
+    <div class="legend">${legendHtml(LEGEND.filter(([, , , t]) => !t || (t === 'break' ? useBreak() : useZone())), scenario)}</div>
     <div class="facts">
       ${fact('Güncel fiyat', fmtPrice(s.price))}
       ${fact('Geçersizlik (0)', fmtPrice(s.points.p0.price, s.price))}
@@ -798,7 +889,7 @@ function renderDetail() {
       ${ruleList(`İtki başlangıcı 0-1-2 (${state.settings.ruleSet})${s.phase === 'forming' ? ' — 2 = şimdiye kadarki uç' : ''}`, s.impulse.results)}
       ${s.abc ? ruleList(`Dalga 2 iç yapısı: ${s.abc.label}${s.phase === 'forming' ? (s.cDone ? ' (0-A-B, C tamam)' : ' (0-A-B, C oluşuyor)') : ''}`, s.abc.results) : ''}
     </div>`;
-  drawSetup($('#chart'), r.candles, r.live, s, { showBreak: useBreak(), showZone: useZone() });
+  drawSetup($('#chart'), r.candles, r.live, s, { showBreak: useBreak(), showZone: useZone(), scenario });
 }
 
 function select(s) {
@@ -836,6 +927,7 @@ function init() {
   $('#onlyPerfect').addEventListener('change', (e) => updateSettings({ onlyPerfect: e.target.checked }));
   $('#structTpl').addEventListener('change', (e) => { updateSettings({ structTpl: e.target.checked }); renderSettings($('#settings'), state.settings, updateSettings); });
   $('#showAll').addEventListener('change', (e) => { state.settings.showAll = e.target.checked; saveSettings(state.settings); if (state.scan) render(); });
+  $('#showScenario').addEventListener('change', (e) => { state.settings.showScenario = e.target.checked; saveSettings(state.settings); if (state.scan) render(); });
   $('#scanBtn').addEventListener('click', () => scan());
   $('#settingsBtn').addEventListener('click', () => {
     const el = $('#settings');

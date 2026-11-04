@@ -10,8 +10,9 @@ import { findWave3Setups } from '../scan/wave3.js';
 import { findTriangles, TRI_DEFAULTS } from '../scan/triangle.js';
 import { findAbcde, ABCDE_DEFAULTS } from '../scan/abcde.js';
 import { findDiagonals, DIAG_DEFAULTS } from '../scan/diagonal.js';
+import { findFibClusters } from '../scan/fibcluster.js';
 import { refCoinFor, SMT_LABEL, SMT_HELP } from '../scan/smt.js';
-import { drawSetup, drawTriangle, drawAbcde, drawDiagonal, drawTradeOnly, markTrade, destroyChart, LEGEND, TRI_LEGEND, ABCDE_LEGEND, DIAG_LEGEND } from '../ui/chart.js';
+import { drawSetup, drawTriangle, drawAbcde, drawDiagonal, drawTradeOnly, markTrade, destroyChart, LEGEND, TRI_LEGEND, ABCDE_LEGEND, DIAG_LEGEND, FIB_LEGEND } from '../ui/chart.js';
 
 const $ = (s) => document.querySelector(s);
 const PKEY = 'ew-setup-scanner:btparams:v1';
@@ -80,6 +81,7 @@ function syncForm() {
   document.body.classList.toggle('mode-triangle', params.mode === 'triangle');
   document.body.classList.toggle('mode-abcde', params.mode === 'abcde');
   document.body.classList.toggle('mode-diagonal', params.mode === 'diagonal');
+  document.body.classList.toggle('mode-fib', params.mode === 'fib');
   $('#quick').innerHTML = QUICK[params.tf].map(([t, d]) => `<button type="button" class="ghost sm" data-days="${d}">${t}</button>`).join('');
   for (const b of document.querySelectorAll('#quick button')) {
     b.addEventListener('click', () => {
@@ -268,7 +270,8 @@ const SETTING_KEYS = ['ruleSet', 'sensitivities', 'w1Extend', 'retrMin', 'retrMa
   'perfectAtr', 'zoneFrontAtr', 'approachAtr', 'onlyPerfect', 'minRiskPct', 'textbook', 'textbookMin', 'cleanW1Er', 'cleanW1Speed', 'originReal', 'structTpl',
   'triType', 'triContext', 'flatAtr', 'minTops', 'minBottoms', 'minWidthBars', 'triTarget', 'triMinRR',
   'abcdeEntry', 'eRetr', 'innerAbc', 'w3Check', 'abcdeVariant', 'abcdeSens', 'abcdeStopAtr', 'abcdeTarget', 'abcdeMinRR',
-  'diagType', 'diagShape', 'diagSens', 'diagW4Entry', 'diagW2Min', 'diagExpMax', 'diagRetr', 'diagStopAtr', 'diagEndTarget', 'diagLeadTarget', 'diagMinRR', 'diagBook', 'smtRef', 'smtWin', 'smtOnly'];
+  'diagType', 'diagShape', 'diagSens', 'diagW4Entry', 'diagW2Min', 'diagExpMax', 'diagRetr', 'diagStopAtr', 'diagEndTarget', 'diagLeadTarget', 'diagMinRR', 'diagBook',
+  'fibPairs', 'fibSens', 'fibTolAtr', 'fibMinImpulseAtr', 'fibBMin', 'fibBMax', 'fibStop', 'smtRef', 'smtWin', 'smtOnly'];
 const TRI_TARGET_TXT = { mm: 'ölçülü hareket', f382: '%38,2', f50: '%50', f618: '%61,8', f786: '%78,6', f100: '%100' };
 function pickSettings(o) { return Object.fromEntries(SETTING_KEYS.map((k) => [k, o[k]])); }
 
@@ -294,6 +297,15 @@ function settingsText(p) {
       ...(s.diagType === 'w4' || s.diagType === 'all' ? [`dalga 4 limiti: ${{ fib: 'fib çakışmaları (kademeli)', near: 'yakın kenar', mid: 'orta', far: 'uzak kenar' }[s.diagW4Entry || 'near'] || s.diagW4Entry}`] : []),
       `kural seti ${s.ruleSet}`, `dalga 2 limiti %${+(s.diagRetr * 100).toFixed(1)}`,
       `hedef: ending ${s.diagEndTarget} / leading ${s.diagLeadTarget}`, `min R:R ${s.diagMinRR}`, `kom. %${p.feePct}`,
+    ].join(' · ');
+  }
+  if (p.mode === 'fib') {
+    return [
+      'Fib kesişimi',
+      s.fibPairs === 'all' ? 'tüm oran çiftleri' : '0,618 × 1,272',
+      s.fibStop === 'w0' ? 'stop itki başı' : 'stop %88,6',
+      `fark ≤ ${s.fibTolAtr} ATR`, `min R:R ${s.minRR}`, `H${p.exitTarget + 1}`, `kom. %${p.feePct}`,
+      ...(s.direction && s.direction !== 'both' ? [s.direction === 'long' ? 'sadece long' : 'sadece short'] : []),
     ].join(' · ');
   }
   if (p.mode === 'abcde') {
@@ -456,6 +468,7 @@ const SUBTYPES = {
   abcde: [['', 'Hepsi'], ['elimit', 'E limiti'], ['econfirm', 'E onayı']],
   wave3: [['', 'Hepsi'], ['break', 'B kırılımı'], ['zone', 'Limit bölge']],
   triangle: [['', 'Hepsi'], ['asc', 'Yükselen', (t) => t.pattern === 'asc'], ['desc', 'Alçalan', (t) => t.pattern === 'desc']],
+  fib: [['', 'Hepsi']],
 };
 const subtypesOf = (mode) => SUBTYPES[mode] || SUBTYPES.wave3;
 function matchType(t, mode, key) {
@@ -526,7 +539,7 @@ function filterLine(p) {
   if (filter.coin) parts.push(filter.coin);
   return parts.join(' · ');
 }
-const MODE_NAME = { wave3: 'Dalga-3', triangle: 'Üçgen kırılımı', abcde: 'Running üçgen (ABCDE)', diagonal: 'Diagonal' };
+const MODE_NAME = { wave3: 'Dalga-3', triangle: 'Üçgen kırılımı', abcde: 'Running üçgen (ABCDE)', diagonal: 'Diagonal', fib: 'Fib kesişimi' };
 
 /** İşlemi k. hedefte çıkmış gibi yeniden yazar (aynı giriş ve stop). Hedefi daha az olan işlemde son hedef kullanılır. */
 function withExit(t, k, feePct) {
@@ -708,7 +721,7 @@ async function showTradeChart(t) {
     if (s?.kind === 'diagonal') { drawDiagonal(el, view2, null, s); legend = DIAG_LEGEND; }
     else if (s?.kind === 'abcde') { drawAbcde(el, view2, null, s); legend = ABCDE_LEGEND; }
     else if (s?.kind === 'triangle') { drawTriangle(el, view2, null, s); legend = TRI_LEGEND; }
-    else if (s) { drawSetup(el, view2, null, s, { showBreak: t.type === 'break', showZone: t.type === 'zone' }); legend = LEGEND; }
+    else if (s) { drawSetup(el, view2, null, s, { showBreak: t.type === 'break', showZone: t.type === 'zone' }); legend = s.kind === 'fib' ? FIB_LEGEND : LEGEND; }
     else drawTradeOnly(el, view2, t);
     markTrade(t);
     $('#tvLegend').innerHTML = (legend || []).map(([n, c, cls]) => `<span><i class="${cls}" style="border-top-color:${c}"></i>${esc(n)}</span>`).join('')
@@ -724,6 +737,7 @@ async function showTradeChart(t) {
 /** İşlemle aynı plan (tip, yön, stop) — tarayıcının o mumda bulduğu kalıp. */
 function findPattern(win, t, opts) {
   const dirOk = (x) => x.direction === t.dir;
+  if (opts.mode === 'fib') return findFibClusters(win, opts, null).find((x) => dirOk(x) && near(x.zone.stop, t.stop)) || null;
   if (opts.mode === 'diagonal') return findDiagonals(win, opts, null).find((x) => dirOk(x) && x.plans.some((q) => q.type === t.type && near(q.stop, t.stop))) || null;
   if (opts.mode === 'abcde') return findAbcde(win, opts, null).find((x) => dirOk(x) && x.plans.some((q) => q.type === t.type && near(q.stop, t.stop))) || null;
   if (opts.mode === 'triangle') return findTriangles(win, opts, null).find((x) => dirOk(x) && near(x.levels.stop, t.stop)) || null;
