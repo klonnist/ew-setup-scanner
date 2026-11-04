@@ -1,5 +1,5 @@
 // Backtest sayfası: form, veri indirme + worker havuzu, sonuç raporu ve kayıtlı çalışmalar.
-import { getTopCoins, TIMEFRAMES } from '../data/okx.js';
+import { getTopCoins, instIdOf, TIMEFRAMES } from '../data/okx.js';
 import { getHistory, estimateRequests } from './history.js';
 import { summarize, BT_DEFAULTS, TRI_WINDOW } from './engine.js';
 import { loadRuns, saveRun, deleteRun, importRuns, packTrades, unpackTrades, usedBytes, MAX_BYTES } from './store.js';
@@ -10,7 +10,7 @@ import { findWave3Setups } from '../scan/wave3.js';
 import { findTriangles, TRI_DEFAULTS } from '../scan/triangle.js';
 import { findAbcde, ABCDE_DEFAULTS } from '../scan/abcde.js';
 import { findDiagonals, DIAG_DEFAULTS } from '../scan/diagonal.js';
-import { findFibClusters } from '../scan/fibcluster.js';
+import { findFibClusters, marketOf } from '../scan/fibcluster.js';
 import { refCoinFor, SMT_LABEL, SMT_HELP } from '../scan/smt.js';
 import { drawSetup, drawTriangle, drawAbcde, drawDiagonal, drawTradeOnly, markTrade, destroyChart, LEGEND, TRI_LEGEND, ABCDE_LEGEND, DIAG_LEGEND, FIB_LEGEND } from '../ui/chart.js';
 
@@ -71,6 +71,7 @@ function saveParams() { try { localStorage.setItem(PKEY, JSON.stringify(params))
 function syncShared() {
   $('#btDirection').value = settings.direction || 'both';
   $('#btStructTpl').value = settings.structTpl ? '1' : '';
+  $('#btFibMarket').value = settings.fibMarket || 'spot';
 }
 
 function syncForm() {
@@ -188,8 +189,8 @@ async function run() {
   try {
     setStatus('<p>Coin listesi alınıyor…</p>');
     const coins = Number(params.topN)
-      ? await getTopCoins(Number(params.topN), { signal: ctrl.signal })
-      : (scan.manualCoins || []).map((c) => ({ coin: c, instId: `${c}-USDT` }));
+      ? await getTopCoins(Number(params.topN), { signal: ctrl.signal }, marketOf(opts))
+      : (scan.manualCoins || []).map((c) => ({ coin: c, instId: instIdOf(c, marketOf(opts)) }));
     if (!coins.length) throw new Error('Coin listesi boş (elle liste seçiliyse tarama ayarlarından coin gir).');
 
     const refs = {};
@@ -271,7 +272,7 @@ const SETTING_KEYS = ['ruleSet', 'sensitivities', 'w1Extend', 'retrMin', 'retrMa
   'triType', 'triContext', 'flatAtr', 'minTops', 'minBottoms', 'minWidthBars', 'triTarget', 'triMinRR',
   'abcdeEntry', 'eRetr', 'innerAbc', 'w3Check', 'abcdeVariant', 'abcdeSens', 'abcdeStopAtr', 'abcdeTarget', 'abcdeMinRR',
   'diagType', 'diagShape', 'diagSens', 'diagW4Entry', 'diagW2Min', 'diagExpMax', 'diagRetr', 'diagStopAtr', 'diagEndTarget', 'diagLeadTarget', 'diagMinRR', 'diagBook',
-  'fibPairs', 'fibSens', 'fibTolAtr', 'fibMinImpulseAtr', 'fibBMin', 'fibBMax', 'fibStop', 'smtRef', 'smtWin', 'smtOnly'];
+  'fibMarket', 'fibPairs', 'fibSens', 'fibTolAtr', 'fibMinImpulseAtr', 'fibBMin', 'fibBMax', 'fibStop', 'smtRef', 'smtWin', 'smtOnly'];
 const TRI_TARGET_TXT = { mm: 'ölçülü hareket', f382: '%38,2', f50: '%50', f618: '%61,8', f786: '%78,6', f100: '%100' };
 function pickSettings(o) { return Object.fromEntries(SETTING_KEYS.map((k) => [k, o[k]])); }
 
@@ -302,6 +303,7 @@ function settingsText(p) {
   if (p.mode === 'fib') {
     return [
       'Fib kesişimi',
+      s.fibMarket === 'swap' ? 'OKX vadeli' : 'OKX spot',
       s.fibPairs === 'all' ? 'tüm oran çiftleri' : '0,618 × 1,272',
       s.fibStop === 'w0' ? 'stop itki başı' : 'stop %88,6',
       `fark ≤ ${s.fibTolAtr} ATR`, `min R:R ${s.minRR}`, `H${p.exitTarget + 1}`, `kom. %${p.feePct}`,
@@ -708,7 +710,7 @@ async function showTradeChart(t) {
     const tf = TIMEFRAMES[p.tf];
     const win = windowFor(p.mode);
     const end = (t.outcome === 'open' ? Date.now() : t.exitTime) + 40 * tf.ms;
-    const candles = await getHistory(`${t.coin}-USDT`, tf, t.created - (win + 5) * tf.ms, Math.min(end, Date.now()));
+    const candles = await getHistory(instIdOf(t.coin, marketOf({ mode: p.mode, fibMarket: p.settings?.fibMarket })), tf, t.created - (win + 5) * tf.ms, Math.min(end, Date.now()));
     if (req !== chartReq) return;
     const ci = candles.findIndex((c) => c.time === t.created);
     const off = Math.max(0, ci + 1 - win);
@@ -922,6 +924,7 @@ function init() {
   const shared = (patch) => { onSettings(patch); renderSettings($('#settings'), settings, onSettings, { mode: params.mode }); };
   $('#btDirection').addEventListener('change', (e) => shared({ direction: e.target.value }));
   $('#btStructTpl').addEventListener('change', (e) => shared({ structTpl: e.target.value === '1' }));
+  $('#btFibMarket').addEventListener('change', (e) => shared({ fibMarket: e.target.value }));
   // Tarayıcı sayfasında başka sekmede değişirse (ör. 🧩 Sadece şablon) burada da güncellenir
   window.addEventListener('storage', () => { settings = loadSettings(); renderSettings($('#settings'), settings, onSettings, { mode: params.mode }); syncShared(); });
   for (const b of document.querySelectorAll('#tf button')) {
@@ -935,7 +938,7 @@ function init() {
     el.hidden = !el.hidden;
     $('#settingsBtn').setAttribute('aria-expanded', String(!el.hidden));
   });
-  $('#mode').addEventListener('change', () => { renderSettings($('#settings'), settings, onSettings, { mode: params.mode }); document.body.classList.toggle('mode-triangle', params.mode === 'triangle'); document.body.classList.toggle('mode-abcde', params.mode === 'abcde'); document.body.classList.toggle('mode-diagonal', params.mode === 'diagonal'); });
+  $('#mode').addEventListener('change', () => { renderSettings($('#settings'), settings, onSettings, { mode: params.mode }); document.body.classList.toggle('mode-triangle', params.mode === 'triangle'); document.body.classList.toggle('mode-abcde', params.mode === 'abcde'); document.body.classList.toggle('mode-diagonal', params.mode === 'diagonal'); document.body.classList.toggle('mode-fib', params.mode === 'fib'); });
   $('#runBtn').addEventListener('click', run);
   $('#stopBtn').addEventListener('click', () => { running?.ctrl.abort(); running?.pool.terminate(); });
   $('#exportBtn').addEventListener('click', exportRuns);

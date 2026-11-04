@@ -123,8 +123,12 @@ ortasına limit emir. Yön itkinin yönü. Formül dalga-3'teki ★ Mükemmel il
   B, A'nın %38,2–100'ünü geri almış, bölge A'nın ötesinde ve itkinin başından önce.
 - Stop itkinin %88,6'sı + tampon (Ayarlar'da itkinin başı da seçilebilir). H1 = itki ucu, H2 = itki ucu + 0,272 × itki.
 - Ayarlar → Oranlar: sadece 0,618 × 1,272 (varsayılan) ya da tüm çiftler (0,5 / 0,618 / 0,786 × 1,272 / 1,382 / 1,618).
-- B henüz oluşurken kurulum çıkmaz: B oynadıkça seviye de oynar. Kaynak sitede bu aşamada da görünür, ayrıca o site başka
-  bir coin listesi kullanır; bu yüzden listeler birebir aynı olmaz.
+- **Veri:** araç çubuğunda (Ayarlar'da da) **OKX spot** (varsayılan) ya da **OKX vadeli**. Vadelide coin listesi USDT vadeli
+  sözleşmelerin hacmine göre sıralanır, mumlar `-USDT-SWAP` paritesinden gelir, backtest de aynı veriyi kullanır. Seçim
+  yalnızca bu moda aittir: başka moda geçince tarama yeniden spot mumlarla yapılır. Vadeli işlemin fonlama maliyeti
+  backtest'e dahil değildir.
+- B henüz oluşurken kurulum çıkmaz: B oynadıkça seviye de oynar. Kaynak sitede bu aşamada da görünür ve kaynak site coin
+  başına tek kurulum seçer; bu yüzden aynı veriyle de listeler birebir aynı olmaz.
 - Giriş hep limit; Genel → Yön ayarı uygulanır; SMT etiketi yoktur. Diğer modların sonuçları değişmez.
 
 Backtest (20 coin, ikinci hedefte çıkış; 4H 1 yıl komisyon %0,1, 15m 3 ay vadeli komisyon %0,035). R ve PF:
@@ -140,6 +144,18 @@ Backtest (20 coin, ikinci hedefte çıkış; 4H 1 yıl komisyon %0,1, 15m 3 ay v
 
 İki zaman diliminde tutarlı bir üstünlük yok: 0,618×1,272 4H'de negatif, tüm çiftlerde yönler ters (4H'de short, 15m'de long kazanıyor)
 ve işlem sayıları az. Bu mod bir "bakılacak yer" olarak düşünülmeli; aynı yönde tutarlı sonuç dalga-3 limit long'da.
+
+Aynı coinler, aynı dönem ve aynı komisyonla OKX vadeli mumları (fonlama hariç):
+
+| | 4H hepsi | 4H long | 4H short | 15m hepsi | 15m long | 15m short |
+|---|---|---|---|---|---|---|
+| Fib 0,618×1,272, stop %88,6 | 42 · +2,7R · 1,09 | 14 · −0,3R · 0,97 | 28 · +3,0R · 1,15 | 189 · +22,2R · 1,17 | 103 · +9,1R · 1,12 | 86 · +13,1R · 1,23 |
+| Fib 0,618×1,272, stop itki başı | 19 · −1,0R · 0,93 | 6 · +0,2R · 1,06 | 13 · −1,2R · 0,87 | 93 · +29,8R · 1,60 | 54 · +25,9R · 1,95 | 39 · +3,9R · 1,18 |
+| Fib tüm çiftler, stop %88,6 | 108 · +15,3R · 1,17 | 51 · −19,3R · 0,60 | 57 · +34,6R · 1,85 | 589 · +15,1R · 1,03 | 303 · +38,4R · 1,15 | 286 · −23,3R · 0,91 |
+| Fib tüm çiftler, stop itki başı | 81 · +18,3R · 1,32 | 40 · −5,7R · 0,83 | 41 · +24,0R · 1,97 | 486 · +26,3R · 1,07 | 253 · +54,0R · 1,29 | 233 · −27,7R · 0,85 |
+
+Vadeli biraz daha iyi görünüyor, ama aynı kuralın 4H'de −6,8R'den +2,7R'ye dönmesi 40 küsur işlemde sonucun ne kadar
+oynak olduğunu da gösterir; belirgin bir üstünlük sayılmaz.
 
 ## Senaryo okları
 

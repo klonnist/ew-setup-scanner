@@ -51,7 +51,7 @@ export function watchCard(item, evals, { selected, price }) {
 
 export function watchDetail(item, evals, { price }) {
   const ref = price ?? item.priceAtSave;
-  const tv = `https://www.tradingview.com/chart/?symbol=OKX%3A${encodeURIComponent(item.coin)}USDT`;
+  const tv = `https://www.tradingview.com/chart/?symbol=OKX%3A${encodeURIComponent(item.coin)}USDT${item.instId?.endsWith('-SWAP') ? '.P' : ''}`;
   const plans = item.plans.map((p, i) => {
     const ev = evals?.[i];
     const rows = [

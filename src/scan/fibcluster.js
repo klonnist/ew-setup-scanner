@@ -14,7 +14,11 @@ export const FIB_DEFAULTS = {
   fibBMin: 0.382, // B, A'yı en az bu oranda geri almalı
   fibBMax: 1, // en fazla bu oranda
   fibStop: 'r886', // 'r886': itkinin %88,6'sı | 'w0': itkinin başı
+  fibMarket: 'spot', // 'spot' | 'swap': OKX USDT vadeli (coin listesi ve mumlar); yalnızca bu modda geçerli
 };
+
+/** Taramanın mum ve coin listesini aldığı piyasa: vadeli yalnızca fib modunda seçilebilir, diğer modlar hep spot. */
+export const marketOf = (o) => (o.mode === 'fib' && o.fibMarket === 'swap' ? 'swap' : 'spot');
 
 const GOLDEN = [[0.618, 1.272]];
 const ALL_PAIRS = [0.5, 0.618, 0.786].flatMap((r) => [1.272, 1.382, 1.618].map((e) => [r, e]));

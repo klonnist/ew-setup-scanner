@@ -134,42 +134,45 @@ export async function getCandles(instId, tf, count = 300, opts = {}) {
   return splitLive(out);
 }
 
+/** Parite kimliği. market: 'spot' (BTC-USDT) | 'swap' (USDT vadeli, BTC-USDT-SWAP). */
+export const instIdOf = (coin, market = 'spot') => (market === 'swap' ? `${coin}-USDT-SWAP` : `${coin}-USDT`);
+
 /**
- * Tüm spot tickerlar → 24 saatlik USDT hacmine göre sıralı USDT pariteleri (stablecoinler hariç).
+ * Tüm tickerlar → 24 saatlik USDT hacmine göre sıralı USDT pariteleri (stablecoinler hariç).
  * cryptoIds verilirse yalnızca o kümedeki pariteler alınır (tokenize hisse / altın hariç tutmak için).
  * @returns {{instId:string, coin:string, last:number, volUsd:number, change24h:number}[]}
  */
-export function rankByVolume(tickers, quote = 'USDT', cryptoIds = null) {
+export function rankByVolume(tickers, quote = 'USDT', cryptoIds = null, market = 'spot') {
   const out = [];
   for (const t of tickers) {
-    const [base, q, extra] = String(t.instId).split('-');
-    if (q !== quote || extra || STABLES.has(base)) continue;
+    const [base, q, ...rest] = String(t.instId).split('-');
+    if (q !== quote || rest.join('-') !== (market === 'swap' ? 'SWAP' : '') || STABLES.has(base)) continue;
     if (cryptoIds && !cryptoIds.has(t.instId)) continue;
     const last = +t.last, open = +t.open24h;
-    // Spotta volCcy24h kote para (USDT) cinsindendir.
-    const volUsd = +t.volCcy24h;
+    // Spotta volCcy24h kote para (USDT) cinsindendir; vadelide baz coin cinsindendir, USDT hacmi = adet × son fiyat.
+    const volUsd = market === 'swap' ? +t.volCcy24h * last : +t.volCcy24h;
     if (!(last > 0) || !Number.isFinite(volUsd)) continue;
     out.push({ instId: t.instId, coin: base, last, volUsd, change24h: open > 0 ? last / open - 1 : 0 });
   }
   return out.sort((a, b) => b.volUsd - a.volUsd);
 }
 
-let cryptoPromise = null;
-/** OKX instCategory '1' = kripto; '3' tokenize hisse (xStocks), '4' emtia (XAUT, PAXG). */
-export function getCryptoInstIds(opts = {}) {
-  if (!cryptoPromise) {
+const cryptoPromises = {};
+/** OKX instCategory '1' = kripto; '3' tokenize hisse (xStocks), '4' emtia (XAUT, PAXG). Vadelide yalnızca USDT'li (linear) sözleşmeler. */
+export function getCryptoInstIds(opts = {}, market = 'spot') {
+  if (!cryptoPromises[market]) {
     // Paylaşılan önbellek: çağıranın iptal sinyaline bağlanmaz (iptal edilen bir tarama sonrakini bozmasın).
-    cryptoPromise = okxGet('/api/v5/public/instruments', { instType: 'SPOT' }, { onRetry: opts.onRetry })
-      .then((list) => new Set(list.filter((x) => x.state === 'live' && (x.instCategory ?? '1') === '1').map((x) => x.instId)));
-    cryptoPromise.catch(() => { cryptoPromise = null; });
+    cryptoPromises[market] = okxGet('/api/v5/public/instruments', { instType: market === 'swap' ? 'SWAP' : 'SPOT' }, { onRetry: opts.onRetry })
+      .then((list) => new Set(list.filter((x) => x.state === 'live' && (x.instCategory ?? '1') === '1' && (market !== 'swap' || x.ctType === 'linear')).map((x) => x.instId)));
+    cryptoPromises[market].catch(() => { delete cryptoPromises[market]; });
   }
-  return cryptoPromise;
+  return cryptoPromises[market];
 }
 
-export async function getTopCoins(n = 50, opts = {}) {
+export async function getTopCoins(n = 50, opts = {}, market = 'spot') {
   const [data, crypto] = await Promise.all([
-    okxGet('/api/v5/market/tickers', { instType: 'SPOT' }, opts),
-    getCryptoInstIds(opts),
+    okxGet('/api/v5/market/tickers', { instType: market === 'swap' ? 'SWAP' : 'SPOT' }, opts),
+    getCryptoInstIds(opts, market),
   ]);
-  return rankByVolume(data, 'USDT', crypto).slice(0, n);
+  return rankByVolume(data, 'USDT', crypto, market).slice(0, n);
 }

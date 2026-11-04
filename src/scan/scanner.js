@@ -1,10 +1,10 @@
 // Tarama akışı: hacme göre coin listesi → her coin için mumlar → moda göre setup'lar (dalga-3, üçgen, ABCDE üçgen, diagonal ya da fib kesişimi).
-import { getTopCoins, getCandles, TIMEFRAMES } from '../data/okx.js';
+import { getTopCoins, getCandles, instIdOf, TIMEFRAMES } from '../data/okx.js';
 import { findWave3Setups, compareSetups, DEFAULTS } from './wave3.js';
 import { findTriangles, compareTriangles } from './triangle.js';
 import { findAbcde, compareAbcde } from './abcde.js';
 import { findDiagonals, compareDiagonals } from './diagonal.js';
-import { findFibClusters } from './fibcluster.js';
+import { findFibClusters, marketOf } from './fibcluster.js';
 import { tagSmt, refCoinFor, timeIndex, SMT_DEFAULTS } from './smt.js';
 import { openViews, tagConflicts } from './conflict.js';
 
@@ -62,11 +62,12 @@ export async function runScan(settings, hooks = {}) {
   const opts = { ...DEFAULTS, ...settings };
   const net = { signal: hooks.signal, onRetry: hooks.onRetry };
 
+  const market = marketOf(settings);
   let coins;
   if (settings.manualCoins?.length) {
-    coins = settings.manualCoins.map((c) => ({ coin: c, instId: `${c}-USDT` }));
+    coins = settings.manualCoins.map((c) => ({ coin: c, instId: instIdOf(c, market) }));
   } else {
-    coins = await getTopCoins(settings.topN || 50, net);
+    coins = await getTopCoins(settings.topN || 50, net, market);
   }
 
   const results = new Array(coins.length);
@@ -94,5 +95,5 @@ export async function runScan(settings, hooks = {}) {
 
   const setups = results.flatMap((r) => r.setups.map((s) => ({ ...s, coin: r.coin, instId: r.instId })));
   sortSetups(setups, opts);
-  return { tf, coins, results, setups, refs, at: Date.now() };
+  return { tf, market, coins, results, setups, refs, at: Date.now() };
 }

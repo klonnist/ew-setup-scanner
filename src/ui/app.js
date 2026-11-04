@@ -7,6 +7,7 @@ import { pickDiagonals } from '../scan/diagonal.js';
 import { loadSettings, saveSettings, renderSettings, toScanOptions, UI_DEFAULTS } from './settings.js';
 import { drawSetup, drawTriangle, drawAbcde, drawDiagonal, destroyChart, LEGEND, TRI_LEGEND, ABCDE_LEGEND, DIAG_LEGEND, FIB_LEGEND, SCENARIO_LEGEND } from './chart.js';
 import { scenarioPaths } from '../scan/scenario.js';
+import { marketOf } from '../scan/fibcluster.js';
 import { triCard, triDetail, triSummary, triKey } from './triangleView.js';
 import { abcdeCard, abcdeDetail, abcdeSummary, abcdeKey } from './abcdeView.js';
 import { diagCard, diagDetail, diagSummary, diagKey } from './diagonalView.js';
@@ -56,6 +57,7 @@ function syncToolbar() {
   $('#onlyPerfect').checked = !!s.onlyPerfect;
   $('#structTpl').checked = !!s.structTpl;
   $('#showScenario').checked = !!s.showScenario;
+  $('#fibMarket').value = s.fibMarket;
   $('#mode').value = s.mode;
   // Dalga-3'e özgü kontroller üçgen modunda gizlenir
   document.body.classList.toggle('mode-triangle', s.mode === 'triangle');
@@ -72,7 +74,8 @@ function updateSettings(patch) {
   if (patch === null) renderSettings($('#settings'), state.settings, updateSettings);
   if ('autoRefresh' in (patch || {})) setupAutoRefresh();
   if (patch && 'mode' in patch && patch.mode !== prev.mode) renderSettings($('#settings'), state.settings, updateSettings); // seçili modun bölümü açılsın
-  const netChanged = patch === null || NET_KEYS.some((k) => k in patch && String(patch[k]) !== String(prev[k]));
+  // Mumlar piyasaya bağlı: fib + vadeli seçilince ya da bu moddan çıkılınca yeniden indirilir
+  const netChanged = patch === null || NET_KEYS.some((k) => k in patch && String(patch[k]) !== String(prev[k])) || marketOf(prev) !== marketOf(state.settings);
   if (!state.scan) { if (state.busy) scan(); return; } // ilk tarama sürerken değişiklik: yeniden başlat
   if (netChanged) { markStale(); scan(); }
   else recompute();
@@ -312,11 +315,11 @@ function renderSummary() {
   if (isFib()) {
     const active = pickSetups(state.setups, opts);
     $('#summary').innerHTML = `
-      <p><strong>${r.results.length} coin</strong> · ${esc(r.tf.label)} · ${fmtTime(r.at)} ·
+      <p><strong>${r.results.length} coin</strong> · ${r.market === 'swap' ? 'OKX vadeli' : 'OKX spot'} · ${esc(r.tf.label)} · ${fmtTime(r.at)} ·
         <strong>${active.length}</strong> aktif kurulum · ${state.setups.length - active.length} kaçan/bozulan
         ${errors.length ? `<span class="error"> · ${errors.length} coin okunamadı (${esc(errors.slice(0, 4).map((e) => e.coin).join(', '))})</span>` : ''}</p>
-      <p class="note">Bu mod yalnızca oran çakışmasına bakar: Elliott kuralı ve süre şartı yoktur. Backtest'te tutarlı bir üstünlük görülmedi
-        (0,618 × 1,272, ikinci hedef: 4H 1 yıl 47 işlem −6,8R, 15m 3 ay 216 işlem +15,5R).</p>`;
+      <p class="note">Bu mod yalnızca oran çakışmasına bakar: Elliott kuralı ve süre şartı yoktur. Backtest'te belirgin bir üstünlük görülmedi
+        (0,618 × 1,272, ikinci hedef: ${r.market === 'swap' ? '4H 1 yıl 42 işlem +2,7R, 15m 3 ay 189 işlem +22,2R' : '4H 1 yıl 47 işlem −6,8R, 15m 3 ay 216 işlem +15,5R'}).</p>`;
     $('#listTitle').textContent = `Fib kesişimleri (${visibleSetups().length})`;
     return;
   }
@@ -795,13 +798,14 @@ function scenarioFor(s) {
 function fibDetail(s, scenario) {
   const { p0, p1 } = s.points;
   const f = s.fib;
-  const tv = `https://www.tradingview.com/chart/?symbol=OKX%3A${encodeURIComponent(s.coin)}USDT`;
+  const swap = s.instId?.endsWith('-SWAP');
+  const tv = `https://www.tradingview.com/chart/?symbol=OKX%3A${encodeURIComponent(s.coin)}USDT${swap ? '.P' : ''}`;
   return `
     <div class="detail-head">
       <h2>${esc(s.coin)}/USDT</h2>
       <span class="dir ${s.direction}">${dirTxt(s)}</span>
       <span class="chip">Fib ${esc(fibName(f))}</span>
-      <span class="chip">${esc(state.scan.tf.id)} · derece ${s.sensitivity}×ATR</span>
+      <span class="chip">${swap ? 'Vadeli' : 'Spot'} · ${esc(state.scan.tf.id)} · derece ${s.sensitivity}×ATR</span>
       ${originChip(s)}${conflictChip(s)}
       <a class="ext" href="${tv}" target="_blank" rel="noopener">TradingView'de aç ↗</a>
     </div>
@@ -924,6 +928,7 @@ function init() {
   $('#ruleSet').addEventListener('change', (e) => updateSettings({ ruleSet: e.target.value }));
   $('#entryType').addEventListener('change', (e) => updateSettings({ entryType: e.target.value }));
   $('#mode').addEventListener('change', (e) => { state.selected = null; updateSettings({ mode: e.target.value }); });
+  $('#fibMarket').addEventListener('change', (e) => { state.selected = null; updateSettings({ fibMarket: e.target.value }); renderSettings($('#settings'), state.settings, updateSettings); });
   $('#onlyPerfect').addEventListener('change', (e) => updateSettings({ onlyPerfect: e.target.checked }));
   $('#structTpl').addEventListener('change', (e) => { updateSettings({ structTpl: e.target.checked }); renderSettings($('#settings'), state.settings, updateSettings); });
   $('#showAll').addEventListener('change', (e) => { state.settings.showAll = e.target.checked; saveSettings(state.settings); if (state.scan) render(); });
