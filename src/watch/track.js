@@ -164,12 +164,12 @@ export function snapshot(s, candles, ctx) {
     key: fib
       ? `${s.coin}|${ctx.tf.id}|fib|${s.direction}|${tAt(s.points.p0.i)}|${tAt(s.points.p1.i)}|${tAt(s.abc.A.i)}|${tAt(s.abc.B.i)}${swap ? '|swap' : ''}`
       : `${s.coin}|${ctx.tf.id}|w3|${s.direction}|${tAt(s.points.p0.i)}|${tAt(s.points.p1.i)}`,
-    title: fib ? `Fib kesişimi${swap ? ' · vadeli' : ''} · ${s.cDone ? 'C tamam' : 'C oluşuyor'}`
+    title: fib ? `Fib kesişimi${swap ? ' · vadeli' : ''} · ${s.stateLabel}`
       : `${s.phase === 'forming' ? (s.cDone ? 'C tamam · dalga 3 başlıyor' : 'Dalga 2 sürüyor') : 'Dalga 2 tamam'}${z?.perfect ? ' · ★ mükemmel' : ''}`,
     points: [
       pt(s.points.p0, fib ? 'İtki başı' : '0'), pt(s.points.p1, fib ? 'İtki ucu' : '1'),
-      ...(s.abc ? [pt(s.abc.A, 'A'), pt(s.abc.B, 'B')] : []),
-      pt(p2, s.phase === 'forming' ? 'C?' : '2'),
+      ...(s.abc ? [pt(s.abc.A, 'A'), pt(s.abc.B, s.bForming ? 'B?' : 'B')] : []),
+      ...(p2 ? [pt(p2, s.phase === 'forming' ? 'C?' : '2')] : []),
     ],
     lines: [{ price: s.points.p0.price, kind: 'inval', title: fib ? 'İtki başı' : '0 / geçersiz' }],
     plans,

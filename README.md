@@ -127,8 +127,12 @@ ortasına limit emir. Yön itkinin yönü. Formül dalga-3'teki ★ Mükemmel il
   sözleşmelerin hacmine göre sıralanır, mumlar `-USDT-SWAP` paritesinden gelir, backtest de aynı veriyi kullanır. Seçim
   yalnızca bu moda aittir: başka moda geçince tarama yeniden spot mumlarla yapılır. Vadeli işlemin fonlama maliyeti
   backtest'e dahil değildir.
-- B henüz oluşurken kurulum çıkmaz: B oynadıkça seviye de oynar. Kaynak sitede bu aşamada da görünür ve kaynak site coin
-  başına tek kurulum seçer; bu yüzden aynı veriyle de listeler birebir aynı olmaz.
+- **B oluşurken de göster** (liste üstünde kutu, Ayarlar'da da; varsayılan kapalı): normalde B onaylanmadan kurulum çıkmaz,
+  çünkü B oynadıkça C seviyesi ve giriş de oynar. Açılınca son üç onaylı nokta + oluşan uçla kurulum listelenir, kartta
+  "B oluşuyor" yazar. Canlı mum B'yi geçerse kurulum, mum kapanıp yeni B belli olana kadar gizlenir. Kaynak sitede bu aşama
+  hep görünür.
+- **Min. R:R** (Ayarlar → Fib kesişimi, varsayılan 2, 0 = filtre yok): yalnızca bu modun filtresidir, Dalga-3 ayarından bağımsızdır.
+- Kaynak site coin başına tek kurulum seçer ve geçmiş dolumlara bakmaz; bu yüzden aynı ayarlarla da listeler birebir aynı olmaz.
 - Giriş hep limit; Genel → Yön ayarı uygulanır; SMT etiketi yoktur. Diğer modların sonuçları değişmez.
 
 Backtest (20 coin, ikinci hedefte çıkış; 4H 1 yıl komisyon %0,1, 15m 3 ay vadeli komisyon %0,035). R ve PF:
@@ -156,6 +160,23 @@ Aynı coinler, aynı dönem ve aynı komisyonla OKX vadeli mumları (fonlama har
 
 Vadeli biraz daha iyi görünüyor, ama aynı kuralın 4H'de −6,8R'den +2,7R'ye dönmesi 40 küsur işlemde sonucun ne kadar
 oynak olduğunu da gösterir; belirgin bir üstünlük sayılmaz.
+
+İki seçeneğin etkisi (stop %88,6, ikinci hedef, iki yön, aynı coin ve dönem). Backtest'te oluşan B yükseldikçe yeni emir
+verilir, fiyat eski B'yi geçince eski emir iptal olur; yani emrin elle güncellendiği varsayılır.
+
+| | B bekle, R:R 2 (varsayılan) | B bekle, R:R 0 | B oluşurken, R:R 2 | B oluşurken, R:R 0 |
+|---|---|---|---|---|
+| 4H spot, 0,618×1,272 | 47 · −6,8R · 0,82 | 47 · −6,8R · 0,82 | 53 · −13,2R · 0,70 | 53 · −13,2R · 0,70 |
+| 4H vadeli, 0,618×1,272 | 42 · +2,7R · 1,09 | 42 · +2,7R · 1,09 | 50 · −2,0R · 0,95 | 50 · −2,0R · 0,95 |
+| 4H spot, tüm çiftler | 103 · +18,9R · 1,23 | 126 · +15,1R · 1,15 | 111 · +19,2R · 1,21 | 136 · +15,2R · 1,14 |
+| 4H vadeli, tüm çiftler | 108 · +15,3R · 1,17 | 127 · +8,0R · 1,08 | 119 · +15,7R · 1,16 | 141 · +10,9R · 1,10 |
+| 15m spot, 0,618×1,272 | 216 · +15,5R · 1,10 | 216 · +15,5R · 1,10 | 258 · +4,2R · 1,02 | 258 · +4,2R · 1,02 |
+| 15m vadeli, 0,618×1,272 | 189 · +22,2R · 1,17 | 189 · +22,2R · 1,17 | 232 · +17,2R · 1,10 | 232 · +17,2R · 1,10 |
+| 15m spot, tüm çiftler | 643 · −15,3R · 0,97 | 739 · −18,6R · 0,97 | 723 · −61,4R · 0,91 | 827 · −60,2R · 0,92 |
+| 15m vadeli, tüm çiftler | 589 · +15,1R · 1,03 | 673 · +6,8R · 1,01 | 681 · +1,8R · 1,00 | 776 · −2,9R · 1,00 |
+
+İki seçenek listeyi kaynak siteye yaklaştırır ama sonucu iyileştirmez: R:R 2 ile B oluşurken giriş 8 satırın 6'sında düşürdü,
+2'sinde (4H tüm çiftler) neredeyse aynı kaldı. R:R filtresini kapatmak 4 satırda düşürdü, 0,618×1,272 satırlarında değiştirmedi.
 
 ## Senaryo okları
 

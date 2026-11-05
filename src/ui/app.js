@@ -44,7 +44,7 @@ const isAbc = () => state.settings.mode === 'abcde';
 const isDiag = () => state.settings.mode === 'diagonal';
 const isFib = () => state.settings.mode === 'fib';
 const LONG_KINDS = new Set(['triangle', 'abcde', 'diagonal']); // 600 mumluk pencerede bulunanlar
-const fibKey = (s) => `${s.coin}|${s.direction}|fib|${s.points.p0.price}|${s.points.p1.price}|${s.abc.A.price}|${s.abc.B.price}`;
+const fibKey = (s) => `${s.coin}|${s.direction}|fib|${s.points.p0.price}|${s.points.p1.price}|${s.abc.A.price}|${s.bForming ? 'B?' : s.abc.B.price}`; // oluşan B oynar: kart seçili kalır, bildirim tekrarlamaz
 const setupKey = (s) => (s.kind === 'triangle' ? triKey(s) : s.kind === 'abcde' ? abcdeKey(s) : s.kind === 'diagonal' ? diagKey(s) : s.kind === 'fib' ? fibKey(s) : `${s.coin}|${s.direction}|${s.phase}|${s.points.p0.price}|${s.points.p1.price}`);
 
 // ------------------------------------------------------------------ araç çubuğu
@@ -58,6 +58,7 @@ function syncToolbar() {
   $('#structTpl').checked = !!s.structTpl;
   $('#showScenario').checked = !!s.showScenario;
   $('#fibMarket').value = s.fibMarket;
+  $('#fibFormingB').checked = !!s.fibFormingB;
   $('#mode').value = s.mode;
   // Dalga-3'e özgü kontroller üçgen modunda gizlenir
   document.body.classList.toggle('mode-triangle', s.mode === 'triangle');
@@ -314,9 +315,11 @@ function renderSummary() {
   const errors = r.results.filter((x) => x.error);
   if (isFib()) {
     const active = pickSetups(state.setups, opts);
+    const loose = pickSetups(state.setups, { ...opts, fibMinRR: 0 }).length;
+    const nFormingB = active.filter((s) => s.bForming).length;
     $('#summary').innerHTML = `
       <p><strong>${r.results.length} coin</strong> · ${r.market === 'swap' ? 'OKX vadeli' : 'OKX spot'} · ${esc(r.tf.label)} · ${fmtTime(r.at)} ·
-        <strong>${active.length}</strong> aktif kurulum · ${state.setups.length - active.length} kaçan/bozulan
+        <strong>${active.length}</strong> aktif kurulum${nFormingB ? ` (${nFormingB} tanesinde B oluşuyor)` : ''} · ${state.setups.length - loose} kaçan/bozulan${loose > active.length ? ` · ${loose - active.length} tanesi R:R &lt; ${opts.fibMinRR} olduğu için gizli` : ''}
         ${errors.length ? `<span class="error"> · ${errors.length} coin okunamadı (${esc(errors.slice(0, 4).map((e) => e.coin).join(', '))})</span>` : ''}</p>
       <p class="note">Bu mod yalnızca oran çakışmasına bakar: Elliott kuralı ve süre şartı yoktur. Backtest'te belirgin bir üstünlük görülmedi
         (0,618 × 1,272, ikinci hedef: ${r.market === 'swap' ? '4H 1 yıl 42 işlem +2,7R, 15m 3 ay 189 işlem +22,2R' : '4H 1 yıl 47 işlem −6,8R, 15m 3 ay 216 işlem +15,5R'}).</p>`;
@@ -471,6 +474,7 @@ function fibCard(s) {
       <span>Geri çekilme ${fmtPct(s.retr, 1)}${s.cDone ? '' : ' (şu an)'}</span>
       <span>derece ${s.sensitivity}×ATR</span>
     </div>
+    ${s.bForming ? '<p class="note">B henüz bitmedi: giriş seviyesi değişebilir.</p>' : ''}
     ${zoneBlock(s, active)}
   </button>`;
 }
@@ -811,7 +815,7 @@ function fibDetail(s, scenario) {
     </div>
     <div class="chart" id="chart"></div>
     <div class="legend">${legendHtml(FIB_LEGEND, scenario)}</div>
-    <p class="note">Yalnızca oran çakışması: dalga sayımı, Elliott kuralı ve süre şartı kontrol edilmez.</p>
+    <p class="note">Yalnızca oran çakışması: dalga sayımı, Elliott kuralı ve süre şartı kontrol edilmez.${s.bForming ? ' B henüz bitmedi: B oynadıkça C seviyesi ve giriş de değişir, limit emri buna göre güncellemek gerekir.' : ''}</p>
     <div class="facts">
       ${fact('Güncel fiyat', fmtPrice(s.price))}
       ${fact('İtki', `${fmtPrice(p0.price, s.price)} → ${fmtPrice(p1.price, s.price)}`)}
@@ -929,6 +933,7 @@ function init() {
   $('#entryType').addEventListener('change', (e) => updateSettings({ entryType: e.target.value }));
   $('#mode').addEventListener('change', (e) => { state.selected = null; updateSettings({ mode: e.target.value }); });
   $('#fibMarket').addEventListener('change', (e) => { state.selected = null; updateSettings({ fibMarket: e.target.value }); renderSettings($('#settings'), state.settings, updateSettings); });
+  $('#fibFormingB').addEventListener('change', (e) => { updateSettings({ fibFormingB: e.target.checked }); renderSettings($('#settings'), state.settings, updateSettings); });
   $('#onlyPerfect').addEventListener('change', (e) => updateSettings({ onlyPerfect: e.target.checked }));
   $('#structTpl').addEventListener('change', (e) => { updateSettings({ structTpl: e.target.checked }); renderSettings($('#settings'), state.settings, updateSettings); });
   $('#showAll').addEventListener('change', (e) => { state.settings.showAll = e.target.checked; saveSettings(state.settings); if (state.scan) render(); });

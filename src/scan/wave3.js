@@ -632,7 +632,8 @@ export function activePlans(s, opts = {}) {
     && riskOk(s.levels.entry, s.levels.stop, o)) {
     out.push({ type: 'break', rr: s.rr });
   }
-  if (useZone(o) && s.zone && ZONE_ACTIVE.has(s.zone.state) && s.zone.rr >= o.minRR && riskOk(s.zone.entry, s.zone.stop, o)) {
+  const zoneMinRR = s.kind === 'fib' ? (o.fibMinRR ?? o.minRR) : o.minRR; // fib kesişiminin kendi ayarı var
+  if (useZone(o) && s.zone && ZONE_ACTIVE.has(s.zone.state) && s.zone.rr >= zoneMinRR && riskOk(s.zone.entry, s.zone.stop, o)) {
     out.push({ type: 'zone', rr: s.zone.rr });
   }
   return out;

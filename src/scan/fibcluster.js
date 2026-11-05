@@ -15,6 +15,8 @@ export const FIB_DEFAULTS = {
   fibBMax: 1, // en fazla bu oranda
   fibStop: 'r886', // 'r886': itkinin %88,6'sı | 'w0': itkinin başı
   fibMarket: 'spot', // 'spot' | 'swap': OKX USDT vadeli (coin listesi ve mumlar); yalnızca bu modda geçerli
+  fibFormingB: false, // true: B henüz onaylanmadan da kurulum göster (B oynadıkça giriş seviyesi değişir)
+  fibMinRR: 2, // bu modun en düşük R:R'si; 0 = filtre yok
 };
 
 /** Taramanın mum ve coin listesini aldığı piyasa: vadeli yalnızca fib modunda seçilebilir, diğer modlar hep spot. */
@@ -59,26 +61,29 @@ export function findFibClusters(candles, options = {}, live = null) {
     const { pivots, tentative } = zigzag(candles, atrArr, k);
     const n = pivots.length;
     // C oluşuyor: son dört nokta 0-1-A-B. C onaylandı: bir önceki dört nokta (dolan işlem ve kaçan kurulum listede kalır).
-    // B henüz oluşurken kurulum yok: B oynadıkça seviye de oynar, limit emir anlamsız olur.
+    // B henüz oluşurken kurulum varsayılan olarak yok: B oynadıkça seviye de oynar. fibFormingB ile açılır (son üç onaylı nokta + oluşan uç).
     const wins = [];
     if (n >= 4 && tentative) wins.push({ pts: pivots.slice(n - 4), C: tentative, done: false });
     if (n >= 5) wins.push({ pts: pivots.slice(n - 5, n - 1), C: pivots[n - 1], done: true });
-    for (const { pts, C, done } of wins) {
+    if (opts.fibFormingB && n >= 3 && tentative) wins.push({ pts: [...pivots.slice(n - 3), tentative], C: tentative, done: false, bForming: true });
+    for (const { pts, C, done, bForming } of wins) {
       const key = pts.map((p) => p.i).join('-');
       if (seen.has(key)) continue;
       seen.add(key);
-      const s = evaluate({ candles, atrArr, pivots, pts, C, done, k, opts, live, price });
+      const s = evaluate({ candles, atrArr, pivots, pts, C, done, bForming, k, opts, live, price });
       if (s) out.push(s);
     }
   }
   return out;
 }
 
-function evaluate({ candles, atrArr, pivots, pts, C, done, k, opts, live, price }) {
+function evaluate({ candles, atrArr, pivots, pts, C, done, bForming = false, k, opts, live, price }) {
   const [P0, P1, A, B] = pts;
   const d = P1.price > P0.price ? 1 : -1;
   const direction = d === 1 ? 'long' : 'short';
   if (opts.direction !== 'both' && opts.direction !== direction) return null;
+  // Canlı mum oluşan B'yi geçtiyse seviyeler eskidi: mum kapanınca yeni B ile yeniden hesaplanır
+  if (bForming && live && d * ((d === 1 ? live.high : live.low) - B.price) > 0) return null;
   // ATR B'de sabitlenir: seviyeler değişmediği için kurulum sonraki mumlarda ATR oynadı diye kaybolmaz
   const atr = atrArr[B.i];
   const pair = fibPairOf(P0, P1, A, B, atr, opts);
@@ -96,6 +101,7 @@ function evaluate({ candles, atrArr, pivots, pts, C, done, k, opts, live, price 
     kind: 'fib',
     phase: 'forming',
     cDone: done,
+    bForming,
     w1q: w1Quality(candles, atrArr, P0, P1),
     origin: originOf(pivots, P0, P1, d),
     textbook: null,
@@ -104,10 +110,10 @@ function evaluate({ candles, atrArr, pivots, pts, C, done, k, opts, live, price 
     direction,
     d,
     sensitivity: k,
-    points: { p0: P0, p1: P1, p2: null, cNow: { i: C.i, price: C.price, type: C.type } },
+    points: { p0: P0, p1: P1, p2: null, cNow: bForming ? null : { i: C.i, price: C.price, type: C.type } },
     abc: { kind: 'fib', label: 'Fib kesişimi', A, B, results: [], score: 0 },
     impulse: { label: 'İtki', results: [], score: 0 },
-    retr: (d * (P1.price - C.price)) / L,
+    retr: (d * (P1.price - (bForming ? A : C).price)) / L, // B oluşurken en derin geri çekilme A'dır
     timeRatio: D2 / (D1 || 1),
     timeOk: true,
     durations: { D1, D2 },
@@ -118,7 +124,7 @@ function evaluate({ candles, atrArr, pivots, pts, C, done, k, opts, live, price 
     price,
     rr: 0,
     state: 'forming',
-    stateLabel: done ? 'C tamam' : 'C oluşuyor',
+    stateLabel: bForming ? 'B oluşuyor' : done ? 'C tamam' : 'C oluşuyor',
     barsSince2: null,
     // Sıralama için: önce 0,618 × 1,272, sonra fiyata yakınlık
     score: (golden ? 50 : 30) + Math.max(0, 50 - Math.round((5 * Math.abs(price - zone.confluence)) / atr)),

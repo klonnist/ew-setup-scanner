@@ -97,8 +97,8 @@ export function drawSetup(el, candles, live, s, show = { showBreak: true, showZo
   const pts = [
     { p: p0, label: fib ? 'İtki başı' : '0' },
     { p: p1, label: fib ? 'İtki ucu' : '1' },
-    ...(s.abc ? [{ p: s.abc.A, label: 'A' }, { p: s.abc.B, label: 'B' }] : []),
-    { p: p2, label: s.phase === 'forming' ? 'C?' : s.abc ? '2 (C)' : '2' },
+    ...(s.abc ? [{ p: s.abc.A, label: 'A' }, { p: s.abc.B, label: s.bForming ? 'B?' : 'B' }] : []),
+    ...(p2 ? [{ p: p2, label: s.phase === 'forming' ? 'C?' : s.abc ? '2 (C)' : '2' }] : []), // B oluşurken C yok
   ];
   const path = chart.addSeries(LW.LineSeries, {
     color: C.wave, lineWidth: 2, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,

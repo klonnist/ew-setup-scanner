@@ -148,3 +148,82 @@ test('backtest: fib modunda limit emir dolar, H1 itki ucunda kapanır', () => {
   assert.equal(t.dir, 'long');
   assert.equal(t.outcome, 'hedef');
 });
+
+// ---------------------------------------------------------------- B oluşurken
+// Mumlar B'nin yükselişinde biter: 0, 1, A onaylı, B henüz onaylı değil.
+const B_OPEN = build(IMPULSE);
+
+test('B oluşurken: varsayılan kapalı, seçenekle kurulum çıkar', () => {
+  assert.equal(findFibClusters(B_OPEN, OPTS).length, 0);
+  const list = findFibClusters(B_OPEN, { ...OPTS, fibFormingB: true });
+  assert.equal(list.length, 1);
+  const s = list[0];
+  assert.equal(s.bForming, true);
+  assert.equal(s.stateLabel, 'B oluşuyor');
+  assert.equal(s.direction, 'long');
+  assert.equal(s.points.cNow, null);
+  assert.equal(s.zone.state, 'waiting');
+  near(s.fib.lvR, 200.3 - 0.618 * (200.3 - 99.7));
+  near(s.fib.lvC, s.abc.B.price - 1.272 * (200.3 - 159.7));
+  near(s.retr, (200.3 - 159.7) / (200.3 - 99.7));
+});
+
+test('B oluşurken: B yükseldikçe C seviyesi de yükselir', () => {
+  const lvC = (end) => findFibClusters(build([...IMPULSE.slice(0, 4), [end, 160 + (end - 62) * 3]]), { ...OPTS, fibFormingB: true }).find((s) => s.bForming)?.fib.lvC;
+  const a = lvC(71), b = lvC(72);
+  assert.ok(a != null && b != null);
+  near(b - a, 3, 1e-6);
+});
+
+test('B oluşurken: seçenek açıkken B onaylı kurulum aynı kalır', () => {
+  const off = findFibClusters(FORMING, OPTS);
+  const on = findFibClusters(FORMING, { ...OPTS, fibFormingB: true }).filter((s) => !s.bForming);
+  assert.deepEqual(on, off);
+});
+
+test("B oluşurken: canlı mum B'yi geçtiyse seviye eski, kurulum gösterilmez", () => {
+  const B = Math.max(...B_OPEN.slice(62).map((c) => c.high));
+  const live = (high) => ({ ...B_OPEN[B_OPEN.length - 1], time: 72 * 3600e3, high, low: high - 1, close: high - 0.5 });
+  assert.equal(findFibClusters(B_OPEN, { ...OPTS, fibFormingB: true }, live(B - 0.5)).length, 1);
+  assert.equal(findFibClusters(B_OPEN, { ...OPTS, fibFormingB: true }, live(B + 1)).length, 0);
+});
+
+test('B oluşurken: short aynalı', () => {
+  const s = findFibClusters(mirror(B_OPEN, 300), { ...OPTS, fibFormingB: true })[0];
+  assert.equal(s.direction, 'short');
+  assert.equal(s.bForming, true);
+});
+
+test('B oluşurken: takip kaydında C yok, B? etiketi var', () => {
+  const s = { ...findFibClusters(B_OPEN, { ...OPTS, fibFormingB: true })[0], coin: 'X', instId: 'X-USDT' };
+  const snap = snapshot(s, B_OPEN, { tf: { id: '4H', ms: 3600e3 }, mode: 'fib', now: 1 });
+  assert.deepEqual(snap.points.map((p) => p.label), ['İtki başı', 'İtki ucu', 'A', 'B?']);
+  assert.match(snap.title, /B oluşuyor/);
+});
+
+test('backtest: kapalıyken B oluşurken emir verilmez; açıkken daha erken verilir', () => {
+  const candles = build([...IMPULSE, [90, 136], [130, 210]]);
+  const run = (o) => backtestCoin(candles, { from: candles[60].time, to: candles[candles.length - 1].time, exitTarget: 0, opts: { ...OPTS, mode: 'fib', ...o } }).trades;
+  const off = run({}), on = run({ fibFormingB: true });
+  assert.ok(off.length >= 1 && on.length >= 1);
+  assert.ok(Math.min(...on.map((t) => t.created)) < Math.min(...off.map((t) => t.created)), 'emir B onaylanmadan verilmeli');
+});
+
+// ---------------------------------------------------------------- fibMinRR
+test("fibMinRR: yalnızca fib kurulumuna uygulanır, Dalga-3 min R:R fib'i etkilemez", () => {
+  const s = findFibClusters(FORMING, OPTS)[0];
+  const rr = s.zone.rr;
+  const P = { entryType: 'zone' };
+  assert.equal(activePlans(s, { ...P, fibMinRR: rr + 1 }).length, 0);
+  assert.equal(activePlans(s, { ...P, fibMinRR: rr + 1, minRR: 0 }).length, 0, 'dalga-3 ayarı fib filtresini açmaz');
+  assert.equal(activePlans(s, { ...P, fibMinRR: 0, minRR: rr + 1 }).length, 1, 'dalga-3 ayarı fib filtresini kapatmaz');
+  const w = { ...s, kind: 'wave3' };
+  assert.equal(activePlans(w, { ...P, fibMinRR: 0, minRR: rr + 1 }).length, 0, 'dalga-3 kurulumu kendi ayarını kullanır');
+});
+
+test('fibMinRR: backtest de bu ayarı kullanır', () => {
+  const candles = build([...IMPULSE, [90, 136], [130, 210]]);
+  const run = (o) => backtestCoin(candles, { from: candles[60].time, to: candles[candles.length - 1].time, exitTarget: 0, opts: { ...OPTS, mode: 'fib', ...o } }).trades;
+  assert.ok(run({}).length >= 1);
+  assert.equal(run({ fibMinRR: 99 }).length, 0);
+});

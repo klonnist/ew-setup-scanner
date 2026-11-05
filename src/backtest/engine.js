@@ -114,7 +114,7 @@ export function backtestCoin(candles, cfg) {
           }
         }
       }
-      if (useZone && s.phase === 'forming' && s.zone && s.zone.rr >= opts.minRR && riskOk(s.zone.entry, s.zone.stop, opts)) {
+      if (useZone && s.phase === 'forming' && s.zone && s.zone.rr >= (fibMode ? (opts.fibMinRR ?? opts.minRR) : opts.minRR) && riskOk(s.zone.entry, s.zone.stop, opts)) {
         const key = `Z|${base}|${abs(s.abc.A)}|${abs(s.abc.B)}`;
         if (seen.has(key)) {
           const o = zoneOrders.get(key);

@@ -272,7 +272,7 @@ const SETTING_KEYS = ['ruleSet', 'sensitivities', 'w1Extend', 'retrMin', 'retrMa
   'triType', 'triContext', 'flatAtr', 'minTops', 'minBottoms', 'minWidthBars', 'triTarget', 'triMinRR',
   'abcdeEntry', 'eRetr', 'innerAbc', 'w3Check', 'abcdeVariant', 'abcdeSens', 'abcdeStopAtr', 'abcdeTarget', 'abcdeMinRR',
   'diagType', 'diagShape', 'diagSens', 'diagW4Entry', 'diagW2Min', 'diagExpMax', 'diagRetr', 'diagStopAtr', 'diagEndTarget', 'diagLeadTarget', 'diagMinRR', 'diagBook',
-  'fibMarket', 'fibPairs', 'fibSens', 'fibTolAtr', 'fibMinImpulseAtr', 'fibBMin', 'fibBMax', 'fibStop', 'smtRef', 'smtWin', 'smtOnly'];
+  'fibMarket', 'fibFormingB', 'fibMinRR', 'fibPairs', 'fibSens', 'fibTolAtr', 'fibMinImpulseAtr', 'fibBMin', 'fibBMax', 'fibStop', 'smtRef', 'smtWin', 'smtOnly'];
 const TRI_TARGET_TXT = { mm: 'ölçülü hareket', f382: '%38,2', f50: '%50', f618: '%61,8', f786: '%78,6', f100: '%100' };
 function pickSettings(o) { return Object.fromEntries(SETTING_KEYS.map((k) => [k, o[k]])); }
 
@@ -306,7 +306,8 @@ function settingsText(p) {
       s.fibMarket === 'swap' ? 'OKX vadeli' : 'OKX spot',
       s.fibPairs === 'all' ? 'tüm oran çiftleri' : '0,618 × 1,272',
       s.fibStop === 'w0' ? 'stop itki başı' : 'stop %88,6',
-      `fark ≤ ${s.fibTolAtr} ATR`, `min R:R ${s.minRR}`, `H${p.exitTarget + 1}`, `kom. %${p.feePct}`,
+      ...(s.fibFormingB ? ['B oluşurken de'] : []),
+      `fark ≤ ${s.fibTolAtr} ATR`, `min R:R ${s.fibMinRR ?? s.minRR}`, `H${p.exitTarget + 1}`, `kom. %${p.feePct}`,
       ...(s.direction && s.direction !== 'both' ? [s.direction === 'long' ? 'sadece long' : 'sadece short'] : []),
     ].join(' · ');
   }

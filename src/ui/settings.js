@@ -147,6 +147,8 @@ const FIELDS = [
 
   // Fib kesişimi
   ['fibMarket', 'Veri', 'select', { group: 'fib', options: [['spot', 'OKX spot'], ['swap', 'OKX vadeli (USDT)']], hint: 'Coin listesi ve mumlar. Yalnızca bu mod için; diğer modlar her zaman spot kullanır.' }],
+  ['fibFormingB', 'B oluşurken de göster', 'bool', { group: 'fib', hint: "B bitmeden kurulum listelenir. B oynadıkça giriş seviyesi de değişir; limit emri buna göre güncellemek gerekir. Backtest'te sonucu iyileştirmedi." }],
+  ['fibMinRR', 'Min. R:R', 'number', { group: 'fib', step: 0.25, min: 0, hint: '0 = filtre yok. Yalnızca bu mod; Dalga-3 ayarından bağımsız.' }],
   ['fibPairs', 'Oranlar', 'select', { group: 'fib', options: [['golden', 'Sadece 0,618 × 1,272'], ['all', 'Tüm çiftler (0,5 / 0,618 / 0,786 × 1,272 / 1,382 / 1,618)']] }],
   ['fibStop', 'Stop yeri', 'select', { group: 'fib', options: [['r886', 'İtkinin %88,6 geri çekilmesi'], ['w0', 'İtkinin başı (0 noktası)']], hint: 'Tampon: Dalga-3 bölümündeki stop tamponu.' }],
   ['fibTolAtr', 'İki seviye farkı en fazla (× ATR)', 'number', { group: 'fib', step: 0.05, min: 0 }],
