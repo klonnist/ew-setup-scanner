@@ -11,6 +11,9 @@ export const WATCH_STATE = {
   invalid: 'Bozuldu (giriş öncesi)',
   expired: 'Süre doldu',
 };
+/** Yüzdeler için giriş: dolduysa gerçekleşen ortalama, dolmadıysa emir seviyelerinin ortalaması. */
+export const planEntry = (p, ev) => ev?.entry ?? p.legs.reduce((a, b) => a + b, 0) / p.legs.length;
+
 export const PLAN_NAME = { break: 'B kırılımı', zone: 'Limit bölge', triangle: 'Üçgen kırılımı', elimit: 'E limiti (C–D %61,8)', econfirm: 'E onayı', d4lim: 'Dalga 4 limiti → 5', d4conf: '4 onayı → 5', dend: 'Ending: 2–4 kırılımı', dlead: 'Leading: dalga 2 limiti' };
 const OPEN = new Set(['waiting', 'entered']);
 export const isOpen = (st) => OPEN.has(st);

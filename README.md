@@ -24,6 +24,9 @@ Durumlar: *Hazırlanıyor* (tetik bekleniyor), *Tetiklendi*, *Kaçtı* (hedef 1'
 
 Araç çubuğundaki **Giriş tipi** ile seçilir; "İkisi birden" seçilince kartta iki plan ayrı R:R ile görünür.
 
+Stop ve hedeflerin yanındaki yüzdeler (kart, ayrıntı, grafik, takip listesi) girişten ölçülür: kazanç +, zarar −, short'ta da
+aynı. Kaldıraçsız ve komisyonsuzdur. Giriş; dolmamış emirde emir seviyesi (kademelide ortalama), dolmuşta gerçekleşen ortalamadır.
+
 - **B kırılımı (onaylı):** yukarıdaki seviyeler; dalga 2 tamamlandıktan sonra.
 - **Limit bölge (erken):** giriş bölgesi = C = 1,272 × A (B'den ölçülür) ile dalga 2 = %61,8 geri çekilme arası
   (TradingView Fibonacci araçlarıyla aynı, doğrusal ölçek). Dalga 2 **sürerken** de (0-1-A-B onaylı, C oluşuyor) listelenir.

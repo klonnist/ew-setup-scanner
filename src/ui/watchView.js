@@ -1,6 +1,6 @@
 // ★ Takip listem: kart ve ayrıntı HTML'i (app.js çağırır; grafik chart.js drawWatch).
-import { fmtPrice, fmtTime, esc } from './format.js';
-import { PLAN_NAME } from '../watch/track.js';
+import { fmtPrice, fmtTime, esc, levelCell } from './format.js';
+import { PLAN_NAME, planEntry } from '../watch/track.js';
 
 const MODE_TXT = { wave3: 'Dalga-3', triangle: 'Üçgen', abcde: 'ABCDE üçgen', diagonal: 'Diagonal', fib: 'Fib kesişimi' };
 const fmtR = (r) => (r == null ? '–' : `${r > 0 ? '+' : ''}${r.toFixed(2).replace('.', ',')}R`);
@@ -19,14 +19,15 @@ function badge(ev) {
 }
 
 function planRow(item, p, ev, ref) {
+  const entry = planEntry(p, ev);
   return `<div class="plan">
     <div class="plan-head"><span class="plan-name">${esc(PLAN_NAME[p.type])}</span>${badge(ev)}
       <span class="rr">${ev?.R != null ? `<b class="num ${ev.R >= 0 ? 'pos' : 'neg'}">${fmtR(ev.R)}</b>${ev.open ? ' anlık' : ''}` : ''}</span></div>
     <div class="lv">
       <div><b>${ev?.entry != null ? 'Giriş' : p.entryKind === 'limit' ? 'Limit' : p.entryKind === 'stop' ? 'Tetik' : 'Giriş'}</b><span class="num">${fmtPrice(ev?.entry ?? p.legs[0], ref)}</span></div>
-      <div><b>Stop</b><span class="num">${fmtPrice(p.stop, ref)}</span></div>
-      <div><b>Hedef 1</b><span class="num">${fmtPrice(p.targets[0]?.price, ref)}</span></div>
-      <div><b>Hedef 2</b><span class="num">${fmtPrice(p.targets[1]?.price, ref)}</span></div>
+      <div><b>Stop</b><span class="num">${levelCell(entry, p.stop, item.d, ref)}</span></div>
+      <div><b>Hedef 1</b><span class="num">${levelCell(entry, p.targets[0]?.price, item.d, ref)}</span></div>
+      <div><b>Hedef 2</b><span class="num">${levelCell(entry, p.targets[1]?.price, item.d, ref)}</span></div>
     </div>
   </div>`;
 }
@@ -54,12 +55,13 @@ export function watchDetail(item, evals, { price }) {
   const tv = `https://www.tradingview.com/chart/?symbol=OKX%3A${encodeURIComponent(item.coin)}USDT${item.instId?.endsWith('-SWAP') ? '.P' : ''}`;
   const plans = item.plans.map((p, i) => {
     const ev = evals?.[i];
+    const entry = planEntry(p, ev);
     const rows = [
       ['Giriş türü', { stop: 'tetik (seviye geçilince)', limit: 'limit (seviyeye gelince)', market: 'kayıt anındaki fiyat' }[p.entryKind]],
       ['Emir seviyesi', p.legs.map((l) => fmtPrice(l, ref)).join(' / ')],
       ['Gerçekleşen giriş', ev?.entry != null ? `${fmtPrice(ev.entry, ref)} · ${fmtTime(ev.entryTime)}${ev.legs > 1 ? ` · ${ev.filledLegs}/${ev.legs} bacak` : ''}` : '–'],
-      ['Stop', fmtPrice(p.stop, ref)],
-      ...p.targets.map((t, k) => [`Hedef ${k + 1}`, `${fmtPrice(t.price, ref)}${ev && ev.targetsHit > k ? ' ✓' : ''} <small class="muted">${esc(t.name)}</small>`]),
+      ['Stop', levelCell(entry, p.stop, item.d, ref)],
+      ...p.targets.map((t, k) => [`Hedef ${k + 1}`, `${levelCell(entry, t.price, item.d, ref)}${ev && ev.targetsHit > k ? ' ✓' : ''} <small class="muted">${esc(t.name)}</small>`]),
       ['Çıkış', ev?.exitPrice != null ? `${fmtPrice(ev.exitPrice, ref)} · ${fmtTime(ev.exitTime)}` : '–'],
       ['R', ev?.R != null ? `${fmtR(ev.R)}${ev.open ? ' (anlık)' : ''}` : '–'],
     ];

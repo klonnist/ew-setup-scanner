@@ -1,5 +1,5 @@
 // Diagonal modu: kart, özet ve ayrıntı HTML'i (app.js çağırır; grafik chart.js drawDiagonal).
-import { fmtPrice, fmtPct, fmtX, esc, smtChip, conflictChip } from './format.js';
+import { fmtPrice, fmtX, esc, smtChip, conflictChip, levelCell, moveTxt } from './format.js';
 import { riskPct, feeR } from '../scan/wave3.js';
 import { DIAG_PLAN, isOpenDiag } from '../scan/diagonal.js';
 
@@ -18,7 +18,7 @@ export const HOW = {
 
 function stopTxt(entry, stop, ref) {
   const pct = riskPct(entry, stop);
-  return `${fmtPrice(stop, ref)} <small class="${pct < 1.5 ? 'warn-txt' : 'muted'}">%${pct.toFixed(pct < 1 ? 2 : 1).replace('.', ',')}</small>`;
+  return `${fmtPrice(stop, ref)} <small class="${pct < 1.5 ? 'warn-txt' : 'neg'}">−%${pct.toFixed(pct < 1 ? 2 : 1).replace('.', ',')}</small>`;
 }
 
 function entryLabel(p) {
@@ -30,7 +30,7 @@ function entryLabel(p) {
 function planBlock(t, p) {
   return `<div class="plan${isOpenDiag(p.state) ? '' : ' faded'}">
       <div class="plan-head"><span class="plan-name">${esc(DIAG_PLAN[p.type])}</span><span class="state dg-${p.state}">${esc(p.stateLabel)}</span><span class="rr">R:R <b class="num">${fmtX(p.rr, 1)}</b></span></div>
-      <div class="lv">${lv(entryLabel(p), p.legs?.length > 1 && p.filledLegs < p.legs.length ? p.legs.map((x) => fmtPrice(x, t.price)).join(' / ') : fmtPrice(p.entry, t.price))}${lv('Stop', stopTxt(p.entry, p.stop, t.price))}${lv('Hedef 1', fmtPrice(p.targets[0].price, t.price))}${lv('Ana hedef', fmtPrice(p.main.price, t.price))}</div>
+      <div class="lv">${lv(entryLabel(p), p.legs?.length > 1 && p.filledLegs < p.legs.length ? p.legs.map((x) => fmtPrice(x, t.price)).join(' / ') : fmtPrice(p.entry, t.price))}${lv('Stop', stopTxt(p.entry, p.stop, t.price))}${lv('Hedef 1', levelCell(p.entry, p.targets[0].price, t.d, t.price))}${lv('Ana hedef', levelCell(p.entry, p.main.price, t.d, t.price))}</div>
     </div>`;
 }
 
@@ -90,7 +90,7 @@ export function diagDetail(t, { tfId, feePct, ruleSet }) {
     ? [['0', P.p0], ['1', P.p1], ['2', P.p2], ['3', P.p3], [t.forming ? '4 (oluşuyor)' : '4', P.p4]]
     : [['0', P.p0], ['1', P.p1], ['2', P.p2], ['3', P.p3], ['4', P.p4], [t.forming ? '5 (oluşuyor)' : '5', P.p5]];
   const waves = names.map(([n, q]) => `<li><span>${n}</span><span class="num">${fmtPrice(q.price, t.price)}</span><span></span></li>`).join('');
-  const targets = p.targets.map((x) => `<li class="${x.key === p.main.key ? 'edge' : ''}"><span>${esc(x.name)}${x.key === p.main.key ? ' · ana hedef' : ''}</span><span class="num">${fmtPrice(x.price, t.price)}</span><span>${fmtPct(Math.abs(x.price - p.entry) / p.entry, 1)}</span></li>`).join('');
+  const targets = p.targets.map((x) => `<li class="${x.key === p.main.key ? 'edge' : ''}"><span>${esc(x.name)}${x.key === p.main.key ? ' · ana hedef' : ''}</span><span class="num">${fmtPrice(x.price, t.price)}</span><span>${moveTxt(p.entry, x.price, t.d)}</span></li>`).join('');
   const plans = t.plans.map((q) => {
     const fr = feeR(q.entry, q.stop, feePct ?? 0.1);
     return `<h3 class="sec">${esc(DIAG_PLAN[q.type])} · <span class="state dg-${q.state}">${esc(q.stateLabel)}</span></h3>

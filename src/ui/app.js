@@ -17,7 +17,7 @@ import { snapshot, evaluatePlan, isOpen, triangleShape } from '../watch/track.js
 import { loadWatch, addWatch, removeWatch, updateWatch, saveAll, findByKey, exportWatch, importWatch } from '../watch/store.js';
 import { getCandles, TIMEFRAMES } from '../data/okx.js';
 import { LONG_BARS } from '../scan/scanner.js';
-import { fmtPrice, fmtPct, fmtX, fmtTime, esc, smtChip, conflictChip } from './format.js';
+import { fmtPrice, fmtPct, fmtX, fmtTime, esc, smtChip, conflictChip, levelCell } from './format.js';
 
 const $ = (sel) => document.querySelector(sel);
 const NET_KEYS = ['timeframe', 'topN', 'manualCoins'];
@@ -354,7 +354,7 @@ const TIGHT_PCT = 1.5;
 const pctTxt = (x, d) => x.toFixed(d).replace('.', ',');
 function stopCell(entry, stop, ref) {
   const pct = riskPct(entry, stop);
-  return `${fmtPrice(stop, ref)} <small class="${pct < TIGHT_PCT ? 'warn-txt' : 'muted'}">%${pctTxt(pct, pct < 1 ? 2 : 1)}</small>`;
+  return `${fmtPrice(stop, ref)} <small class="${pct < TIGHT_PCT ? 'warn-txt' : 'neg'}">−%${pctTxt(pct, pct < 1 ? 2 : 1)}</small>`;
 }
 function tightNote(entry, stop) {
   const pct = riskPct(entry, stop);
@@ -372,7 +372,7 @@ function breakBlock(s, active) {
   const L = s.levels;
   return `<div class="plan${active ? '' : ' faded'}">
     <div class="plan-head"><span class="plan-name">B kırılımı</span><span class="state ${s.state}">${esc(s.stateLabel)}</span><span class="rr">R:R <b class="num">${fmtX(s.rr, 1)}</b></span></div>
-    <div class="lv">${lvBox(s.state === 'triggered' ? 'Fiyat' : 'Tetik', fmtPrice(L.entry, s.price))}${lvBox('Stop', stopCell(L.entry, L.stop, s.price))}${lvBox('Hedef 1', fmtPrice(L.targets[0].price, s.price))}${lvBox('Hedef 2', fmtPrice(L.targets[1]?.price, s.price))}</div>
+    <div class="lv">${lvBox(s.state === 'triggered' ? 'Fiyat' : 'Tetik', fmtPrice(L.entry, s.price))}${lvBox('Stop', stopCell(L.entry, L.stop, s.price))}${lvBox('Hedef 1', levelCell(L.entry, L.targets[0].price, s.d, s.price))}${lvBox('Hedef 2', levelCell(L.entry, L.targets[1]?.price, s.d, s.price))}</div>
     ${tightNote(L.entry, L.stop)}
   </div>`;
 }
@@ -389,7 +389,7 @@ function zoneBlock(s, active) {
     ${wait ? `<div class="note">Süre koşulu: emir ${wait} mum sonra aktif</div>` : ''}
     <div class="lv">${z.perfect
       ? lvBox('Çakışma seviyesi', `${fmtPrice(z.confluence, s.price)} <small class="muted">fark ${fmtX(z.widthAtr, 2)} ATR</small>`, 'wide')
-      : lvBox('Bölge', `${fmtPrice(z.near, s.price)} – ${fmtPrice(z.far, s.price)}`, 'wide')}${lvBox(z.filledLegs ? 'Ort. giriş' : 'Emir', fmtPrice(z.entry, s.price))}${lvBox('Stop', stopCell(z.entry, z.stop, s.price))}${lvBox('Hedef 2', fmtPrice(z.targets[1]?.price, s.price))}</div>
+      : lvBox('Bölge', `${fmtPrice(z.near, s.price)} – ${fmtPrice(z.far, s.price)}`, 'wide')}${lvBox(z.filledLegs ? 'Ort. giriş' : 'Emir', fmtPrice(z.entry, s.price))}${lvBox('Stop', stopCell(z.entry, z.stop, s.price))}${lvBox('Hedef 1', levelCell(z.entry, z.targets[0]?.price, s.d, s.price))}${lvBox('Hedef 2', levelCell(z.entry, z.targets[1]?.price, s.d, s.price))}</div>
     ${tightNote(z.entry, z.stop)}
   </div>`;
 }
@@ -755,7 +755,7 @@ function breakFacts(s) {
     <div class="facts">
       ${fact(s.state === 'triggered' ? 'Giriş (güncel fiyat)' : 'Tetik (B kırılımı)', fmtPrice(L.entry, s.price))}
       ${fact('Stop', fmtPrice(L.stop, s.price), ` <small class="muted">risk ${fmtPct(risk)}</small>`)}
-      ${L.targets.map((t, i) => fact(`Hedef ${i + 1} (${t.label})`, fmtPrice(t.price, s.price))).join('')}
+      ${L.targets.map((t, i) => fact(`Hedef ${i + 1} (${t.label})`, levelCell(L.entry, t.price, s.d, s.price))).join('')}
       ${fact(`R:R (hedef ${state.settings.mainTarget + 1})`, fmtX(s.rr, 2))}
     </div>`;
 }
@@ -781,7 +781,7 @@ function zoneFacts(s) {
       ${fact('Bölge gücü', `${esc(z.strength)} · ${fmtX(z.widthAtr, 1)} ATR · ${fmtPct(z.widthPct, 2)}`)}
       ${fact('Giriş', fmtPrice(z.entry, s.price), ` <small class="muted">${esc(entryTxt)}${z.filledLegs ? `, ${z.filledLegs}/${z.legs.length} doldu` : ''}</small>`)}
       ${fact(z.stopMode === 'r886' ? 'Stop (dalga 2 = %88,6)' : 'Stop (dalga 1 başı)', fmtPrice(z.stop, s.price), ` <small class="muted">risk ${fmtPct(risk)}</small>`)}
-      ${z.targets.map((t, i) => fact(`Hedef ${i + 1} (${t.label})`, fmtPrice(t.price, s.price))).join('')}
+      ${z.targets.map((t, i) => fact(`Hedef ${i + 1} (${t.label})`, levelCell(z.entry, t.price, s.d, s.price))).join('')}
       ${fact(`R:R (hedef ${state.settings.mainTarget + 1})`, fmtX(z.rr, 2))}
     </div>
     <ul class="levels">${levels}</ul>`;

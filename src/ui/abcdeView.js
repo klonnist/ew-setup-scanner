@@ -1,5 +1,5 @@
 // Running / daralan ABCDE üçgeni modu: kart, özet ve ayrıntı HTML'i (app.js çağırır; grafik chart.js drawAbcde).
-import { fmtPrice, fmtPct, fmtX, esc, smtChip, conflictChip } from './format.js';
+import { fmtPrice, fmtPct, fmtX, esc, smtChip, conflictChip, levelCell, moveTxt } from './format.js';
 import { riskPct, feeR } from '../scan/wave3.js';
 import { PLAN_NAME_ABCDE, isOpenPlan } from '../scan/abcde.js';
 
@@ -10,7 +10,7 @@ const r2 = (x) => x.toFixed(2).replace('.', ',');
 
 function stopTxt(entry, stop, ref) {
   const pct = riskPct(entry, stop);
-  return `${fmtPrice(stop, ref)} <small class="${pct < 1.5 ? 'warn-txt' : 'muted'}">%${pct.toFixed(pct < 1 ? 2 : 1).replace('.', ',')}</small>`;
+  return `${fmtPrice(stop, ref)} <small class="${pct < 1.5 ? 'warn-txt' : 'neg'}">−%${pct.toFixed(pct < 1 ? 2 : 1).replace('.', ',')}</small>`;
 }
 
 function planBlock(t, p) {
@@ -18,7 +18,7 @@ function planBlock(t, p) {
   const entryLbl = p.type === 'elimit' ? (p.fillIdx >= 0 ? 'Doldu' : 'Limit') : 'Giriş';
   return `<div class="plan${open ? '' : ' faded'}">
     <div class="plan-head"><span class="plan-name">${esc(PLAN_NAME_ABCDE[p.type])}</span><span class="state ab-${p.state}">${esc(p.stateLabel)}</span><span class="rr">R:R <b class="num">${fmtX(p.rr, 1)}</b></span></div>
-    <div class="lv">${lv(entryLbl, fmtPrice(p.entry, t.price))}${lv('Stop (C)', stopTxt(p.entry, p.stop, t.price))}${lv('Hedef 1', fmtPrice(t.levels.targets[0].price, t.price))}${lv('Ana hedef', fmtPrice(p.main.price, t.price))}</div>
+    <div class="lv">${lv(entryLbl, fmtPrice(p.entry, t.price))}${lv('Stop (C)', stopTxt(p.entry, p.stop, t.price))}${lv('Hedef 1', levelCell(p.entry, t.levels.targets[0].price, t.d, t.price))}${lv('Ana hedef', levelCell(p.entry, p.main.price, t.d, t.price))}</div>
   </div>`;
 }
 
@@ -81,7 +81,8 @@ export function abcdeDetail(t, { tfId, feePct, eRetr }) {
         ${fact(`R:R (${p.main.name})`, fmtX(p.rr, 2))}
       </div>`;
   }).join('');
-  const targets = t.levels.targets.map((x) => `<li><span>${esc(x.name)}</span><span class="num">${fmtPrice(x.price, t.price)}</span><span></span></li>`).join('');
+  const first = t.plans.find((p) => isOpenPlan(p.state)) ?? t.plans[0];
+  const targets = t.levels.targets.map((x) => `<li><span>${esc(x.name)}</span><span class="num">${fmtPrice(x.price, t.price)}</span><span>${first ? moveTxt(first.entry, x.price, t.d) : ''}</span></li>`).join('');
   return `
     <div class="detail-head">
       <h2>${esc(t.coin)}/USDT</h2>
@@ -107,7 +108,7 @@ export function abcdeDetail(t, { tfId, feePct, eRetr }) {
       <li>${ok(t.innerOk)} Her bacak 3'lü (ABC)${t.innerOk ? '' : ` — bulunamadı: ${esc(t.missing.join(', '))}`}</li></ul>
     <h3 class="sec">Bacaklar · her bacak bir öncekinin ≈ 0,618'i beklenir (aşmalar olabilir)</h3>
     <div class="table-wrap"><table class="stat"><thead><tr><th>Bacak</th><th>Fiyat</th><th>Boy</th><th>Mum</th><th>Oran</th><th>İç yapı</th></tr></thead><tbody>${legs}</tbody></table></div>
-    <h3 class="sec">Hedefler</h3>
+    <h3 class="sec">Hedefler${first ? ` · yüzde ${esc(PLAN_NAME_ABCDE[first.type])} girişinden` : ''}</h3>
     <ul class="levels">${targets}</ul>
     <p class="muted small">0 = üçgenin başlangıcı (önceki hareket itkiyse dalga 3'ün sonu). Uzantılar log ölçekte, görünen pencerede önceki hareketin başından ölçülür.</p>`;
 }

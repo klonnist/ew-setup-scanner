@@ -18,6 +18,20 @@ export function fmtPrice(p, ref = p) {
 export const fmtPct = (r, d = 1) => `%${(r * 100).toLocaleString('tr-TR', { minimumFractionDigits: d, maximumFractionDigits: d })}`;
 export const fmtX = (r, d = 2) => `${r.toLocaleString('tr-TR', { minimumFractionDigits: d, maximumFractionDigits: d })}×`;
 
+/** Girişten seviyeye işlem yönünde yüzde: kazanç +, zarar − (short'ta fiyatın düşmesi kazançtır). Kaldıraçsız, komisyonsuz. */
+export function moveTxt(entry, price, d) {
+  const x = ((d * (price - entry)) / entry) * 100;
+  if (!Number.isFinite(x)) return '';
+  const a = Math.abs(x);
+  return `${x < 0 ? '−' : '+'}%${a.toFixed(a < 1 ? 2 : 1).replace('.', ',')}`;
+}
+
+/** Seviye hücresi: fiyat ve girişe göre yüzdesi. */
+export function levelCell(entry, price, d, ref) {
+  const t = moveTxt(entry, price, d);
+  return `${fmtPrice(price, ref)}${t ? ` <small class="${t[0] === '+' ? 'pos' : 'neg'}">${t}</small>` : ''}`;
+}
+
 export function fmtTime(ms) {
   return new Date(ms).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 }

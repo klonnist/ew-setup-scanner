@@ -1,5 +1,6 @@
 // Lightweight Charts 5 ile setup grafiği: mumlar, 0-1-A-B-2 dalga yolu, etiketler ve seviye çizgileri.
-import { decimals } from './format.js';
+import { decimals, moveTxt } from './format.js';
+import { planEntry } from '../watch/track.js';
 import { SCENARIO_AHEAD } from '../scan/scenario.js';
 
 const C = {
@@ -124,7 +125,7 @@ export function drawSetup(el, candles, live, s, show = { showBreak: true, showZo
   line(p0.price, C.inval, fib ? 'İtki başı' : '0 / geçersiz', LW.LineStyle.Dotted);
   if (show.showBreak && L) {
     line(L.entry, C.entry, s.state === 'triggered' ? 'Giriş (güncel)' : 'Tetik B', LW.LineStyle.Solid);
-    line(L.stop, C.stop, 'Stop');
+    line(L.stop, C.stop, `Stop ${moveTxt(L.entry, L.stop, s.d)}`);
   } else if (show.showBreak && s.abc) {
     line(s.abc.B.price, C.entry, 'Tetik B', LW.LineStyle.Solid);
   }
@@ -145,9 +146,10 @@ export function drawSetup(el, candles, live, s, show = { showBreak: true, showZo
       }
       if (Z.front > 0) Z.legs.forEach((lv) => line(lv, C.zone, 'Emir', LW.LineStyle.Dotted));
     }
-    line(Z.stop, C.zoneStop, fib ? 'Stop' : 'Stop (bölge)');
+    line(Z.stop, C.zoneStop, `${fib ? 'Stop' : 'Stop (bölge)'} ${moveTxt(Z.entry, Z.stop, s.d)}`);
   }
-  (L?.targets || Z?.targets || []).forEach((t, i) => line(t.price, C.target, `H${i + 1} ${t.short ?? t.k}`));
+  const tgtEntry = show.showBreak && L ? L.entry : Z?.entry ?? L?.entry;
+  (L?.targets || Z?.targets || []).forEach((t, i) => line(t.price, C.target, `H${i + 1} ${t.short ?? t.k} ${moveTxt(tgtEntry, t.price, s.d)}`));
   drawScenario(chart, LW, all, show.scenario, { type: 'price', precision: prec, minMove: 10 ** -prec });
 
   // Görünüm: 0 noktasının biraz öncesinden sona
@@ -248,10 +250,10 @@ export function drawTriangle(el, candles, live, t, { scenario = null } = {}) {
   const line = (price, color, title, style = LW.LineStyle.Dashed) =>
     series.createPriceLine({ price, color, lineWidth: 1, lineStyle: style, axisLabelVisible: true, title });
   line(L.entry, T.entry, t.state === 'broken' ? 'Giriş (güncel)' : 'Kırılım', LW.LineStyle.Solid);
-  line(L.stop, T.stop, 'Stop');
+  line(L.stop, T.stop, `Stop ${moveTxt(L.entry, L.stop, t.d)}`);
   for (const x of L.targets) {
     if (t.d * (x.price - L.entry) <= 0) continue; // girişin gerisindeki hedefleri çizme
-    line(x.price, x.kind === 'mm' ? T.mm : T.fib, x.kind === 'mm' ? 'Ölçülü' : x.name.replace('Geri çekilme ', '').replace('İzdüşüm ', 'İzd. '));
+    line(x.price, x.kind === 'mm' ? T.mm : T.fib, `${x.kind === 'mm' ? 'Ölçülü' : x.name.replace('Geri çekilme ', '').replace('İzdüşüm ', 'İzd. ')} ${moveTxt(L.entry, x.price, t.d)}`);
   }
 
   drawScenario(chart, LW, all, scenario, pf);
@@ -337,8 +339,9 @@ export function drawAbcde(el, candles, live, t, { plans = t.plans, scenario = nu
     if (p.type === 'elimit') line(p.level, A5.limit, 'E limiti %61,8', LW.LineStyle.Solid);
     else line(p.entry, A5.entry, 'E onayı', LW.LineStyle.Solid);
   }
-  line(t.levels.stop, A5.stop, 'Stop (C)');
-  for (const x of t.levels.targets) line(x.price, A5.target, x.key === 'top' ? '0 (başlangıç)' : x.key === 'thrust' ? 'Thrust' : x.key === 'e1236' ? '1,236' : '1,618');
+  const e0 = plans[0]?.entry; // yüzdeler ilk planın girişinden; plan yoksa yüzde yazılmaz
+  line(t.levels.stop, A5.stop, `Stop (C) ${moveTxt(e0, t.levels.stop, t.d)}`);
+  for (const x of t.levels.targets) line(x.price, A5.target, `${x.key === 'top' ? '0 (başlangıç)' : x.key === 'thrust' ? 'Thrust' : x.key === 'e1236' ? '1,236' : '1,618'} ${moveTxt(e0, x.price, t.d)}`);
 
   drawScenario(chart, LW, all, scenario, pf);
 
@@ -444,8 +447,8 @@ export function drawDiagonal(el, candles, live, t, { scenario = null } = {}) {
     line(t.fib.ext03, DG.fib, '0→3 −0,236', LW.LineStyle.Dotted);
     line(t.fib.ext23, DG.fib, '2→3 −0,236', LW.LineStyle.Dotted);
   }
-  line(p.stop, DG.stop, 'Stop');
-  for (const x of p.targets) line(x.price, DG.target, x.name.replace(' (dalga 1 sonu)', '').replace('Dalga 3 = ', 'D3 '));
+  line(p.stop, DG.stop, `Stop ${moveTxt(p.entry, p.stop, t.d)}`);
+  for (const x of p.targets) line(x.price, DG.target, `${x.name.replace(' (dalga 1 sonu)', '').replace('Dalga 3 = ', 'D3 ')} ${moveTxt(p.entry, x.price, t.d)}`);
   drawScenario(chart, LW, all, scenario, pf);
 
   chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, P.p0.i - 15), to: all.length + 6 + (scenario ? SCENARIO_AHEAD : 0) });
@@ -617,8 +620,9 @@ export function drawWatch(el, candles, live, item, evals, { scenario = null } = 
   item.plans.forEach((p, i) => {
     const tag = item.plans.length > 1 ? PLAN_TAG[p.type] || '' : '';
     p.legs.forEach((lv) => line(lv, W.entry, `Giriş${tag}`, LW.LineStyle.Solid));
-    line(p.stop, W.stop, `Stop${tag}`);
-    if (i === 0) p.targets.forEach((t, k) => line(t.price, W.target, `H${k + 1}`));
+    const e = planEntry(p, evals?.[i]);
+    line(p.stop, W.stop, `Stop${tag} ${moveTxt(e, p.stop, item.d)}`);
+    if (i === 0) p.targets.forEach((t, k) => line(t.price, W.target, `H${k + 1} ${moveTxt(e, t.price, item.d)}`));
   });
   drawScenario(chart, LW, all, scenario, pf);
 

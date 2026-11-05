@@ -1,5 +1,5 @@
 // Üçgen kırılımı modu: kart, özet ve ayrıntı HTML'i (app.js çağırır; grafik chart.js drawTriangle).
-import { fmtPrice, fmtPct, fmtX, esc, conflictChip } from './format.js';
+import { fmtPrice, fmtX, esc, conflictChip, levelCell, moveTxt } from './format.js';
 import { riskPct, feeR } from '../scan/wave3.js';
 
 const dirTxt = (t) => (t.d === 1 ? 'Yukarı kırılım ▲' : 'Aşağı kırılım ▼');
@@ -11,7 +11,7 @@ const lv = (label, value, cls = '') => `<div${cls ? ` class="${cls}"` : ''}><b>$
 
 function stopTxt(t) {
   const pct = riskPct(t.levels.entry, t.levels.stop);
-  return `${fmtPrice(t.levels.stop, t.price)} <small class="${pct < 1.5 ? 'warn-txt' : 'muted'}">%${pct.toFixed(pct < 1 ? 2 : 1).replace('.', ',')}</small>`;
+  return `${fmtPrice(t.levels.stop, t.price)} <small class="${pct < 1.5 ? 'warn-txt' : 'neg'}">−%${pct.toFixed(pct < 1 ? 2 : 1).replace('.', ',')}</small>`;
 }
 
 export function triCard(t, { selected, active }) {
@@ -35,8 +35,8 @@ export function triCard(t, { selected, active }) {
     <div class="lv">
       ${lv(t.state === 'broken' ? 'Fiyat' : 'Kırılım', fmtPrice(L.entry, t.price))}
       ${lv('Stop', stopTxt(t))}
-      ${lv('Ölçülü hedef', fmtPrice(L.targets[0].price, t.price))}
-      ${lv(fib ? (t.fibMode === 'retr' ? '%61,8 geri' : '%61,8 izdüşüm') : 'Ana hedef', fmtPrice((fib || L.main).price, t.price))}
+      ${lv('Ölçülü hedef', levelCell(L.entry, L.targets[0].price, t.d, t.price))}
+      ${lv(fib ? (t.fibMode === 'retr' ? '%61,8 geri' : '%61,8 izdüşüm') : 'Ana hedef', levelCell(L.entry, (fib || L.main).price, t.d, t.price))}
     </div>
   </button>`;
 }
@@ -63,7 +63,7 @@ export function triDetail(t, { tfId, feePct }) {
   const targets = L.targets.map((x) => {
     const beyond = t.d * (x.price - L.entry) > 0;
     const main = x.key === L.main.key;
-    return `<li class="${main ? 'edge' : beyond ? 'in' : ''}"><span>${esc(x.name)}${main ? ' · ana hedef' : ''}</span><span class="num">${fmtPrice(x.price, t.price)}</span><span>${beyond ? fmtPct(Math.abs(x.price - L.entry) / L.entry, 1) : 'geride'}</span></li>`;
+    return `<li class="${main ? 'edge' : beyond ? 'in' : ''}"><span>${esc(x.name)}${main ? ' · ana hedef' : ''}</span><span class="num">${fmtPrice(x.price, t.price)}</span><span>${beyond ? moveTxt(L.entry, x.price, t.d) : 'geride'}</span></li>`;
   }).join('');
   const prior = t.prior
     ? `${fmtPrice(t.prior.from.price, t.price)} → ${fmtPrice(t.prior.to.price, t.price)} (${t.prior.dir === 'down' ? 'düşüş' : 'yükseliş'} %${(Math.abs(t.prior.from.price - t.prior.to.price) / t.prior.from.price * 100).toFixed(1).replace('.', ',')})`
