@@ -66,6 +66,21 @@ function drawScenario(chart, LW, all, paths, pf) {
  * @param s      setup (wave3.js ya da fibcluster.js çıktısı)
  * @param show   { showBreak, showZone, scenario } hangi giriş planlarının çizileceği, senaryo okları (scenarioPaths; yoksa çizilmez)
  */
+/** Girişin ötesindeki en yakın n hedefin fiyatı. */
+export const nearTargets = (entry, targets, d, n = 2) => (targets || []).map((t) => t.price)
+  .filter((p) => d * (p - entry) > 0).sort((a, b) => d * (a - b)).slice(0, n);
+
+/** Otomatik ölçek bilgisini verilen fiyatları içerecek şekilde genişletir. */
+export function widenRange(info, prices) {
+  const ps = prices.filter(Number.isFinite);
+  if (!info?.priceRange || !ps.length) return info;
+  const { minValue, maxValue } = info.priceRange;
+  return { ...info, priceRange: { minValue: Math.min(minValue, ...ps), maxValue: Math.max(maxValue, ...ps) } };
+}
+
+/** Stop ve yakın hedefler grafiğin dışında kalmasın: fiyat çizgileri otomatik ölçeğe kendiliğinden girmez. */
+const keepInView = (series, prices) => series.applyOptions({ autoscaleInfoProvider: (orig) => widenRange(orig(), prices) });
+
 export function drawSetup(el, candles, live, s, show = { showBreak: true, showZone: false }) {
   destroyChart();
   const LW = window.LightweightCharts;
@@ -150,6 +165,7 @@ export function drawSetup(el, candles, live, s, show = { showBreak: true, showZo
   }
   const tgtEntry = show.showBreak && L ? L.entry : Z?.entry ?? L?.entry;
   (L?.targets || Z?.targets || []).forEach((t, i) => line(t.price, C.target, `H${i + 1} ${t.short ?? t.k} ${moveTxt(tgtEntry, t.price, s.d)}`));
+  keepInView(series, [show.showBreak ? L?.stop : null, Z?.stop, ...nearTargets(tgtEntry, L?.targets || Z?.targets, s.d)]);
   drawScenario(chart, LW, all, show.scenario, { type: 'price', precision: prec, minMove: 10 ** -prec });
 
   // Görünüm: 0 noktasının biraz öncesinden sona
@@ -256,6 +272,7 @@ export function drawTriangle(el, candles, live, t, { scenario = null } = {}) {
     line(x.price, x.kind === 'mm' ? T.mm : T.fib, `${x.kind === 'mm' ? 'Ölçülü' : x.name.replace('Geri çekilme ', '').replace('İzdüşüm ', 'İzd. ')} ${moveTxt(L.entry, x.price, t.d)}`);
   }
 
+  keepInView(series, [L.stop, ...nearTargets(L.entry, L.targets, t.d)]);
   drawScenario(chart, LW, all, scenario, pf);
 
   const from = Math.max(0, (t.prior ? t.prior.from.i : t.first.i) - 10);
@@ -343,6 +360,7 @@ export function drawAbcde(el, candles, live, t, { plans = t.plans, scenario = nu
   line(t.levels.stop, A5.stop, `Stop (C) ${moveTxt(e0, t.levels.stop, t.d)}`);
   for (const x of t.levels.targets) line(x.price, A5.target, `${x.key === 'top' ? '0 (başlangıç)' : x.key === 'thrust' ? 'Thrust' : x.key === 'e1236' ? '1,236' : '1,618'} ${moveTxt(e0, x.price, t.d)}`);
 
+  keepInView(series, [t.levels.stop, ...nearTargets(e0, t.levels.targets, t.d)]);
   drawScenario(chart, LW, all, scenario, pf);
 
   chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, P.w3s.i - 10), to: all.length + 6 + (scenario ? SCENARIO_AHEAD : 0) });
@@ -449,6 +467,7 @@ export function drawDiagonal(el, candles, live, t, { scenario = null } = {}) {
   }
   line(p.stop, DG.stop, `Stop ${moveTxt(p.entry, p.stop, t.d)}`);
   for (const x of p.targets) line(x.price, DG.target, `${x.name.replace(' (dalga 1 sonu)', '').replace('Dalga 3 = ', 'D3 ')} ${moveTxt(p.entry, x.price, t.d)}`);
+  keepInView(series, [p.stop, ...nearTargets(p.entry, p.targets, t.d)]);
   drawScenario(chart, LW, all, scenario, pf);
 
   chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, P.p0.i - 15), to: all.length + 6 + (scenario ? SCENARIO_AHEAD : 0) });
@@ -624,6 +643,8 @@ export function drawWatch(el, candles, live, item, evals, { scenario = null } = 
     line(p.stop, W.stop, `Stop${tag} ${moveTxt(e, p.stop, item.d)}`);
     if (i === 0) p.targets.forEach((t, k) => line(t.price, W.target, `H${k + 1} ${moveTxt(e, t.price, item.d)}`));
   });
+  const first0 = item.plans[0];
+  keepInView(series, first0 ? [...item.plans.map((p) => p.stop), ...nearTargets(planEntry(first0, evals?.[0]), first0.targets, item.d)] : []);
   drawScenario(chart, LW, all, scenario, pf);
 
   const first = Math.min(...item.points.map((p) => p.time), item.savedAt, item.shape?.prior?.from.time ?? Infinity);
