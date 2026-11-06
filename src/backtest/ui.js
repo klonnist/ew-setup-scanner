@@ -72,6 +72,7 @@ function syncShared() {
   $('#btDirection').value = settings.direction || 'both';
   $('#btStructTpl').value = settings.structTpl ? '1' : '';
   $('#btFibMarket').value = settings.fibMarket || 'spot';
+  $('#btW3Market').value = settings.w3Market || 'spot';
 }
 
 function syncForm() {
@@ -268,7 +269,7 @@ async function run() {
 
 const SETTING_KEYS = ['ruleSet', 'sensitivities', 'w1Extend', 'retrMin', 'retrMax', 'requireAbc', 'abcKinds', 'minTimeRatio', 'minW1Atr',
   'rsiMode', 'volume', 'stopMode', 'stopAtr', 'targets', 'targetSet', 'minRR', 'direction', 'zoneCExt', 'zoneRetr', 'zoneEntry', 'zoneStop', 'zoneTime',
-  'perfectAtr', 'zoneFrontAtr', 'approachAtr', 'onlyPerfect', 'minRiskPct', 'textbook', 'textbookMin', 'cleanW1Er', 'cleanW1Speed', 'originReal', 'structTpl',
+  'perfectAtr', 'zoneFrontAtr', 'approachAtr', 'onlyPerfect', 'minRiskPct', 'textbook', 'textbookMin', 'cleanW1Er', 'cleanW1Speed', 'originReal', 'structTpl', 'w3Market', 'w3FormingB',
   'triType', 'triContext', 'flatAtr', 'minTops', 'minBottoms', 'minWidthBars', 'triTarget', 'triMinRR',
   'abcdeEntry', 'eRetr', 'innerAbc', 'w3Check', 'abcdeVariant', 'abcdeSens', 'abcdeStopAtr', 'abcdeTarget', 'abcdeMinRR',
   'diagType', 'diagShape', 'diagSens', 'diagW4Entry', 'diagW2Min', 'diagExpMax', 'diagRetr', 'diagStopAtr', 'diagEndTarget', 'diagLeadTarget', 'diagMinRR', 'diagBook',
@@ -332,7 +333,9 @@ function settingsText(p) {
   if (s.originReal) parts.unshift('yapı kırılımı şart');
   if (s.structTpl) parts.unshift('🧩 yapı şablonu');
   if (s.direction && s.direction !== 'both') parts.unshift(s.direction === 'long' ? 'sadece long' : 'sadece short');
+  if (s.w3Market === 'swap') parts.unshift('OKX vadeli');
   if (p.entryType !== 'break') {
+    if (s.w3FormingB) parts.push('B oluşurken de');
     parts.push(`bölge ${ZONE_ENTRY_TXT[s.zoneEntry] || s.zoneEntry}/${s.zoneStop === 'r886' ? 'stop %88,6' : 'stop 0'}${s.zoneTime === 'ignore' ? '/süresiz' : ''}`);
     if (s.zoneFrontAtr != null) parts.push(`ön pay ${s.zoneFrontAtr} ATR`);
   }
@@ -711,7 +714,7 @@ async function showTradeChart(t) {
     const tf = TIMEFRAMES[p.tf];
     const win = windowFor(p.mode);
     const end = (t.outcome === 'open' ? Date.now() : t.exitTime) + 40 * tf.ms;
-    const candles = await getHistory(instIdOf(t.coin, marketOf({ mode: p.mode, fibMarket: p.settings?.fibMarket })), tf, t.created - (win + 5) * tf.ms, Math.min(end, Date.now()));
+    const candles = await getHistory(instIdOf(t.coin, marketOf({ mode: p.mode, fibMarket: p.settings?.fibMarket, w3Market: p.settings?.w3Market })), tf, t.created - (win + 5) * tf.ms, Math.min(end, Date.now()));
     if (req !== chartReq) return;
     const ci = candles.findIndex((c) => c.time === t.created);
     const off = Math.max(0, ci + 1 - win);
@@ -926,6 +929,7 @@ function init() {
   $('#btDirection').addEventListener('change', (e) => shared({ direction: e.target.value }));
   $('#btStructTpl').addEventListener('change', (e) => shared({ structTpl: e.target.value === '1' }));
   $('#btFibMarket').addEventListener('change', (e) => shared({ fibMarket: e.target.value }));
+  $('#btW3Market').addEventListener('change', (e) => shared({ w3Market: e.target.value }));
   // Tarayıcı sayfasında başka sekmede değişirse (ör. 🧩 Sadece şablon) burada da güncellenir
   window.addEventListener('storage', () => { settings = loadSettings(); renderSettings($('#settings'), settings, onSettings, { mode: params.mode }); syncShared(); });
   for (const b of document.querySelectorAll('#tf button')) {

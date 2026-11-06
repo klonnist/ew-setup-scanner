@@ -79,6 +79,7 @@ const FIELDS = [
   ['autoRefresh', 'Otomatik yenileme', 'select', { group: 'general', options: [[0, 'Kapalı'], [5, '5 dakikada bir'], [15, '15 dakikada bir']], num: true, hint: 'Sekme açıkken çalışır; yeni setup çıkınca bildirim gösterir.' }],
 
   // Dalga-3
+  ['w3Market', 'Veri', 'select', { group: 'wave3', sub: 'Dalga yapısı', options: [['spot', 'OKX spot'], ['swap', 'OKX vadeli (USDT)']], hint: "Coin listesi ve mumlar. Yalnızca bu mod için. Vadelide fonlama maliyeti backtest'e dahil değildir." }],
   ['sensitivities', 'ZigZag duyarlılığı (× ATR)', 'list', { group: 'wave3', sub: 'Dalga yapısı', hint: 'Her değer bir dalga derecesi. Küçük = kısa dalgalar.' }],
   ['w1Extend', 'Dalga 1 başlangıcı', 'select', { group: 'wave3', sub: 'Dalga yapısı', options: [[0, 'Son dönüş noktası'], [1, '1 iç dalgalanma geri'], [2, '2 iç dalgalanma geri'], [99, 'En geniş dalga 1']], num: true, hint: "Daha önceki dip daha aşağıdaysa ve aradaki tepe 1'i geçmiyorsa 0 noktası geriye taşınır." }],
   ['minW1Atr', 'Min. dalga 1 boyu (× ATR)', 'number', { group: 'wave3', sub: 'Dalga yapısı', step: 0.5, min: 0 }],
@@ -99,6 +100,7 @@ const FIELDS = [
   ['stopAtr', 'Stop tamponu (× ATR)', 'number', { group: 'wave3', sub: 'B kırılımı', step: 0.05, min: 0, hint: 'İki giriş tipinde de stop bu kadar ötesine konur.' }],
   ['zoneCExt', 'Bölge kenarı: C = ? × A', 'number', { group: 'wave3', sub: 'Limit bölge', step: 0.001, min: 0.5, hint: "B'den ölçülür. Varsayılan 1,272." }],
   ['zoneRetr', 'Bölge kenarı: dalga 2 geri çekilme', 'pct', { group: 'wave3', sub: 'Limit bölge', hint: 'Varsayılan %61,8.' }],
+  ['w3FormingB', 'B oluşurken de göster', 'bool', { group: 'wave3', sub: 'Limit bölge', hint: "A onaylıysa B bitmeden kurulum listelenir. B oynadıkça giriş seviyesi de değişir; limit emri buna göre güncellemek gerekir. Backtest'te sonucu iyileştirmedi." }],
   ['zoneEntry', 'Bölge girişi', 'select', { group: 'wave3', sub: 'Limit bölge', options: [['mid', 'Kademeli: yarısı yakın, yarısı uzak kenar'], ['near', 'Yakın kenar'], ['far', 'Uzak kenar'], ['r618', 'Sadece %61,8 seviyesi'], ['c127', 'Sadece C = 1,272A seviyesi']], hint: "Mükemmel setup'larda (iki seviye çakışınca) her seçenekte tek çakışma seviyesi kullanılır." }],
   ['zoneStop', 'Stop yeri', 'select', { group: 'wave3', sub: 'Limit bölge', options: [['w0', 'Dalga 1 başı (0 noktası)'], ['r886', 'Dalga 2 = %88,6']] }],
   ['perfectAtr', '★ Mükemmel: iki kenar farkı ≤ ? × ATR', 'number', { group: 'wave3', sub: 'Limit bölge', step: 0.05, min: 0, hint: '%61,8 ile C = 1,272A bu kadar yakınsa tek çakışma seviyesi sayılır.' }],
@@ -146,7 +148,7 @@ const FIELDS = [
   ['diagLeadTarget', 'Ana hedef', 'select', { group: 'diagonal', sub: 'Leading', options: [['w3a', 'Dalga 3 = 1 × dalga 1'], ['w3b', 'Dalga 3 = 1,618 × dalga 1'], ['p5', '5 ucu (dalga 1 sonu)']] }],
 
   // Fib kesişimi
-  ['fibMarket', 'Veri', 'select', { group: 'fib', options: [['spot', 'OKX spot'], ['swap', 'OKX vadeli (USDT)']], hint: 'Coin listesi ve mumlar. Yalnızca bu mod için; diğer modlar her zaman spot kullanır.' }],
+  ['fibMarket', 'Veri', 'select', { group: 'fib', options: [['spot', 'OKX spot'], ['swap', 'OKX vadeli (USDT)']], hint: "Coin listesi ve mumlar. Yalnızca bu mod için; Dalga-3'ün kendi seçimi var, Üçgen, ABCDE ve Diagonal her zaman spot kullanır." }],
   ['fibFormingB', 'B oluşurken de göster', 'bool', { group: 'fib', hint: "B bitmeden kurulum listelenir. B oynadıkça giriş seviyesi de değişir; limit emri buna göre güncellemek gerekir. Backtest'te sonucu iyileştirmedi." }],
   ['fibMinRR', 'Min. R:R', 'number', { group: 'fib', step: 0.25, min: 0, hint: '0 = filtre yok. Yalnızca bu mod; Dalga-3 ayarından bağımsız.' }],
   ['fibPairs', 'Oranlar', 'select', { group: 'fib', options: [['golden', 'Sadece 0,618 × 1,272'], ['all', 'Tüm çiftler (0,5 / 0,618 / 0,786 × 1,272 / 1,382 / 1,618)']] }],

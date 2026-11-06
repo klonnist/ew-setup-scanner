@@ -14,13 +14,16 @@ export const FIB_DEFAULTS = {
   fibBMin: 0.382, // B, A'yı en az bu oranda geri almalı
   fibBMax: 1, // en fazla bu oranda
   fibStop: 'r886', // 'r886': itkinin %88,6'sı | 'w0': itkinin başı
-  fibMarket: 'spot', // 'spot' | 'swap': OKX USDT vadeli (coin listesi ve mumlar); yalnızca bu modda geçerli
+  fibMarket: 'spot', // 'spot' | 'swap': OKX USDT vadeli (coin listesi ve mumlar); yalnızca bu modda geçerli (Dalga-3'ün kendi ayarı w3Market)
   fibFormingB: false, // true: B henüz onaylanmadan da kurulum göster (B oynadıkça giriş seviyesi değişir)
   fibMinRR: 2, // bu modun en düşük R:R'si; 0 = filtre yok
 };
 
-/** Taramanın mum ve coin listesini aldığı piyasa: vadeli yalnızca fib modunda seçilebilir, diğer modlar hep spot. */
-export const marketOf = (o) => (o.mode === 'fib' && o.fibMarket === 'swap' ? 'swap' : 'spot');
+/** Taramanın mum ve coin listesini aldığı piyasa: vadeli Fib ve Dalga-3'te ayrı ayrı seçilir, diğer modlar hep spot. Mod yoksa Dalga-3. */
+export const marketOf = (o) => {
+  const mode = o.mode ?? 'wave3';
+  return (mode === 'fib' ? o.fibMarket : mode === 'wave3' ? o.w3Market : null) === 'swap' ? 'swap' : 'spot';
+};
 
 const GOLDEN = [[0.618, 1.272]];
 const ALL_PAIRS = [0.5, 0.618, 0.786].flatMap((r) => [1.272, 1.382, 1.618].map((e) => [r, e]));

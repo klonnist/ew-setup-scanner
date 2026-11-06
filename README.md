@@ -38,6 +38,31 @@ aynı. Kaldıraçsız ve komisyonsuzdur. Giriş; dolmamış emirde emir seviyesi
   - **★ Mükemmel:** iki kenar arası ≤ 0,5 ATR ise tek çakışma seviyesi; listede en üstte, "Sadece mükemmel" ile süzülebilir.
   - **Ön pay:** limit emir seviyenin 0,2 ATR önüne konur (fiyat seviyeye birkaç tik kala dönse de dolsun; 0 = tam seviye).
   - **Seviyeye yaklaştı:** fiyat emre 0,5 ATR'den yakınsa kart işaretlenir; otomatik yenilemede bildirim gelir.
+  - **B oluşurken de göster** (liste üstünde kutu, Ayarlar'da da; varsayılan kapalı; yalnızca limit bölge): A onaylıysa B bitmeden
+    kurulum listelenir, kartta "B oluşuyor" yazar. B oynadıkça C seviyesi ve emir de oynar; canlı mum B'yi geçerse B onun ucu olur.
+    Onaylı B varsa sonuç değişmez. B oluşan sayım "Çelişen sayım" etiketine girmez; SMT ölçülemez, "Sadece SMT'li" açıkken gizlenir.
+    Takibe alınan plan dondurulur: fiyat o B'yi geçince iptal olur.
+
+**Veri** (araç çubuğunda, Ayarlar'da ve backtest sayfasında): **OKX spot** (varsayılan) ya da **OKX vadeli**. Seçim yalnızca Dalga-3'e aittir,
+Fib kesişiminin kendi seçimi vardır. Fonlama maliyeti backtest'e dahil değildir. SMT referansı backtest'te BTC / ETH spot, taramada liste içindeyse vadeli grafiğidir.
+
+İki seçeneğin etkisi (limit bölge long, ikinci hedef, min. R:R 2, aynı 20 coin ve dönem; işlem · toplam R · PF). Backtest'te oluşan B
+yükseldikçe yeni emir verilir, fiyat eski B'yi geçince eski emir iptal olur; yani emrin elle güncellendiği varsayılır. Şablon satırları
+şablonsuz koşudan süzüldü (15m spot'ta doğrudan koşuya göre 1 işlem fark).
+
+| | Spot, kom. %0,1 | Vadeli, kom. %0,1 | Vadeli, kom. %0,05 |
+|---|---|---|---|
+| 4H, şablon, B bekle | 46 · −7,2R · 0,74 | 63 · −7,0R · 0,81 | 63 · −6,1R · 0,83 |
+| 4H, şablon, B oluşurken | 46 · −7,2R · 0,74 | 63 · −7,1R · 0,81 | 63 · −6,1R · 0,83 |
+| 4H, şablonsuz, B bekle | 410 · +75,3R · 1,35 | 415 · +56,6R · 1,25 | 415 · +64,2R · 1,30 |
+| 4H, şablonsuz, B oluşurken | 418 · +71,8R · 1,32 | 422 · +52,3R · 1,23 | 422 · +60,2R · 1,27 |
+| 15m, şablon, B bekle | 193 · −14,1R · 0,88 | 212 · −5,4R · 0,96 | 212 · +10,8R · 1,09 |
+| 15m, şablon, B oluşurken | 192 · −18,3R · 0,85 | 213 · −7,4R · 0,94 | 213 · +9,3R · 1,08 |
+| 15m, şablonsuz, B bekle | 1700 · −151,8R · 0,88 | 1739 · −171,4R · 0,86 | 1739 · +6,3R · 1,01 |
+| 15m, şablonsuz, B oluşurken | 1742 · −189,8R · 0,85 | 1777 · −197,2R · 0,85 | 1777 · −11,3R · 0,99 |
+
+B oluşurken giriş hiçbir satırı iyileştirmedi: 4H şablonlu satırlarda neredeyse aynı, diğerlerinde 3–38R daha kötü. Aynı komisyonla vadeli
+spot'tan belirgin iyi değil (4H şablonsuzda daha kötü); 15m'deki fark çoğunlukla komisyondan gelir. 15m'de sonucun işaretini komisyon belirliyor.
 
 Tüm eşikler sayfadaki **Ayarlar** bölmesinden değiştirilebilir; ayarlar konu başlıklarına ayrılmıştır (Genel, Dalga-3, Üçgen, ABCDE, Diagonal, Fib kesişimi) ve seçili modun başlığı açık gelir. Ağ gerektirmeyen ayarlar önbellekteki mumlarla anında yeniden hesaplanır.
 
@@ -128,7 +153,7 @@ ortasına limit emir. Yön itkinin yönü. Formül dalga-3'teki ★ Mükemmel il
 - Ayarlar → Oranlar: sadece 0,618 × 1,272 (varsayılan) ya da tüm çiftler (0,5 / 0,618 / 0,786 × 1,272 / 1,382 / 1,618).
 - **Veri:** araç çubuğunda (Ayarlar'da da) **OKX spot** (varsayılan) ya da **OKX vadeli**. Vadelide coin listesi USDT vadeli
   sözleşmelerin hacmine göre sıralanır, mumlar `-USDT-SWAP` paritesinden gelir, backtest de aynı veriyi kullanır. Seçim
-  yalnızca bu moda aittir: başka moda geçince tarama yeniden spot mumlarla yapılır. Vadeli işlemin fonlama maliyeti
+  bu moda aittir: Dalga-3'ün kendi Veri seçimi vardır, Üçgen, ABCDE ve Diagonal spot mumlarla taranır. Vadeli işlemin fonlama maliyeti
   backtest'e dahil değildir.
 - **B oluşurken de göster** (liste üstünde kutu, Ayarlar'da da; varsayılan kapalı): normalde B onaylanmadan kurulum çıkmaz,
   çünkü B oynadıkça C seviyesi ve giriş de oynar. Açılınca son üç onaylı nokta + oluşan uçla kurulum listelenir, kartta

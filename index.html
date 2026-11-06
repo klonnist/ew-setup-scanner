@@ -35,9 +35,16 @@
           <option value="fib">Fib kesişimi (0,618×1,272)</option>
         </select>
       </label>
-      <label class="field inline fib-only" title="Fib kesişimi modunda coin listesi ve mumlar. Diğer modlar her zaman OKX spot kullanır.">
+      <label class="field inline fib-only" title="Fib kesişimi modunda coin listesi ve mumlar. Üçgen, ABCDE ve Diagonal her zaman OKX spot kullanır.">
         <span>Veri</span>
         <select id="fibMarket">
+          <option value="spot">OKX spot</option>
+          <option value="swap">OKX vadeli</option>
+        </select>
+      </label>
+      <label class="field inline wave-only" title="Dalga-3 modunda coin listesi ve mumlar. Üçgen, ABCDE ve Diagonal her zaman OKX spot kullanır.">
+        <span>Veri</span>
+        <select id="w3Market">
           <option value="spot">OKX spot</option>
           <option value="swap">OKX vadeli</option>
         </select>
@@ -83,6 +90,7 @@
           <label class="check perfect-toggle wave-only"><input type="checkbox" id="onlyPerfect" /> ★ Sadece mükemmel</label>
           <label class="check perfect-toggle wave-only" title="Yalnızca dalga 1'i içte 5'li itki (i–v) olan kurulumlar"><input type="checkbox" id="structTpl" /> 🧩 Sadece şablon</label>
           <label class="check fib-only" title="B bitmeden de kurulum listelenir. B oynadıkça giriş seviyesi değişir."><input type="checkbox" id="fibFormingB" /> B oluşurken de göster</label>
+          <label class="check wave-only" title="Limit bölge için: B bitmeden de kurulum listelenir. B oynadıkça giriş seviyesi değişir."><input type="checkbox" id="w3FormingB" /> B oluşurken de göster</label>
           <label class="check"><input type="checkbox" id="showAll" /> Kaçan / bozulanları da göster</label>
           <label class="check" title="Grafikte yeşil ana yol (giriş → hedefler) ve kırmızı alternatif yol (stop). Tahmin değil, planın çizimi; zaman ekseni temsilî."><input type="checkbox" id="showScenario" /> Senaryo okları</label>
         </div>

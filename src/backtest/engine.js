@@ -90,6 +90,7 @@ export function backtestCoin(candles, cfg) {
     const setups = fibMode ? findFibClusters(win, opts, null) : findWave3Setups(win, opts, null);
     for (const s of setups) {
       if (opts.onlyPerfect && !s.zone?.perfect) continue;
+      if (opts.smtOnly && s.bForming && !s.kind) continue; // C yok, SMT ölçülemez: B onaylanınca aynı anahtarla değerlendirilir
       const smt = smtOf(s, win);
       const abs = (p) => candles[p.i + off].time;
       const base = `${s.direction}|${abs(s.points.p0)}|${abs(s.points.p1)}`;

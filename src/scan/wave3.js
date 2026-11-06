@@ -44,6 +44,8 @@ export const DEFAULTS = {
   cleanW1Speed: 0.3, // dalga 1 hızı: (|1 − 0| ÷ ATR) ÷ mum sayısı
   originReal: false, // yapı kırılımı şart: dalga 1, 0'dan önceki son tepeyi (short: dibi) kırmış olmalı
   structTpl: false, // yapı şablonu: yalnızca dalga 1'i içte 5'li itki olan kurulumlar (diğer şablon şartları bilgi)
+  w3FormingB: false, // true: limit bölgede B henüz onaylanmadan da kurulum göster (B oynadıkça giriş seviyesi değişir)
+  w3Market: 'spot', // 'spot' | 'swap': OKX USDT vadeli (coin listesi ve mumlar); yalnızca bu modda geçerli
 };
 
 // Yapı şablonu: zorunlu şart dalga 1'in içte 5'li itki (i–v) olması. Diğerleri bilgi: ii/iv değişimi, dalga 2 zigzag
@@ -398,6 +400,21 @@ function evaluateForming({ candles, atrArr, pivots, P0, P1, tentative, k, opts, 
     const cExt = rest.some((p) => p.type === A.type && p.i < C.i);
     if (ev.length) { ab = { A, B, C, eval: ev[0], cDone, cExt }; break; }
   }
+  // B oluşuyor (w3FormingB): A onaylı, oluşan uç B sayılır. Yalnızca onaylı A-B bulunamadıysa bakılır.
+  if (!ab && opts.w3FormingB) {
+    for (const div of opts.subDivisors) {
+      const { pivots: inner, tentative: t } = zigzag(candles, atrArr, k / div, { from: P1.i, to: last, start: { i: P1.i, type: P1.type } });
+      const ins = inner.filter((p) => p.i > P1.i);
+      if (ins.length !== 1 || ins[0].type === P1.type || t?.type !== P1.type) continue;
+      // B yükselirken canlı mum çoğu zaman onu geçer: oluşan B canlı mumun ucu olur (grafikte son kapanan muma işaretlenir)
+      const liveExt = live ? (d === 1 ? live.high : live.low) : null;
+      const B = live && d * (liveExt - t.price) > 0 ? { i: last, price: liveExt, type: t.type } : t;
+      const A = ins[0];
+      const pts = [{ t: P1.i, p: P1.price }, { t: A.i, p: A.price }, { t: B.i, p: B.price }];
+      const ev = kinds.map((id) => evaluate(id, pts, { ruleSet: opts.ruleSet, logScale: true })).filter((e) => e.valid).sort((a, b) => b.score - a.score);
+      if (ev.length) { ab = { A, B, C: null, eval: ev[0], cDone: false, cExt: false, bForming: true }; break; }
+    }
+  }
   if (!ab) reject.push('Dalga 2 ABC değil');
 
   if (reject.length) {
@@ -439,6 +456,7 @@ function evaluateForming({ candles, atrArr, pivots, P0, P1, tentative, k, opts, 
     phase: 'forming',
     cDone: !!ab.cDone,
     cExt: !!ab.cExt,
+    bForming: !!ab.bForming,
     w1q,
     origin,
     textbook,
@@ -446,7 +464,7 @@ function evaluateForming({ candles, atrArr, pivots, P0, P1, tentative, k, opts, 
     direction: dirName,
     d,
     sensitivity: k,
-    points: { p0: P0, p1: P1, p2: null, cNow: { i: ab.C.i, price: ab.C.price, type: ab.C.type } },
+    points: { p0: P0, p1: P1, p2: null, cNow: ab.C ? { i: ab.C.i, price: ab.C.price, type: ab.C.type } : null },
     abc: { kind: ab.eval.pattern, label: ab.eval.label, A: ab.A, B: ab.B, results: ab.eval.results, score: ab.eval.score },
     impulse: { label: imp.label, results: imp.results, score: imp.score },
     retr: retrNow,
@@ -460,7 +478,7 @@ function evaluateForming({ candles, atrArr, pivots, P0, P1, tentative, k, opts, 
     price,
     rr: 0,
     state: 'forming',
-    stateLabel: 'Dalga 2 sürüyor',
+    stateLabel: ab.bForming ? 'B oluşuyor' : 'Dalga 2 sürüyor',
     barsSince2: null,
     score,
   };

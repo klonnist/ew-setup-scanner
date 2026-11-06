@@ -59,6 +59,9 @@ function syncToolbar() {
   $('#showScenario').checked = !!s.showScenario;
   $('#fibMarket').value = s.fibMarket;
   $('#fibFormingB').checked = !!s.fibFormingB;
+  $('#w3Market').value = s.w3Market;
+  $('#w3FormingB').checked = !!s.w3FormingB;
+  $('#w3FormingB').disabled = s.entryType === 'break'; // yalnızca limit bölgede anlamlı
   $('#mode').value = s.mode;
   // Dalga-3'e özgü kontroller üçgen modunda gizlenir
   document.body.classList.toggle('mode-triangle', s.mode === 'triangle');
@@ -322,7 +325,7 @@ function renderSummary() {
         <strong>${active.length}</strong> aktif kurulum${nFormingB ? ` (${nFormingB} tanesinde B oluşuyor)` : ''} · ${state.setups.length - loose} kaçan/bozulan${loose > active.length ? ` · ${loose - active.length} tanesi R:R &lt; ${opts.fibMinRR} olduğu için gizli` : ''}
         ${errors.length ? `<span class="error"> · ${errors.length} coin okunamadı (${esc(errors.slice(0, 4).map((e) => e.coin).join(', '))})</span>` : ''}</p>
       <p class="note">Bu mod yalnızca oran çakışmasına bakar: Elliott kuralı ve süre şartı yoktur. Backtest'te belirgin bir üstünlük görülmedi
-        (0,618 × 1,272, ikinci hedef: ${r.market === 'swap' ? '4H 1 yıl 42 işlem +2,7R, 15m 3 ay 189 işlem +22,2R' : '4H 1 yıl 47 işlem −6,8R, 15m 3 ay 216 işlem +15,5R'}).</p>`;
+        (0,618 × 1,272, ikinci hedef: ${r.market === 'swap' ? '4H 1 yıl 42 işlem +2,7R, 15m 3 ay 189 işlem +22,2R' : '4H 1 yıl 47 işlem −6,8R, 15m 3 ay 216 işlem +15,5R'}; komisyon 4H %0,1, 15m %0,035).</p>`;
     $('#listTitle').textContent = `Fib kesişimleri (${visibleSetups().length})`;
     return;
   }
@@ -339,9 +342,10 @@ function renderSummary() {
   }
   const chips = [...counts].sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span class="chip">${esc(k)}: ${v}</span>`).join('');
   const nPerfect = vis.filter((s) => s.zone?.perfect).length;
-  const split = [useBreak() ? `${nBreak} B kırılımı` : '', useZone() ? `${nZone} limit bölge` : '', `★ ${nPerfect} mükemmel`].filter(Boolean).join(', ');
+  const nFormingB = vis.filter((s) => s.bForming).length;
+  const split = [useBreak() ? `${nBreak} B kırılımı` : '', useZone() ? `${nZone} limit bölge` : '', `★ ${nPerfect} mükemmel`, nFormingB ? `${nFormingB} tanesinde B oluşuyor` : ''].filter(Boolean).join(', ');
   $('#summary').innerHTML = `
-    <p><strong>${r.results.length} coin</strong> · ${esc(r.tf.label)} · ${fmtTime(r.at)} ·
+    <p><strong>${r.results.length} coin</strong> · ${r.market === 'swap' ? 'OKX vadeli · ' : ''}${esc(r.tf.label)} · ${fmtTime(r.at)} ·
       <strong>${vis.length}</strong> aktif setup (${split})${loose > vis.length ? ` · ${loose - vis.length} tanesi R:R &lt; ${opts.minRR} olduğu için gizli` : ''} ·
       ${state.setups.length - loose} kaçan/bozulan
       ${errors.length ? `<span class="error"> · ${errors.length} coin okunamadı (${esc(errors.slice(0, 4).map((e) => e.coin).join(', '))})</span>` : ''}</p>
@@ -425,6 +429,7 @@ function tbChip(s) {
 /** Dalga-3 aşaması: C alt derecede bittiyse (fiyat C'den döndü) kurulum listede kalır, etiketi değişir. */
 function phaseLabel(s) {
   if (s.phase !== 'forming') return 'Dalga 2 tamam';
+  if (s.bForming) return 'B oluşuyor';
   return s.cDone ? 'C tamam · dalga 3 başlıyor' : 'Dalga 2 sürüyor';
 }
 
@@ -450,6 +455,7 @@ function card(s) {
       <span>${time}</span>
       <span>derece ${s.sensitivity}×ATR</span>
     </div>
+    ${s.bForming ? '<p class="note">B henüz bitmedi: giriş seviyesi değişebilir.</p>' : ''}
     ${useBreak() ? breakBlock(s, act.includes('break')) : ''}
     ${useZone() ? zoneBlock(s, act.includes('zone')) : ''}
   </button>`;
@@ -864,18 +870,20 @@ function renderDetail() {
   const rsi = [];
   if (s.rsi.divergence) rsi.push(`C/A uyumsuzluk ${s.rsi.divergence.ok ? 'var ✓' : 'yok'} (${s.rsi.divergence.rA.toFixed(0)} → ${s.rsi.divergence.rC.toFixed(0)})`);
   if (s.rsi.w1Momentum) rsi.push(`dalga 1 RSI ${s.rsi.w1Momentum.r1.toFixed(0)} ${s.rsi.w1Momentum.ok ? '✓' : ''}`);
-  const tv = `https://www.tradingview.com/chart/?symbol=OKX%3A${encodeURIComponent(s.coin)}USDT`;
+  const swap = s.instId?.endsWith('-SWAP');
+  const tv = `https://www.tradingview.com/chart/?symbol=OKX%3A${encodeURIComponent(s.coin)}USDT${swap ? '.P' : ''}`;
   box.innerHTML = `
     <div class="detail-head">
       <h2>${esc(s.coin)}/USDT</h2>
       <span class="dir ${s.direction}">${dirTxt(s)}</span>
       <span class="chip">${phaseLabel(s)}</span>
-      <span class="chip">${esc(state.scan.tf.id)} · derece ${s.sensitivity}×ATR</span>
+      <span class="chip">${swap ? 'Vadeli · ' : ''}${esc(state.scan.tf.id)} · derece ${s.sensitivity}×ATR</span>
       ${smtChip(s)}${tbChip(s)}${tplChip(s)}${originChip(s)}${conflictChip(s)}
       <a class="ext" href="${tv}" target="_blank" rel="noopener">TradingView'de aç ↗</a>
     </div>
     <div class="chart" id="chart"></div>
     <div class="legend">${legendHtml(LEGEND.filter(([, , , t]) => !t || (t === 'break' ? useBreak() : useZone())), scenario)}</div>
+    ${s.bForming ? '<p class="note">B henüz bitmedi: B oynadıkça C seviyesi ve giriş de değişir, limit emri buna göre güncellemek gerekir.</p>' : ''}
     <div class="facts">
       ${fact('Güncel fiyat', fmtPrice(s.price))}
       ${fact('Geçersizlik (0)', fmtPrice(s.points.p0.price, s.price))}
@@ -886,7 +894,7 @@ function renderDetail() {
       ${s.tpl ? fact('Yapı şablonu', `${s.tpl.ok ? '✓' : `${s.tpl.n}/${s.tpl.need}`} · ${TPL_ROWS.map(([k, n]) => `${n} ${s.tpl.checks[k] === null ? '…' : s.tpl.checks[k] ? '✓' : '✗'}`).join(' · ')}`) : ''}
       ${s.textbook ? fact('Ders kitabı şablonu', `${s.textbook.n}/4${s.textbook.ratios ? ` · a %${Math.round(s.textbook.ratios.a * 100)} · b %${Math.round(s.textbook.ratios.b * 100)} · c ${fmtX(s.textbook.ratios.c, 2)}${s.textbook.ratios.aEr != null ? ` · A verim ${fmtX(s.textbook.ratios.aEr, 2).replace('×', '')}` : ''}` : ''}${tbMissing(s.textbook).length ? ' – eksik: ' + tbMissing(s.textbook).join(', ') : ' ✓'}`) : ''}
       ${fact('Süre: dalga 1 / dalga 2', `${s.durations.D1} / ${s.durations.D2} mum (${fmtX(s.timeRatio)})${s.phase === 'forming' ? (s.timeOk ? ' ✓' : ' – henüz sağlanmadı') : ''}`)}
-      ${fact('Dalga 2 yapısı', s.abc ? esc(s.abc.label) + (s.phase === 'forming' ? (s.cDone ? ' (C tamam, dönüş başladı)' : ' (C oluşuyor)') : '') : 'ABC bulunamadı')}
+      ${fact('Dalga 2 yapısı', s.abc ? esc(s.abc.label) + (s.phase === 'forming' ? (s.bForming ? ' (B oluşuyor)' : s.cDone ? ' (C tamam, dönüş başladı)' : ' (C oluşuyor)') : '') : 'ABC bulunamadı')}
       ${s.phase === 'complete' ? fact('RSI', esc(rsi.join(' · ') || '–')) : ''}
       ${s.volume ? fact('Hacim W1 / W2', s.volume.ok ? 'W1 > W2 ✓' : 'W1 ≤ W2') : ''}
       ${fact('Skor', `${s.score}/100`)}
@@ -895,7 +903,7 @@ function renderDetail() {
     ${useZone() ? zoneFacts(s) : ''}
     <div class="rules">
       ${ruleList(`İtki başlangıcı 0-1-2 (${state.settings.ruleSet})${s.phase === 'forming' ? ' — 2 = şimdiye kadarki uç' : ''}`, s.impulse.results)}
-      ${s.abc ? ruleList(`Dalga 2 iç yapısı: ${s.abc.label}${s.phase === 'forming' ? (s.cDone ? ' (0-A-B, C tamam)' : ' (0-A-B, C oluşuyor)') : ''}`, s.abc.results) : ''}
+      ${s.abc ? ruleList(`Dalga 2 iç yapısı: ${s.abc.label}${s.phase === 'forming' ? (s.bForming ? ' (0-A, B oluşuyor)' : s.cDone ? ' (0-A-B, C tamam)' : ' (0-A-B, C oluşuyor)') : ''}`, s.abc.results) : ''}
     </div>`;
   drawSetup($('#chart'), r.candles, r.live, s, { showBreak: useBreak(), showZone: useZone(), scenario });
 }
@@ -934,6 +942,8 @@ function init() {
   $('#mode').addEventListener('change', (e) => { state.selected = null; updateSettings({ mode: e.target.value }); });
   $('#fibMarket').addEventListener('change', (e) => { state.selected = null; updateSettings({ fibMarket: e.target.value }); renderSettings($('#settings'), state.settings, updateSettings); });
   $('#fibFormingB').addEventListener('change', (e) => { updateSettings({ fibFormingB: e.target.checked }); renderSettings($('#settings'), state.settings, updateSettings); });
+  $('#w3Market').addEventListener('change', (e) => { state.selected = null; updateSettings({ w3Market: e.target.value }); renderSettings($('#settings'), state.settings, updateSettings); });
+  $('#w3FormingB').addEventListener('change', (e) => { updateSettings({ w3FormingB: e.target.checked }); renderSettings($('#settings'), state.settings, updateSettings); });
   $('#onlyPerfect').addEventListener('change', (e) => updateSettings({ onlyPerfect: e.target.checked }));
   $('#structTpl').addEventListener('change', (e) => { updateSettings({ structTpl: e.target.checked }); renderSettings($('#settings'), state.settings, updateSettings); });
   $('#showAll').addEventListener('change', (e) => { state.settings.showAll = e.target.checked; saveSettings(state.settings); if (state.scan) render(); });

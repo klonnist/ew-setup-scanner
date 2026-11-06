@@ -5,6 +5,7 @@ import { marketOf } from '../src/scan/fibcluster.js';
 import { runScan } from '../src/scan/scanner.js';
 import { snapshot } from '../src/watch/track.js';
 import { findFibClusters } from '../src/scan/fibcluster.js';
+import { findWave3Setups } from '../src/scan/wave3.js';
 import { build } from './helpers.js';
 
 const realFetch = globalThis.fetch;
@@ -17,7 +18,7 @@ test('instIdOf: spot ve vadeli parite kimliği', () => {
   assert.equal(instIdOf('BTC', 'swap'), 'BTC-USDT-SWAP');
 });
 
-test('marketOf: vadeli yalnızca fib modunda seçilebilir', () => {
+test('marketOf: fibMarket yalnızca Fib modunda geçerli', () => {
   assert.equal(marketOf({ mode: 'fib', fibMarket: 'swap' }), 'swap');
   assert.equal(marketOf({ mode: 'fib', fibMarket: 'spot' }), 'spot');
   assert.equal(marketOf({ mode: 'fib' }), 'spot');
@@ -55,6 +56,14 @@ function stubOkx() {
 }
 const instOf = (urls) => [...new Set(urls.filter((u) => u.pathname.endsWith('/market/candles')).map((u) => u.searchParams.get('instId')).filter((x) => x.startsWith('AAA')))];
 
+test('marketOf: w3Market yalnızca Dalga-3 modunda geçerli, mod yoksa Dalga-3', () => {
+  assert.equal(marketOf({ mode: 'wave3', w3Market: 'swap' }), 'swap');
+  assert.equal(marketOf({ w3Market: 'swap' }), 'swap');
+  assert.equal(marketOf({ mode: 'wave3', w3Market: 'spot' }), 'spot');
+  assert.equal(marketOf({ mode: 'wave3' }), 'spot');
+  for (const mode of ['fib', 'triangle', 'abcde', 'diagonal']) assert.equal(marketOf({ mode, w3Market: 'swap' }), 'spot');
+});
+
 test('tarama: fib + vadeli vadeli mumları indirir', async () => {
   const urls = stubOkx();
   const res = await runScan({ mode: 'fib', fibMarket: 'swap', timeframe: '4H', topN: 1 });
@@ -79,6 +88,29 @@ for (const [mode, fibMarket] of [['fib', 'spot'], ['wave3', 'swap'], ['triangle'
   });
 }
 
+test('tarama: Dalga-3 + vadeli vadeli mumları ve coin listesini indirir', async () => {
+  const urls = stubOkx();
+  const res = await runScan({ mode: 'wave3', w3Market: 'swap', timeframe: '4H', topN: 1 });
+  assert.equal(res.market, 'swap');
+  assert.deepEqual(instOf(urls), ['AAA-USDT-SWAP']);
+  assert.ok(urls.some((u) => u.searchParams.get('instType') === 'SWAP'));
+});
+
+test('tarama: Dalga-3 elle coin listesi de vadeliden gelir', async () => {
+  const urls = stubOkx();
+  await runScan({ mode: 'wave3', w3Market: 'swap', timeframe: '4H', manualCoins: ['AAA'] });
+  assert.deepEqual(instOf(urls), ['AAA-USDT-SWAP']);
+});
+
+for (const mode of ['fib', 'triangle', 'abcde', 'diagonal']) {
+  test(`tarama: ${mode} (w3Market swap) spot kalır`, async () => {
+    const urls = stubOkx();
+    const res = await runScan({ mode, w3Market: 'swap', timeframe: '4H', topN: 1 });
+    assert.equal(res.market, 'spot');
+    assert.deepEqual(instOf(urls), ['AAA-USDT']);
+  });
+}
+
 test('getTopCoins: varsayılan spot', async () => {
   const urls = stubOkx();
   const list = await getTopCoins(5, {});
@@ -94,6 +126,19 @@ test('takip kaydı: vadeli parite ayrı anahtar, başlıkta belli, mumlar vadeli
   const swap = snapshot({ ...s, coin: 'X', instId: 'X-USDT-SWAP' }, candles, ctx);
   assert.equal(swap.instId, 'X-USDT-SWAP');
   assert.notEqual(spot.key, swap.key);
+  assert.match(swap.title, /vadeli/);
+  assert.doesNotMatch(spot.title, /vadeli/);
+});
+
+test('takip kaydı: Dalga-3 vadeli ayrı anahtar ve başlıkta belli, spot anahtarı değişmez', () => {
+  const candles = build([[0, 120], [20, 100], [40, 130], [52, 115], [60, 122], [66, 112]]);
+  const s = findWave3Setups(candles, { sensitivities: [4.5], entryType: 'zone', direction: 'both' }).find((x) => x.phase === 'forming');
+  const ctx = { tf: { id: '4H', ms: 3600e3 }, mode: 'wave3', now: 1 };
+  const spot = snapshot({ ...s, coin: 'X', instId: 'X-USDT' }, candles, ctx);
+  const swap = snapshot({ ...s, coin: 'X', instId: 'X-USDT-SWAP' }, candles, ctx);
+  assert.equal(swap.instId, 'X-USDT-SWAP');
+  assert.equal(swap.key, spot.key + '|swap');
+  assert.doesNotMatch(spot.key, /swap/);
   assert.match(swap.title, /vadeli/);
   assert.doesNotMatch(spot.title, /vadeli/);
 });

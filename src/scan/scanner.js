@@ -29,8 +29,9 @@ export function detect(r, opts, refs = null) {
   tagSmt(setups, subject, rc ? refs?.[rc] || null : null, opts);
   for (const s of setups) s.smtRef = s.smt ? rc : null;
   tagConflicts(setups, openViews(r, opts), opts.mode || 'wave3');
-  // Sadece SMT'li: karşılaştırılacak ucu olmayan kalıplar (üçgen, leading) ve referans verisi olmayanlar etkilenmez
-  return opts.smtOnly ? setups.filter((s) => !s.smt || s.smt === 'smt') : setups;
+  // Sadece SMT'li: karşılaştırılacak ucu olmayan kalıplar (üçgen, leading) ve referans verisi olmayanlar etkilenmez.
+  // Dalga-3'te B oluşurken C yok, SMT henüz ölçülemez: B onaylanana kadar gizlenir.
+  return opts.smtOnly ? setups.filter((s) => (!s.smt && !(s.bForming && !s.kind)) || s.smt === 'smt') : setups;
 }
 
 /** SMT referans grafikleri (BTC, ETH): taramada indirilmişse oradan, yoksa ayrıca indirilir. Hata taramayı bozmaz. */

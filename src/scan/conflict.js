@@ -20,7 +20,7 @@ const MODES = {
  * yalnızca mod değişince yeniden hesaplanmaz.
  */
 export function openViews(r, opts) {
-  const { mode, diagnostics, ...rest } = opts;
+  const { mode, diagnostics, w3FormingB, ...rest } = opts; // B'si belli olmayan sayım çelişki sayılmaz
   const key = JSON.stringify(rest);
   if (r.views?.key === key) return r.views.list;
   const list = [];
