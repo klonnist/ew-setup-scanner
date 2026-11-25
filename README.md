@@ -321,6 +321,29 @@ OKX geçmiş mumlarıyla her mum kapanışında canlı tarayıcının göreceği
 - **İşlem grafiği:** işlem listesinde 📈 düğmesine basınca, işlemin açıldığı mumda backtest'in gördüğü kalıp aynı ayarlarla yeniden bulunur ve tarama ekranındaki grafikle çizilir; gerçekleşen giriş ve çıkış işaretlenir, sonrasındaki mumlar fiyatın ne yaptığını gösterir.
 - **İşlemleri CSV indir:** süzülmüş işlemler, para simülasyonu sütunlarıyla (noktalı virgül, Excel'de açılır).
 
+## Scalp sayfası (scalp.html)
+
+Altcoin Evreni (Batuhan Sertoğlu) videolarındaki 5/15 dakikalık scalp mantığının şematik anlatımı ve backtest'i. Ayrı sayfadır,
+tarayıcı ve diğer backtest modlarının koduna dokunmaz (`src/scalp/`). Kurgu: olgun range → bir ucun likiditesi süpürülür →
+süpürmeden önceki son iç tepe/dip kapanışla kırılır ve fiyat range içine döner → kapanıştan market giriş; stop süpürme ucunun
+0,1 ATR ötesi, hedef range'in öbür ucu, TP1 aradaki ilk iç pivot. Yönetim A (tek hedef), B (TP1'de %50), C (TP1'de %50 + stop girişe)
+aynı işlemlerde birlikte hesaplanır. Range: 96 mumdaki 3'lü fraktallar, üst/alt %25 bantta ≥2 dokunuş, dokunuşlar iç içe
+(kanal range sayılmaz), 2–12 ATR. Süpürme 3 ATR'den derine giderse iptal; onay en fazla 12 mum. Varsayılan min R:R 2 (videoda 3).
+
+Ölçüm (25.11.2026, `node tools/scalp-bt.js 20 swap <önbellek>`; OKX vadeli ilk 20, Long+Short, komisyon %0,05 / taraf):
+
+| TF | Gün | Min R:R | İşlem | A toplam (PF) | C toplam (PF) | C, %0,1 komisyon |
+|---|---|---|---|---|---|---|
+| 5m | 7 | 2 | 9 | −0,8R (0,86) | −2,1R (0,62) | −3,1R |
+| 5m | 30 | 2 | 47 | −4,6R (0,86) | −2,5R (0,88) | −8,2R |
+| 5m | 30 | 3 | 11 | −3,6R (0,55) | +1,6R (1,69) | +0,2R |
+| 15m | 30 | 2 | 16 | +2,3R (1,21) | +3,5R (1,53) | +2,1R |
+| 15m | 60 | 2 | 23 | +2,5R (1,15) | +4,2R (1,43) | +2,2R |
+| 15m | 60 | 3 | 7 | +1,3R (1,24) | +1,7R (1,52) | +1,1R |
+
+5m eksi; 15m hafif artı ama 23 işlemle kanıt değil ve kârın çoğu short'tan. Süpürmelerin çoğu 3 ATR'yi aşıp gerçek kırılıma dönüşüyor
+(sayfadaki "Huni" kutusu bunu her çalıştırmada gösterir). 1,5 ATR sınırıyla 5m'de 7 günde 20 coinde 0 işlem çıkmıştı.
+
 ## Kural motoru
 
 `src/ew/` klasörü [ew-chart-reader](https://github.com/klonnist/ew-chart-reader) projesinin `engine` ve `rules`
