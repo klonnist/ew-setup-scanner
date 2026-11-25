@@ -344,6 +344,24 @@ aynı işlemlerde birlikte hesaplanır. Range: 96 mumdaki 3'lü fraktallar, üst
 5m eksi; 15m hafif artı ama 23 işlemle kanıt değil ve kârın çoğu short'tan. Süpürmelerin çoğu 3 ATR'yi aşıp gerçek kırılıma dönüşüyor
 (sayfadaki "Huni" kutusu bunu her çalıştırmada gösterir). 1,5 ATR sınırıyla 5m'de 7 günde 20 coinde 0 işlem çıkmıştı.
 
+**12 aylık eğitim / test (26.11.2026, `node tools/scalp-research.js <önbellek> 120 sonuç.json`)** — 15m, OKX vadeli ilk 30 coin,
+25.11.2025 → 25.11.2026, test = son 120 gün, min R:R 2, komisyon %0,05 (retestte giriş %0,02). İsteğe bağlı seçenekler (varsayılan kapalı,
+kapalıyken çıktı byte byte aynı): `wickSweep` (sadece iğne), `htf` (4H yapı yönü: with / notAgainst), `entryMode: 'retest'` (kırılan seviyeye limit),
+`priorMove` (range öncesi sert düşüş / hareket; `priorBars` 96, `priorMult` 0,5 — eşik yalnızca işlem sayısına bakılarak seçildi).
+
+| Ayar | Eğitim işlem | A | C (PF) | Test işlem | A | C (PF) |
+|---|---|---|---|---|---|---|
+| Temel | 131 | −27,0R | −31,6R (0,56) | 74 | −17,6R | −3,7R (0,89) |
+| + Sadece iğne | 73 | −28,3R | −23,2R (0,47) | 41 | −14,6R | −6,1R (0,70) |
+| + 4H aynı yön | 61 | −3,3R | −11,8R (0,64) | 40 | −6,3R | 0,0R (1,00) |
+| + Retest limit | 188 | −18,5R | −26,1R (0,71) | 92 | −9,1R | −2,6R (0,94) |
+| + Range öncesi sert düşüş | 37 | −19,5R | −17,6R (0,29) | 23 | +0,5R | +4,6R (1,69) |
+| + Range öncesi sert hareket | 66 | −26,9R | −25,1R (0,40) | 41 | −10,7R | −2,4R (0,86) |
+| Eğitimde en iyi kombinasyon (iğne + 4H + retest) | 44 | −3,3R | −4,0R (0,80) | 26 | +1,9R | +4,0R (1,32) |
+
+72 kombinasyonun hiçbiri eğitimde (C) artı değil; eğitim ve testte birlikte artı olan satır yok (0 / 216). Kısa vadede görülen
+"15m 60 gün +4R" 12 ayda tutmadı. Kuralın mekanik kısmı tek başına kazandırmıyor.
+
 ## Kural motoru
 
 `src/ew/` klasörü [ew-chart-reader](https://github.com/klonnist/ew-chart-reader) projesinin `engine` ve `rules`

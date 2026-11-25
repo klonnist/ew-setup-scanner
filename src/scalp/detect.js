@@ -81,3 +81,21 @@ export function lastInner(candles, innerList, beforeIdx, knownBy, d) {
   if (best < 0) return null;
   return { idx: best, price: d === 1 ? candles[best].high : candles[best].low };
 }
+
+/**
+ * Range'den önce sert hareket var mı? (videoda: "sert bir düşüş sonrasında ... yatay bir range")
+ * Bakılan dönem: range penceresinin başından geriye priorBars mum (yalnızca t'den önceki mumlar).
+ * 'drop': dönemdeki en yüksek tepe, range tepesinin en az priorMult × range yüksekliği üstünde (range düşüşün dibinde).
+ * 'any' : düşüş ya da aynası (dönemdeki en düşük dip, range dibinin aynı ölçüde altında → yükselişin tepesinde).
+ */
+export function priorMoveOk(candles, range, t, o) {
+  if (!o.priorMove || o.priorMove === 'off') return true;
+  const b = Math.max(0, t - o.window), a = Math.max(0, b - o.priorBars);
+  if (b <= a) return false;
+  let hi = -Infinity, lo = Infinity;
+  for (let i = a; i < b; i++) { hi = Math.max(hi, candles[i].high); lo = Math.min(lo, candles[i].low); }
+  const need = o.priorMult * range.height;
+  const drop = hi - range.high >= need;
+  if (o.priorMove === 'drop') return drop;
+  return drop || range.low - lo >= need;
+}

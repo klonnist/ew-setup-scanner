@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { build, mirror } from './helpers.js';
-import { backtestScalp, summarizeScalp } from '../src/scalp/engine.js';
+import { backtestScalp, summarizeScalp, htfTrend } from '../src/scalp/engine.js';
 import { pivots, rangeAt, SCALP_DEFAULTS } from '../src/scalp/detect.js';
 import { atr } from '../src/data/indicators.js';
 
@@ -91,4 +91,77 @@ test('yükselen kanal range sayılmaz (tepe/dip dokunuşları iç içe değil)',
 
 test('yön filtresi: sadece short istenirse long setup verilmez', () => {
   assert.equal(run([...RANGE, [120, 112]], { direction: 'short' }).trades.length, 0);
+});
+
+// ---------------------------------------------------------------- isteğe bağlı seçenekler
+test('iğne şartı: kapanışla delinen süpürme iptal, yalnızca iğneyle süpürme işlem verir', () => {
+  // RANGE senaryosunda süpürme mumları range dibinin altında kapanıyor
+  assert.equal(run([...RANGE, [120, 112]]).trades.length, 1);
+  assert.equal(run([...RANGE, [120, 112]], { wickSweep: true }).trades.length, 0);
+  // Aynı yapı, fiyat dibin üstünde kalıyor, tek mumun iğnesi dibi süpürüyor
+  const c = build([...RANGE.slice(0, -1), [104, 100.1], [120, 112]]);
+  c[103] = { ...c[103], low: 98.6 };
+  const t = backtestScalp(c, { ...OPTS, wickSweep: true }).trades;
+  assert.equal(t.length, 1);
+  assert.equal(t[0].sweepPrice, 98.6);
+});
+
+test('4H yönü: gelecek veri kullanmaz ve yükselen merdivende yukarı döner', () => {
+  const c = build([[0, 100], [8, 104], [12, 102], [20, 108], [24, 106], [32, 112], [36, 110], [44, 116], [48, 114], [60, 120]]);
+  const tr = htfTrend(c, 4 * 3600e3);
+  assert.equal(tr[c.length - 1], 1);
+  for (const k of [20, 33, 47]) assert.equal(htfTrend(c.slice(0, k + 1), 4 * 3600e3)[k], tr[k], `bar ${k}`);
+});
+
+test('4H yönü filtresi: işlemler filtresiz işlemlerin alt kümesi, ters yönde işlem yok', () => {
+  const c = build([...RANGE, [120, 112]]);
+  const all = backtestScalp(c, OPTS).trades;
+  const tr = htfTrend(c, 4 * 3600e3);
+  for (const htf of ['with', 'notAgainst']) {
+    const f = backtestScalp(c, { ...OPTS, htf }).trades;
+    assert.ok(f.length <= all.length);
+    for (const t of f) {
+      const i = c.findIndex((x) => x.time === t.sweepStartTime);
+      assert.ok(htf === 'with' ? tr[i] === t.d : tr[i] !== -t.d);
+    }
+  }
+});
+
+test('retest girişi: kırılan seviyeden dolar, R:R büyür, giriş komisyonu maker', () => {
+  const path = [...RANGE, [110, 104.9], [113, 103.5], [128, 112]];
+  const mkt = run(path).trades[0];
+  const rt = run(path, { entryMode: 'retest' }).trades[0];
+  assert.ok(mkt && rt);
+  assert.equal(rt.entry, rt.msbPrice);
+  assert.ok(rt.entry < mkt.entry);
+  assert.ok(rt.rr > mkt.rr);
+  assert.ok(rt.entryTime > mkt.entryTime);
+  const taker = run(path, { entryMode: 'retest', feePct: 0.05 }).trades[0];
+  const maker = run(path, { entryMode: 'retest', feePct: 0.05, makerFeePct: 0.02 }).trades[0];
+  assert.ok(maker.alts.A.feeR < taker.alts.A.feeR);
+});
+
+test('retest gelmezse işlem yok', () => {
+  const r = run([...RANGE, [120, 112]], { entryMode: 'retest', retestBars: 3 });
+  assert.equal(r.trades.length, 0);
+  assert.ok(r.stats.skipped['retest gelmedi'] || r.stats.skipped['retest gelmeden hedef']);
+});
+
+test('range öncesi sert düşüş şartı: düşüşle başlayan senaryoda işlem var, düz başlayanda yok; "any" aynayı da kabul eder', () => {
+  const shifted = RANGE.map(([b, p]) => [b + 20, p]);
+  const dropPath = [[0, 128], ...shifted, [140, 112]];
+  const P = { priorBars: 100 };
+  assert.equal(run(dropPath, { ...P, priorMove: 'drop' }).trades.length, 1);
+  assert.equal(run([...RANGE, [120, 112]], { ...P, priorMove: 'drop' }).trades.length, 0);
+  // Ayna: sert yükselişten sonra range, üst süpürme → short
+  const up = mirror(build(dropPath), 220);
+  assert.equal(backtestScalp(up, { ...OPTS, ...P, priorMove: 'drop' }).trades.length, 0);
+  const any = backtestScalp(up, { ...OPTS, ...P, priorMove: 'any' }).trades;
+  assert.equal(any.length, 1);
+  assert.equal(any[0].d, -1);
+  // Gelecek veri yok: giriş mumunda kesilen veri aynı girişi verir
+  const c = build(dropPath);
+  const full = backtestScalp(c, { ...OPTS, ...P, priorMove: 'drop' }).trades[0];
+  const idx = c.findIndex((x) => x.time === full.entryTime);
+  assert.equal(backtestScalp(c.slice(0, idx + 1), { ...OPTS, ...P, priorMove: 'drop' }).trades[0].entry, full.entry);
 });

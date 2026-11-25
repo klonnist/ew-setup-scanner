@@ -105,7 +105,12 @@ async function run() {
     confirmBars: Math.max(2, +$('#confirmBars').value || SCALP_DEFAULTS.confirmBars),
     direction: $('#direction').value,
     maxDepthAtr: Math.max(0.5, +$('#maxDepthAtr').value || SCALP_DEFAULTS.maxDepthAtr),
+    wickSweep: $('#wickSweep').value === '1',
+    htf: $('#htf').value,
+    entryMode: $('#entryMode').value,
+    priorMove: $('#priorMove').value,
   };
+  if (cfg.entryMode === 'retest') cfg.makerFeePct = Math.max(0, +$('#makerFeePct').value || 0);
   const ctrl = new AbortController();
   running = ctrl;
   $('#runBtn').disabled = true;
@@ -159,7 +164,7 @@ let variant = 'B';
 function render() {
   const { trades } = result;
   $('#results').hidden = false;
-  $('#resMeta').textContent = `${result.tf} · son ${result.days} gün · ${result.coins.length} coin (${result.market === 'swap' ? 'vadeli' : 'spot'}) · min R:R ${result.cfg.minRR} · komisyon %${result.cfg.feePct}/taraf`;
+  $('#resMeta').textContent = `${result.tf} · son ${result.days} gün · ${result.coins.length} coin (${result.market === 'swap' ? 'vadeli' : 'spot'}) · min R:R ${result.cfg.minRR} · komisyon %${result.cfg.feePct}/taraf${result.cfg.wickSweep ? ' · sadece iğne' : ''}${result.cfg.priorMove !== 'off' ? ` · range öncesi ${result.cfg.priorMove === 'drop' ? 'sert düşüş' : 'sert hareket'}` : ''}${result.cfg.htf !== 'off' ? ` · 4H ${result.cfg.htf === 'with' ? 'aynı yön' : 'ters değil'}` : ''}${result.cfg.entryMode === 'retest' ? ` · retest limit (giriş %${result.cfg.makerFeePct})` : ''}`;
   const rows = VARIANTS.map((v) => {
     const s = summarizeScalp(trades, v.id);
     const L = summarizeScalp(trades.filter((t) => t.d === 1), v.id), S = summarizeScalp(trades.filter((t) => t.d === -1), v.id);
@@ -298,6 +303,11 @@ const SKIP_TXT = {
   'onay gelmedi': 'süre içinde iç kırılım (onay) gelmedi',
   'R:R düşük': 'onay geldi ama hedefe R:R yetmedi',
   'risk yok': 'giriş stopun ötesinde',
+  'kapanışla kırıldı': 'süpürme mumu range dışında kapandı (iğne değil)',
+  '4H yönü uymuyor': '4 saatlik yapı yönüne ters',
+  'retest gelmedi': 'retest limiti süre içinde dolmadı',
+  'retest gelmeden hedef': 'fiyat retest vermeden hedefe gitti',
+  'öncesinde sert hareket yok': 'range öncesinde sert düşüş / hareket yok',
 };
 function renderFunnel(f, n) {
   const sk = Object.entries(f.skipped).sort((a, b) => b[1] - a[1]);
